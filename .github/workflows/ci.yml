@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    name: build (Ubuntu, ${{ matrix.compiler }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [gcc, clang]
+        include:
+          - compiler: gcc
+            cc: gcc
+            cxx: g++
+          - compiler: clang
+            cc: clang
+            cxx: clang++
+
+    env:
+      CC: ${{ matrix.cc }}
+      CXX: ${{ matrix.cxx }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake pkg-config ninja-build \
+            libflint-dev libgtest-dev nlohmann-json3-dev
+
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DAMFLOW_BUILD_DRIVER=ON
+
+      - name: Build
+        run: cmake --build build -j
+
+      - name: Run tests (excluding Kira-dependent)
+        # The Kira IBP backend is not available in CI; the test suite
+        # auto-skips Kira-dependent cases when AMFLOW_KIRA is unset.
+        run: ctest --test-dir build --output-on-failure -j 4

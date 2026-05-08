@@ -1,0 +1,31 @@
+# Build directories
+build/
+build_*/
+cmake-build-*/
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Local agent metadata
+.claude/
+
+# Local logs / scratch
+*.log
+id
+
+# Temporary outputs
+/tmp_output/
+*_out.json
+
+# Heavy Mathematica caches (regenerable; see tools/bench/README.md and
+# tools/math_ref/run_amflow_kira.wl for instructions).
+tools/bench/mma_refs/
+tools/math_ref/cache/
+
+# Upstream Mathematica AMFlow — populate via clone or symlink locally;
+# never tracked here.  See reference/README.md.
+reference/amflow-master/
