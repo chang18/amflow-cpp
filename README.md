@@ -4,6 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](CHANGELOG.md)
 [![C++17](https://img.shields.io/badge/C%2B%2B-17-blue.svg)](https://en.cppreference.com/w/cpp/17)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20087172.svg)](https://doi.org/10.5281/zenodo.20087172)
 
 A C++17 reimplementation of the auxiliary-mass-flow algorithm for
 multi-loop Feynman integrals.
@@ -26,8 +27,11 @@ We claim no algorithmic novelty.
 
 If you use this software in published research, please cite **both** the
 upstream paper above (algorithm) and this repository (implementation).
-Machine-readable metadata is in [`CITATION.cff`](CITATION.cff); see
-[`NOTICE`](NOTICE) for full attribution.
+The repository is archived on Zenodo with DOI
+[10.5281/zenodo.20087172](https://doi.org/10.5281/zenodo.20087172)
+(concept DOI; always resolves to the latest release).  Machine-readable
+metadata is in [`CITATION.cff`](CITATION.cff); see [`NOTICE`](NOTICE)
+for full attribution.
 
 > **Note** — the upstream Mathematica source is **not** vendored.
 > Documentation in this repo refers to symbols and line numbers in
