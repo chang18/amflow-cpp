@@ -25,13 +25,13 @@ Items are listed in execution order.
 
 ### Phase 1A — small fixes (~½ day total)
 
-| # | Item | Upstream reference | Approx LoC |
-|---|---|---|---:|
-| 1 | Port `Trivial` ending scheme (auto-fallback when other schemes don't match) | `AMFlow.m:1016-1095` | ~50 |
-| 2 | `SolveIntegrals` single-eps fast path (skip Laurent fit when user supplies `eps -> value` in `Numeric`) | `AMFlow.m:1364-1374` | ~30 |
-| 3 | Cutkosky physical-mass safety check (abort on negative `cutcom[[1,5]]` masses) | `AMFlow.m:1050` | ~15 |
-| 4 | Per-system `AMFSystemDirection` (read `AMFSystemOptions::direction` field; pick per-system Im / NegIm based on prescription) | `AMFlow.m:981-991` | ~30 |
-| 5 | Misc cleanup: stale comments, in-source upstream-line citations refreshed | — | small |
+| # | Item | Upstream reference | Status |
+|---|---|---|---|
+| 1 | Port `Trivial` ending scheme (auto-fallback when other schemes don't match) | `AMFlow.m:1016-1095` | ✅ done |
+| 2 | `SolveIntegrals` single-eps fast path (skip Laurent fit when user supplies `eps -> value` in `Numeric`) | `AMFlow.m:1364-1374` | ✅ done |
+| 3 | Cutkosky physical-mass safety check (abort on negative `cutcom[[1,5]]` masses) | `AMFlow.m:1050` | ✅ done |
+| 4 | Per-system `AMFSystemDirection` (compute per-system Im / NegIm from prescriptions of η-touching loops) | `AMFlow.m:981-991` | ✅ done |
+| 5 | Pin in-source upstream-line citations to commit `efda1db` via REFERENCE_MAP banner | — | ✅ done |
 
 ### Phase 1B — D3 proper Tradition-with-cut projection (~3 days)
 

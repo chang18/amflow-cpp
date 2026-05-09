@@ -60,6 +60,7 @@ const char* ending_scheme_name(EndingScheme s) noexcept {
         case EndingScheme::Tradition:  return "Tradition";
         case EndingScheme::Cutkosky:   return "Cutkosky";
         case EndingScheme::SingleMass: return "SingleMass";
+        case EndingScheme::Trivial:    return "Trivial";
     }
     return "?";
 }
@@ -454,6 +455,13 @@ bool ending_q(const qft::FamilyConfig& fc,
             return single_mass_ending_q_impl(fc, preferred, opts);
         case EndingScheme::Cutkosky:
             return cutkosky_ending_q_impl(fc, preferred);
+        case EndingScheme::Trivial:
+            // Mirrors upstream AMFlow.m:1031:
+            //   AMFSystemEndingQ[preferred_, "Trivial"] := False;
+            // Trivial is the always-applicable fallback; it never
+            // declares "ending here" because it is the *handler* that
+            // takes over when no other scheme can.
+            return false;
     }
     return false;
 }
@@ -912,6 +920,77 @@ void AMFSystem::setup() {
               "integrand recursion -- see AUDIT.md.");
     }
     fc_with_eta_ = build_injected_fc(*fc_, etac_);
+
+    // Mirrors AMFSystemDirection (AMFlow.m:981-991): pick the
+    // continuation direction from the prescriptions of the loops that
+    // touch eta-dependent propagators.  Mixed prescriptions abort.
+    {
+        const auto& fc_eta = *fc_with_eta_;
+        const long eta_var = fc_eta.ctx->var_index("eta");
+        std::set<long> touched_loops;
+        if (eta_var >= 0) {
+            const long n_total = fc_eta.ctx->n_vars();
+            const long n_loop  = (long)fc_eta.n_loops();
+            std::vector<unsigned long> exp((std::size_t)n_total);
+            for (const auto& prop : fc_eta.propagators_after_conservation) {
+                bool depends_on_eta = false;
+                std::vector<bool> seen_loop((std::size_t)n_loop, false);
+                const long len = fmpz_mpoly_length(prop.raw(),
+                                                     fc_eta.ctx->raw());
+                for (long t = 0; t < len; ++t) {
+                    fmpz_mpoly_get_term_exp_ui(exp.data(), prop.raw(), t,
+                                                fc_eta.ctx->raw());
+                    if (exp[(std::size_t)eta_var] > 0) depends_on_eta = true;
+                    for (long li = 0; li < n_loop; ++li) {
+                        if (exp[(std::size_t)li] > 0) {
+                            seen_loop[(std::size_t)li] = true;
+                        }
+                    }
+                }
+                if (!depends_on_eta) continue;
+                for (long li = 0; li < n_loop; ++li) {
+                    if (seen_loop[(std::size_t)li]) {
+                        touched_loops.insert(li);
+                    }
+                }
+            }
+        }
+
+        std::vector<int> pres_list;
+        pres_list.reserve(touched_loops.size());
+        for (long li : touched_loops) {
+            pres_list.push_back(fc_eta.prescription_of_loop(li));
+        }
+
+        // AMFlow.m:534 PrescriptionOf:
+        //   all zero -> 0      (returns 0; caller maps to NegIm)
+        //   drop zeros, all 1 -> 1   (caller maps to NegIm)
+        //   drop zeros, all -1 -> -1 (caller maps to Im)
+        //   mixed -> $Failed   (Abort)
+        bool all_zero = true;
+        for (int p : pres_list) if (p != 0) { all_zero = false; break; }
+        if (pres_list.empty() || all_zero) {
+            direction_ = numeric::RunningOptions::Direction::NegIm;
+        } else {
+            int common = 0;
+            bool consistent = true;
+            for (int p : pres_list) {
+                if (p == 0) continue;
+                if (common == 0) common = p;
+                else if (common != p) { consistent = false; break; }
+            }
+            if (!consistent) {
+                throw std::runtime_error(
+                    "AMFSystem::setup: cannot define a self-consistent "
+                    "path direction (mixed prescriptions on eta-touching "
+                    "loops; mirrors AMFlow.m:987 $Failed branch)");
+            }
+            direction_ = (common == -1)
+                ? numeric::RunningOptions::Direction::Im
+                : numeric::RunningOptions::Direction::NegIm;
+        }
+    }
+
     build_diffeq();
     build_boundary();
 }
@@ -2160,6 +2239,15 @@ AMFSystem::solve_one_eps(std::size_t eps_index, const numeric::AcbValue& eps) {
     }
     std::vector<numeric::AcbValue> sol_acb;
     try {
+        // Per-system path direction (AMFlow.m:981-991).  We override
+        // numeric::run_direction() for the duration of this call so
+        // ode::amflow → ode::run_eta picks up the system-specific
+        // contour orientation derived from the η-touching loops'
+        // prescriptions.
+        numeric::GlobalScope dir_scope;
+        dir_scope.running.run_direction = direction_;
+        dir_scope.commit();
+
         sol_acb = ode::amflow(de, bc_sorted, prec);
     } catch (const std::exception& e) {
         std::ostringstream msg;
@@ -2656,12 +2744,36 @@ amf_system_setup_master(const qft::FamilyConfig& fc,
         fc_use = numeric_fc.get();
     }
 
-    // Mirrors AMFSystemSetupMaster (line 1010):
-    //   if (all schemes ending) -> use etac=0, scheme = first
-    //   else -> recurse with the first non-ending scheme
+    // Mirrors AMFSystemSetupMaster (AMFlow.m:1010 + 1034): auto-append
+    // the Trivial scheme as a final fallback, then pick the first
+    // scheme whose `ending_q` returns false.  Since
+    // `ending_q(Trivial)` is unconditionally false, the for-loop
+    // always finds something — there is no "all ending, fall back"
+    // edge case to handle separately.
+    std::vector<EndingScheme> schemes_with_trivial = opts.ending_schemes;
+    bool has_trivial = false;
+    for (auto s : schemes_with_trivial) {
+        if (s == EndingScheme::Trivial) { has_trivial = true; break; }
+    }
+    if (!has_trivial) schemes_with_trivial.push_back(EndingScheme::Trivial);
+
+    EndingScheme scheme = EndingScheme::Trivial;  // safe default
+    for (auto s : schemes_with_trivial) {
+        if (!ending_q(*fc_use, preferred, s, opts)) { scheme = s; break; }
+    }
+
     std::vector<std::unique_ptr<AMFSystem>> out;
 
-    if (ending_q_all(*fc_use, preferred, opts)) {
+    if (scheme == EndingScheme::Trivial) {
+        // Mirrors upstream `AMFSystemSetupMaster[preferred_, "Trivial"]`
+        // (AMFlow.m:1086-1095): set up a system with NO eta injection
+        // (etac all-zero).  AMFSystem::setup() will see `is_ending_ =
+        // true` and the solver will look up the Vacuum table or use
+        // explicit boundary conditions provided by the caller.
+        AMFLOW_TRACE("AMFLOW_DEBUG_SCHEME") {
+            std::cerr << "[scheme] Trivial fired: family="
+                      << fc_use->family << std::endl;
+        }
         std::vector<int> zero_etac(fc_use->propagators_after_conservation.size(), 0);
         qft::FamilyConfig fc_copy = qft::FamilyConfig::build(
             fc_use->family, fc_use->loops, fc_use->legs,
@@ -2671,15 +2783,9 @@ amf_system_setup_master(const qft::FamilyConfig& fc,
             fc_use->cut, fc_use->prescription);
         auto sys = std::make_unique<AMFSystem>(
             std::move(fc_copy), preferred, std::move(zero_etac),
-            opts.ending_schemes.front(), opts);
+            scheme, opts);
         out.push_back(std::move(sys));
         return out;
-    }
-
-    // Find the first non-ending scheme.
-    EndingScheme scheme = EndingScheme::Tradition;
-    for (auto s : opts.ending_schemes) {
-        if (!ending_q(*fc_use, preferred, s, opts)) { scheme = s; break; }
     }
 
     if (scheme == EndingScheme::SingleMass) {
@@ -2701,6 +2807,7 @@ amf_system_setup_master(const qft::FamilyConfig& fc,
         auto top = qft::get_top_position(preferred);
         auto info = qft::analyze_top_sector(*fc_use, top);
         long phase_loop_num = -1;
+        const qft::TopSectorComponentInfo* phase_comp = nullptr;
         for (const auto& comp : info) {
             if (qft::phase_volume_q(comp)) {
                 if (phase_loop_num >= 0) {
@@ -2709,12 +2816,57 @@ amf_system_setup_master(const qft::FamilyConfig& fc,
                         "phase-volume components");
                 }
                 phase_loop_num = comp.loopnum;
+                phase_comp = &comp;
             }
         }
         if (phase_loop_num < 0) {
             throw std::runtime_error(
                 "amf_system_setup_master: Cutkosky found no "
                 "phase-volume component");
+        }
+
+        // Mirrors AMFlow.m:1050: abort if any cutcom mass is negative
+        // after `Numeric` substitution.  Negative squared masses in the
+        // cut component are unphysical and cannot yield a real cut
+        // rate; allowing them produces meaningless numbers.
+        for (std::size_t mi = 0; mi < phase_comp->mass.size(); ++mi) {
+            algebra::Mfrac evaluated =
+                apply_numeric(phase_comp->mass[mi], numeric_q);
+            const auto* mctx = evaluated.ctx().get();
+            algebra::Mpoly num = evaluated.numerator();
+            algebra::Mpoly den = evaluated.denominator();
+            if (!fmpz_mpoly_is_fmpz(num.raw(), mctx->raw()) ||
+                !fmpz_mpoly_is_fmpz(den.raw(), mctx->raw())) {
+                throw std::runtime_error(
+                    "amf_system_setup_master: Cutkosky cannot validate "
+                    "physical-mass condition because a phase-volume "
+                    "component mass remains symbolic after Numeric "
+                    "substitution; supply a numeric value for every "
+                    "mass and kinematic invariant via "
+                    "amf_options.blackbox.numeric_values.  "
+                    "(Mirrors AMFlow.m:1050.)");
+            }
+            fmpz_t num_z, den_z;
+            fmpz_init(num_z); fmpz_init(den_z);
+            fmpz_mpoly_get_fmpz(num_z, num.raw(), mctx->raw());
+            fmpz_mpoly_get_fmpz(den_z, den.raw(), mctx->raw());
+            const int sgn_num = fmpz_sgn(num_z);
+            const int sgn_den = fmpz_sgn(den_z);
+            fmpz_clear(num_z); fmpz_clear(den_z);
+            if (sgn_den == 0) {
+                throw std::runtime_error(
+                    "amf_system_setup_master: Cutkosky mass denominator "
+                    "is zero after Numeric substitution");
+            }
+            if (sgn_num * sgn_den < 0) {
+                std::ostringstream m;
+                m << "amf_system_setup_master: Cutkosky cannot proceed: "
+                  << "phase-volume component mass[" << mi
+                  << "] is negative after Numeric substitution.  "
+                     "Negative squared masses are unphysical for the "
+                     "Cutkosky scheme.  (Mirrors AMFlow.m:1050.)";
+                throw std::runtime_error(m.str());
+            }
         }
 
         AMFLOW_TRACE("AMFLOW_DEBUG_SCHEME") {

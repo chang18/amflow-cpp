@@ -246,6 +246,7 @@ pipeline::EndingScheme parse_ending_scheme_string(const std::string& s) {
     if (s == "Tradition") return pipeline::EndingScheme::Tradition;
     if (s == "Cutkosky") return pipeline::EndingScheme::Cutkosky;
     if (s == "SingleMass") return pipeline::EndingScheme::SingleMass;
+    if (s == "Trivial") return pipeline::EndingScheme::Trivial;
     throw std::runtime_error("unknown ending scheme '" + s + "'");
 }
 

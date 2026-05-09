@@ -75,6 +75,12 @@ enum class EndingScheme {
     Tradition,
     Cutkosky,
     SingleMass,
+    // Always-applicable fallback: when none of the named schemes
+    // produces an η-injection / Cutkosky / single-mass setup, the
+    // dispatcher falls back to Trivial — set up an AMFSystem with no
+    // η injection.  Mirrors upstream `AMFSystemSetupMaster[..., "Trivial"]`
+    // (AMFlow.m:1086-1095) and the auto-append at AMFlow.m:1034.
+    Trivial,
 };
 const char* ending_scheme_name(EndingScheme s) noexcept;
 
@@ -243,6 +249,14 @@ private:
     bool                          is_ending_;
     AMFSystemOptions              opts_;
     long                          system_id_ = 0;
+
+    // Per-system path direction, computed during setup() from the
+    // prescriptions of η-touching loops (mirrors upstream
+    // `AMFSystemDirection`, AMFlow.m:981-991).  Used in solve() to
+    // override the global `numeric::run_direction()` when this
+    // system's η contour orientation differs from the default.
+    numeric::RunningOptions::Direction direction_
+        = numeric::RunningOptions::Direction::NegIm;
 
     // Eta-injected version of fc_ (used for diffeq + boundary).  Only
     // built if !is_ending_.

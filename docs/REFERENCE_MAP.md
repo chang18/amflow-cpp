@@ -12,10 +12,12 @@ vendor it (see [`reference/README.md`](../reference/README.md)).
 - Upstream `ibp_interface/Kira/interface.m` and the small Kira-glue
   helpers.  Covered in Part III below.
 
-Line numbers cited below track upstream master at the time of the
-v1.0.0 release.  Upstream has continued to develop since (see
-[`AUDIT_MMA_PARITY.md`](AUDIT_MMA_PARITY.md) §5 for the diff
-summary), so individual line numbers may be ~30 lines off in places.
+Line numbers cited below track upstream commit
+[`efda1db`](https://gitlab.com/multiloop-pku/amflow/-/commit/efda1db)
+("add_version_number_1.2"), the snapshot taken when this port was
+performed.  Upstream may have moved on since (see
+[`AUDIT_MMA_PARITY.md`](AUDIT_MMA_PARITY.md) §5 for any drift), so
+individual line numbers may be off in newer revisions.
 **Search by symbol name when in doubt.**  In-source `// Mirrors
 AMFlow.m:NNN` comments follow the same convention.
 

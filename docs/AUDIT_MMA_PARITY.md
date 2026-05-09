@@ -199,12 +199,14 @@ exercises them.  Each is a candidate for a future oracle.
 The upstream master branch has progressed since the C++ port was
 performed.  Diffs against our reference snapshot:
 
-- **New `Trivial` ending scheme** (`AMFlow.m:259`, `1016-1095`):
-  upstream auto-appends `"Trivial"` to the user's `EndingScheme` list
-  (`AMFlow.m:1034`) so there is always a fallback.  Our port has only
-  `Tradition`, `Cutkosky`, `SingleMass`.  Latent: a configuration that
-  trips all three of ours would error where MMA would silently fall
-  back.  **No oracle currently hits this.**
+- ~~**New `Trivial` ending scheme**~~ — **PORTED** (Phase 1A.1):
+  `EndingScheme::Trivial` is now an explicit enum value with
+  `ending_q(Trivial) === false` (mirroring upstream's
+  `AMFSystemEndingQ[..., "Trivial"] := False`); the dispatcher
+  auto-appends Trivial to the user's `ending_schemes` list
+  (mirror of `AMFlow.m:1034`) so a fallback always exists.  Selecting
+  Trivial gives the same passthrough setup as the previous "all
+  schemes ending" shortcut (etac all-zero).
 - **New `UseCache` and `SkipReduction` options** (`AMFlow.m:259`):
   caching/skip toggles for AMFSystem persistence.  Not ported.  Not
   blocking.

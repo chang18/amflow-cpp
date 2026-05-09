@@ -880,6 +880,70 @@ solve_integrals(const qft::FamilyConfig& fc,
             "solve_integrals: eps_order must be non-negative");
     }
 
+    // Single-eps fast path (mirrors AMFlow.m:1364-1374): if the user
+    // pinned `eps` to a numeric value via `numeric_values["eps"]`, we
+    // skip the Laurent fit entirely and return one coefficient at
+    // order 0 representing the integral evaluated at that eps.
+    auto eps_pin_it = opts.bb.numeric_values.find("eps");
+    if (eps_pin_it != opts.bb.numeric_values.end()) {
+        // Working precision and truncation tighten with the goal.
+        numeric::GlobalScope fast_scope;
+        fast_scope.global.working_pre = static_cast<int>(2 * goal_digits);
+        fast_scope.expansion.x_order  = static_cast<int>(4 * goal_digits);
+        if (fast_scope.expansion.extra_x_order < fast_scope.expansion.x_order) {
+            fast_scope.expansion.extra_x_order = fast_scope.expansion.x_order;
+        }
+        fast_scope.commit();
+
+        // Parse user's `eps` and apply the D0 shift `(4 - D0)/2`.
+        fmpq_t user_eps; fmpq_init(user_eps);
+        if (fmpq_set_str(user_eps, eps_pin_it->second.c_str(), 10) != 0) {
+            fmpq_clear(user_eps);
+            throw std::runtime_error(
+                "solve_integrals: failed to parse user `eps` rational '"
+                + eps_pin_it->second + "'");
+        }
+        fmpq_t shift; fmpq_init(shift);
+        numeric::d0_eps_shift_fmpq(shift);
+        fmpq_t internal_eps; fmpq_init(internal_eps);
+        fmpq_add(internal_eps, user_eps, shift);
+
+        const long prec = numeric::working_prec_bits();
+        numeric::AcbValue sample;
+        arb_set_fmpq(acb_realref(sample.raw()), internal_eps, prec);
+        arb_zero(acb_imagref(sample.raw()));
+
+        fmpq_clear(user_eps);
+        fmpq_clear(shift);
+        fmpq_clear(internal_eps);
+
+        std::vector<numeric::AcbValue> internal_samples;
+        internal_samples.push_back(std::move(sample));
+
+        const auto sampled =
+            black_box_amflow(fc, jints, internal_samples, opts, work_dir);
+
+        std::vector<LaurentIntegralSolution> out;
+        out.reserve(sampled.size());
+        for (const auto& row : sampled) {
+            if (row.values.size() != 1) {
+                throw std::runtime_error(
+                    "solve_integrals fast path: expected exactly one "
+                    "sampled value per integral");
+            }
+            LaurentIntegralSolution sol;
+            sol.integral = row.integral;
+            // Express the result as a degenerate one-term Laurent at
+            // order 0 (the value AT the user-supplied eps).  Mirrors
+            // upstream `Thread[Keys[sol] -> Values[sol][[All, 1]]]`
+            // (AMFlow.m:1372).
+            sol.leading_order = 0;
+            sol.coefficients.push_back(row.values[0].clone());
+            out.push_back(std::move(sol));
+        }
+        return out;
+    }
+
     auto cfg = generate_numerical_config(
         static_cast<long>(fc.n_loops()), goal_digits, eps_order);
 
