@@ -168,6 +168,7 @@ For current parity benchmarks at `eps = 1/1000` see
 | [`docs/REFERENCE_MAP.md`](docs/REFERENCE_MAP.md) | Upstream Mathematica symbol → C++ symbol mapping |
 | [`AUDIT.md`](AUDIT.md) | Current parity status, validated surface, benchmark inventory |
 | [`docs/AUDIT_MMA_PARITY.md`](docs/AUDIT_MMA_PARITY.md) | Line-level audit of the C++ port against upstream MMA AMFlow |
+| [`docs/ROADMAP.md`](docs/ROADMAP.md) | Active development plan (post-v1.0 implementation completeness + oracle expansion) |
 | [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md) | Measured C++ vs MMA wall clocks on the 12 oracle benchmarks |
 | [`notes/mma_*_map.md`](notes/) | Per-file upstream Mathematica source → C++ port maps |
 | [`reference/README.md`](reference/README.md) | How to clone the upstream MMA AMFlow locally for reference data regeneration |

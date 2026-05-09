@@ -220,22 +220,24 @@ behaviour we already ported has changed.
 
 ---
 
-## 6. Follow-up items (in rough priority order)
+## 6. Follow-up items
 
-1. **Implement the proper Tradition-with-cut boundary projection**
-   (replace the D3 detect-and-throw with the AMFlow.m:790-803 mirror)
-   so users can run cut families through Tradition without hitting the
-   abort.
-2. **Port `Trivial` ending scheme** so the scheme dispatcher always has
-   a fallback (upstream `AMFlow.m:1016-1095`).
-3. **`ComplexMode` / imaginary-numeric pipeline in Kira interface**
-   (D5); bigger feature; v1.1.
-4. **Pin source-comment line citations** to an upstream commit hash
-   and add a banner in `docs/REFERENCE_MAP.md` explaining the policy.
-5. **Add oracles for the 🟡 unverified branches** that touch user-
-   reachable behaviour (priority: per-system Direction, multi-invariant
-   `LIBPDeriv`, Tradition-with-cut family once D3 is properly fixed,
-   scaleless-via-`Numeric`).
+The active development plan that addresses the items in this audit
+lives in [`docs/ROADMAP.md`](ROADMAP.md).  In summary:
 
-None of these are release-blockers.  Items 2 and 4 are small enough to
-bundle into a follow-up patch release; items 1, 3, 5 are v1.1 work.
+- **Phase 1A** — five small implementations of currently-missing
+  paths (`Trivial` ending scheme, `SolveIntegrals` single-eps fast
+  path, Cutkosky physical-mass safety check, per-system
+  `AMFSystemDirection`, plus stale-comment cleanup).
+- **Phase 1B** — replace the D3 Tradition-with-cut detect-and-throw
+  with the proper projection (mirror of upstream
+  `AMFlow.m:790-803`); requires a new oracle benchmark.
+- **Phase 1C** — implement D5 (Kira `ComplexMode` / imaginary-numeric
+  pipeline); requires a new oracle with complex kinematics.
+- **Phase 2** — convert each 🟡 in §3 above into either an oracle-
+  validated 🟢 or a documented "theoretical equivalence" entry.
+- **Phase 3** — ongoing diversification of the oracle suite (loop
+  number, invariant count, mass config, cut topology, ε regimes).
+
+See `ROADMAP.md` for the concrete breakdown, sizing, and acceptance
+gates.
