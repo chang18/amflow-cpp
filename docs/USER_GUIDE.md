@@ -61,6 +61,25 @@ matrix already in hand.
 For complete field-level reference see
 [`docs/JSON_SCHEMA.md`](JSON_SCHEMA.md).
 
+> **Known limitations** — the C++ port currently does not match
+> upstream MMA in three input regimes:
+>
+> 1. **Complex-valued numeric kinematics** — supply only real values
+>    in `amf_options.blackbox.numeric_values`.  (Audit divergence D5.)
+> 2. **Tradition scheme on a family with non-empty `cut`** — use
+>    `EndingScheme=Cutkosky` for cut families, which clears the cut at
+>    setup time.  C++ aborts with a clear error in this case rather
+>    than producing a possibly-wrong answer.  (D3.)
+> 3. **`Trivial` ending scheme** — not ported; upstream auto-appends
+>    it as a final fallback.  In practice the three available schemes
+>    (`Tradition` / `Cutkosky` / `SingleMass`) cover all oracle
+>    families; report a case if you hit "no scheme matched".
+>
+> Full inventory of upstream divergences (including 21 unverified
+> branches and 17 intentionally-not-ported items) lives in
+> [`docs/AUDIT_MMA_PARITY.md`](AUDIT_MMA_PARITY.md).  See also
+> [`docs/FAQ.md`](FAQ.md) "What's *not* implemented?".
+
 ---
 
 ## 3. 30-second example — no IBP, no Kira

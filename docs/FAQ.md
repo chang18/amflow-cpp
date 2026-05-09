@@ -210,13 +210,40 @@ Full details: [`tools/bench/README.md`](../tools/bench/README.md).
 
 ### Q. What's *not* implemented?
 
+**Out of scope (intentional, won't be added):**
 - `SolveIntegralsGaugeLink`
 - HQET / SCET / Wilson-line workflows
-- IBP backends other than Kira
+- IBP backends other than Kira (no FIRE / LiteRed / FiniteFlow / Blade)
 
-See [`AUDIT.md`](../AUDIT.md) for the validated parity surface and
-[`docs/REFERENCE_MAP.md`](REFERENCE_MAP.md) for the full upstream-MMA →
-C++ symbol mapping (with explicit "not ported" entries).
+**Known limitations (planned for v1.1):**
+- **Complex-valued numeric kinematics.**  Upstream filters
+  imaginary-part numerics through `IBPRule` / `CompensateRule`
+  (apply real parts to Kira, substitute imaginary parts after).
+  This C++ port treats `amf_options.blackbox.numeric_values` as a
+  flat real-valued map; supplying a complex value will not produce
+  correct results.  Workaround: provide only purely-real numeric
+  values for now.  (Audit divergence D5.)
+- **Tradition scheme on a family with non-empty `cut`.**  The C++
+  port currently aborts with a clear error in this case rather than
+  computing a possibly-wrong answer.  Workaround: use
+  `EndingScheme=Cutkosky` for cut families, which clears the parent
+  cut at setup time.  (Audit divergence D3 — was silent-wrong in
+  v1.0.0; converted to loud abort in the post-v1.0 patch.)
+- **`Trivial` ending scheme.**  Upstream auto-appends a `Trivial`
+  fallback so the scheme dispatcher never exhausts; this port has
+  three schemes (`Tradition` / `Cutkosky` / `SingleMass`).  In
+  practice the supplied schemes always succeed for the oracle
+  benchmark families; users with families that need the upstream
+  fallback will see a "no scheme matched" error.
+
+**See also:**
+- [`AUDIT.md`](../AUDIT.md) — validated parity surface and the 12
+  oracle benchmarks.
+- [`docs/AUDIT_MMA_PARITY.md`](AUDIT_MMA_PARITY.md) — line-level
+  upstream-parity audit (full divergence inventory: 6 🔴 / 21 🟡
+  / 17 ⚪).
+- [`docs/REFERENCE_MAP.md`](REFERENCE_MAP.md) — Mathematica → C++
+  symbol mapping (with explicit "not ported" entries).
 
 ### Q. Why "AI-developed" — should I trust the code?
 

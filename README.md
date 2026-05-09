@@ -87,11 +87,12 @@ Public headers under `include/amflow/<domain>/`; implementation under
 | Top-level entries (`amflow`, `black_box_amflow`, `solve_integrals`) | Implemented; exposed via `amflow_cli` JSON modes |
 | Line-level MMA parity audit (post-v1.0) | 65 🟢 verified, 21 🟡 unverified, 6 🔴 (5 fixed, 1 deferred to v1.1); no silent-wrong-result paths remain. See [`docs/AUDIT_MMA_PARITY.md`](docs/AUDIT_MMA_PARITY.md) |
 | Wall-clock vs MMA on 12 oracles | ~1.5–2.5× speedup on Kira-light benches; comparable on Kira-heavy benches (both runtimes spend their wall in Kira); see [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md) |
-| `SolveIntegralsGaugeLink`, HQET / SCET / Wilson lines | Out of scope |
+| `SolveIntegralsGaugeLink`, HQET / SCET / Wilson lines | Out of scope (intentional) |
+| Complex-valued numeric kinematics; Tradition-scheme on cut families; `Trivial` ending fallback | Known limitations — see [`docs/FAQ.md`](docs/FAQ.md) "What's *not* implemented?" |
 
 See [`AUDIT.md`](AUDIT.md) for the validated families and benchmark
 inventory; [`docs/AUDIT_MMA_PARITY.md`](docs/AUDIT_MMA_PARITY.md) for
-the line-level upstream-parity audit.
+the line-level upstream-parity audit (full divergence inventory).
 
 ## Quick start
 
