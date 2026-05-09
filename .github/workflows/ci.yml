@@ -65,11 +65,29 @@ jobs:
 
       - name: Expose FLINT to pkg-config / ldconfig
         run: |
-          echo "PKG_CONFIG_PATH=/opt/flint/lib/pkgconfig" >> "$GITHUB_ENV"
-          echo "LD_LIBRARY_PATH=/opt/flint/lib" >> "$GITHUB_ENV"
+          set -e
+
+          # Show what got installed (diagnostic for future failures).
+          echo "--- /opt/flint/lib ---"
+          ls /opt/flint/lib/ 2>/dev/null | head
+          echo "--- /opt/flint/lib/pkgconfig ---"
+          ls /opt/flint/lib/pkgconfig/ 2>/dev/null || echo "(no pkgconfig dir)"
+
+          # Make linker find the shared lib system-wide.
           echo "/opt/flint/lib" | sudo tee /etc/ld.so.conf.d/flint.conf
           sudo ldconfig
+
+          # Propagate env to subsequent steps (note: $GITHUB_ENV does
+          # NOT affect the current shell — verification runs in the
+          # next step so the env is live there).
+          echo "PKG_CONFIG_PATH=/opt/flint/lib/pkgconfig" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=/opt/flint/lib" >> "$GITHUB_ENV"
+          echo "CMAKE_PREFIX_PATH=/opt/flint" >> "$GITHUB_ENV"
+
+      - name: Verify FLINT visibility
+        run: |
           pkg-config --modversion flint
+          pkg-config --cflags --libs flint
 
       - name: Configure
         run: cmake -S . -B build -G Ninja -DAMFLOW_BUILD_DRIVER=ON
