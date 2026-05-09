@@ -119,7 +119,7 @@ the triplet.
 |---|---|---|
 | `analyze_block` topology choice | non-nested overlapping-closure block matrix | pending |
 | `Calcx00` heuristic match-row vs symbolic Solve | rank-deficient boundary system | pending |
-| Jordan block ordering | ODE block with ≥2 distinct eigenvalues | pending |
+| Jordan block ordering | ODE block with ≥2 distinct eigenvalues | ✅ done (2026-05-10) — `test_ode_jordan.cpp` `*Distinct*` cases (2-/3-distinct-eigenvalue, mixed block sizes, similarity transform); end-to-end "no impact on final integral" independently locked by 12 oracle benches |
 | `LIBPDeriv` multi-invariant | family with two kinematic invariants and a derivative bench | ✅ done (2026-05-09) — `test_ibp_libp_deriv.cpp` `*TwoMassBubble*` covers free-symbol multi-invariant chain rule; Replacement-defined invariant scope documented in `include/amflow/ibp/libp_deriv.hpp` |
 
 ### 2B — medium-risk — ~2 days

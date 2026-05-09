@@ -10,8 +10,8 @@ cover.
 
 | Severity | Count | Action taken |
 |---|---|---|
-| 🟢 verified                  | 66 | — |
-| 🟡 unverified (oracle gap)    | 20 | Documented in §3 below; tracked for future bench expansion.  Phase 2A reduces this count as oracles land (LIBPDeriv multi-invariant: 🟡 → 🟢, 2026-05-09). |
+| 🟢 verified                  | 67 | — |
+| 🟡 unverified (oracle gap)    | 19 | Documented in §3 below; tracked for future bench expansion.  Phase 2A reduces this count as oracles land (LIBPDeriv multi-invariant: 🟡 → 🟢 2026-05-09; Jordan block ordering: 🟡 → 🟢 2026-05-10). |
 | 🔴 actual divergence          |  6 | **5 fully fixed; 1 deferred indefinitely** (D5, ComplexMode — investigated post-v1.0 and found to require an algebra-layer extension; entry-point now rejects loudly).  D3 was upgraded from detect-and-throw (Phase 1A) to the proper projection (Phase 1B) with an oracle. |
 | ⚪ intentionally not ported   | 17 | — |
 
@@ -187,7 +187,7 @@ exercises them.  Each is a candidate for a future oracle.
 | `Calcx00` boundary linear-system selection | `src/ode/zero.cpp:1314-1703` | Heuristic match-row selection + Dixon over Q[i]; upstream uses one symbolic `Solve[…, allvar]`.  Equivalent on full-rank systems. |
 | Acb-inverse failure fallback in `Calcx00` | `src/ode/zero.cpp:1199-1206` | C++ degrades to "all positions resonate"; upstream's symbolic inverse never fails. |
 | `evaluate_taylor` strips arb radii | `src/ode/regular.cpp` | Documented in source; abandons rigorous error bars on the regular-running stage. |
-| Jordan block ordering | `src/ode/jordan.cpp` | Groups by eigenvalue then descending depth; MMA sorts globally by descending size.  Same final algebra, different column permutation when ≥2 distinct eigenvalues. |
+| ~~Jordan block ordering~~ → 🟢 | `src/ode/jordan.cpp` | **Verified, equivalence locked.**  Groups by eigenvalue then descending depth; MMA sorts globally by descending size.  Same final algebra, different column permutation when ≥2 distinct eigenvalues.  Multi-distinct-eigenvalue decomposition correctness (`S J S^{-1} = A`, eigenvalue multiset, block-size multiset) is now locked by `test_ode_jordan.cpp` `*Distinct*` tests (2-, 3-distinct-eigenvalue cases including non-trivial similarity transform and chains on each eigenvalue).  End-to-end "permutation has no effect on final integral" is independently asserted by the 12 oracle benchmarks matching MMA at rel ~10⁻³⁰. |
 | `SolveIntegrals` single-eps fast path | `src/pipeline/solve_integrals.cpp:867-944` | `AMFlow.m:1364-1374` short-circuits when `eps` is in `Numeric`; C++ always Laurent-fits. |
 | Per-system `AMFSystemDirection` | `src/ode/path.cpp:431` | Upstream `AMFlow.m:981-991` picks Im / NegIm per-system based on prescription; C++ uses global `RunDirection`.  `AMFSystemOptions::direction` field is unread. |
 | `SingleMassQ` substitutes `Numeric` | `src/pipeline/amfsystem.cpp:795` | C++ enhancement; MMA tests literally.  Latent: if a user supplies `mass` symbolically and forgets `Numeric`, MMA refuses to ending and C++ accepts. |

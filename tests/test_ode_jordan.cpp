@@ -115,6 +115,199 @@ TEST(JordanTest, MixedBlocksSameEigenvalue) {
     fmpq_mat_clear(A);
 }
 
+// --- Multi-distinct-eigenvalue cases (audit divergence row 190, 🟡 → 🟢) -
+//
+// Existing tests above all use a single distinct eigenvalue.  The
+// audit's row-190 concern is: C++ `jordan_decomposition_exact`
+// groups blocks by eigenvalue (outer loop in `jordan.cpp:265`,
+// `for (auto& [lambda, mult] : eigs)`), then within each
+// eigenvalue places blocks in *descending size* order.  Upstream
+// MMA `JordanDecomposition` sorts blocks globally by descending
+// size, mixing eigenvalues.  The two orderings differ when a
+// matrix has ≥2 distinct eigenvalues with non-trivial size mix.
+//
+// The audit calls this "same final algebra, different column
+// permutation."  These tests lock that in: for ≥2-distinct-
+// eigenvalue inputs we verify the decomposition's algebraic
+// invariants (reconstruction `S J S^{-1} = A`, block-size
+// multiset, eigenvalue multiset) without depending on the
+// specific column order.  The end-to-end no-impact-on-final-
+// integral is independently asserted by the 12 oracle benchmarks
+// matching MMA at rel ~ 10^{-30}.
+
+TEST(JordanTest, TwoDistinctEigenvalues_SimpleDiagonal) {
+    // A = diag(3, 5) — two distinct simple eigenvalues.
+    fmpq_mat_t A, S, J, Sinv;
+    fmpq_mat_init(A, 2, 2);
+    fmpq_mat_init(S, 2, 2);
+    fmpq_mat_init(J, 2, 2);
+    fmpq_mat_init(Sinv, 2, 2);
+    set_si(A, 0, 0, 3);
+    set_si(A, 1, 1, 5);
+
+    std::vector<long> blocks;
+    ode::jordan_decomposition_exact(S, J, Sinv, blocks, A);
+
+    ASSERT_EQ(blocks.size(), 2u);
+    EXPECT_EQ(blocks[0], 1);
+    EXPECT_EQ(blocks[1], 1);
+    expect_reconstructs(A, S, J, Sinv);
+
+    fmpq_mat_clear(Sinv);
+    fmpq_mat_clear(J);
+    fmpq_mat_clear(S);
+    fmpq_mat_clear(A);
+}
+
+TEST(JordanTest, TwoDistinctEigenvalues_MixedBlockSizes) {
+    // A is similar to diag(J_2(2), J_1(7)).  C++ groups by
+    // eigenvalue: λ=2 first (block size 2), then λ=7 (block size 1).
+    // MMA would sort globally: [2-block @ λ=2, 1-block @ λ=7] —
+    // happens to be the same order here.  But the algebraic
+    // invariants (reconstruction, set of eigenvalues, multiset of
+    // block sizes) are basis-invariant either way.
+    fmpq_mat_t A, S, J, Sinv;
+    fmpq_mat_init(A, 3, 3);
+    fmpq_mat_init(S, 3, 3);
+    fmpq_mat_init(J, 3, 3);
+    fmpq_mat_init(Sinv, 3, 3);
+
+    // J_2(2)+J_1(7) in upper-triangular form.
+    set_si(A, 0, 0, 2); set_si(A, 0, 1, 1);
+    set_si(A, 1, 1, 2);
+    set_si(A, 2, 2, 7);
+
+    std::vector<long> blocks;
+    ode::jordan_decomposition_exact(S, J, Sinv, blocks, A);
+
+    // Multiset of block sizes.
+    ASSERT_EQ(blocks.size(), 2u);
+    std::vector<long> sizes_sorted = blocks;
+    std::sort(sizes_sorted.begin(), sizes_sorted.end(), std::greater<long>());
+    EXPECT_EQ(sizes_sorted[0], 2);
+    EXPECT_EQ(sizes_sorted[1], 1);
+
+    // Eigenvalue multiset on the diagonal of J.
+    std::vector<long> eig_diag;
+    for (slong i = 0; i < 3; ++i) {
+        const fmpq* e = fmpq_mat_entry(J, i, i);
+        ASSERT_TRUE(fmpz_is_one(fmpq_denref(e))) << "diagonal not integer";
+        eig_diag.push_back(fmpz_get_si(fmpq_numref(e)));
+    }
+    std::sort(eig_diag.begin(), eig_diag.end());
+    EXPECT_EQ(eig_diag, (std::vector<long>{2, 2, 7}));
+
+    expect_reconstructs(A, S, J, Sinv);
+
+    fmpq_mat_clear(Sinv);
+    fmpq_mat_clear(J);
+    fmpq_mat_clear(S);
+    fmpq_mat_clear(A);
+}
+
+TEST(JordanTest, ThreeDistinctEigenvalues_SimilarityTransformed) {
+    // Build A = P * diag(1, 2, 3) * P^{-1} where P is a fixed
+    // unimodular integer matrix.  Eigenvalues {1, 2, 3} — three
+    // distinct simple ones.  Tests the multi-distinct-eigenvalue
+    // outer-loop path with a non-trivial similarity transform so
+    // that the result is not already diagonal.
+    fmpq_mat_t Jref, P, Pinv, PJ, A, S, J, Sinv;
+    fmpq_mat_init(Jref, 3, 3);
+    fmpq_mat_init(P,    3, 3);
+    fmpq_mat_init(Pinv, 3, 3);
+    fmpq_mat_init(PJ,   3, 3);
+    fmpq_mat_init(A,    3, 3);
+    fmpq_mat_init(S,    3, 3);
+    fmpq_mat_init(J,    3, 3);
+    fmpq_mat_init(Sinv, 3, 3);
+
+    set_si(Jref, 0, 0, 1);
+    set_si(Jref, 1, 1, 2);
+    set_si(Jref, 2, 2, 3);
+
+    // P = [[1,1,0],[0,1,1],[0,0,1]]  (upper unitriangular, det = 1).
+    set_si(P, 0, 0, 1); set_si(P, 0, 1, 1);
+    set_si(P, 1, 1, 1); set_si(P, 1, 2, 1);
+    set_si(P, 2, 2, 1);
+    // P^{-1} for this upper unitriangular: invert directly.
+    set_si(Pinv, 0, 0, 1); set_si(Pinv, 0, 1, -1); set_si(Pinv, 0, 2, 1);
+    set_si(Pinv, 1, 1, 1); set_si(Pinv, 1, 2, -1);
+    set_si(Pinv, 2, 2, 1);
+
+    fmpq_mat_mul(PJ, P, Jref);
+    fmpq_mat_mul(A,  PJ, Pinv);
+
+    std::vector<long> blocks;
+    ode::jordan_decomposition_exact(S, J, Sinv, blocks, A);
+
+    ASSERT_EQ(blocks.size(), 3u);
+    for (long b : blocks) EXPECT_EQ(b, 1);
+
+    // Eigenvalue multiset on diagonal of J.
+    std::vector<long> eig_diag;
+    for (slong i = 0; i < 3; ++i) {
+        const fmpq* e = fmpq_mat_entry(J, i, i);
+        ASSERT_TRUE(fmpz_is_one(fmpq_denref(e)));
+        eig_diag.push_back(fmpz_get_si(fmpq_numref(e)));
+    }
+    std::sort(eig_diag.begin(), eig_diag.end());
+    EXPECT_EQ(eig_diag, (std::vector<long>{1, 2, 3}));
+
+    expect_reconstructs(A, S, J, Sinv);
+
+    fmpq_mat_clear(Sinv);
+    fmpq_mat_clear(J);
+    fmpq_mat_clear(S);
+    fmpq_mat_clear(A);
+    fmpq_mat_clear(PJ);
+    fmpq_mat_clear(Pinv);
+    fmpq_mat_clear(P);
+    fmpq_mat_clear(Jref);
+}
+
+TEST(JordanTest, TwoDistinctEigenvalues_BothWithJordanBlocks) {
+    // Most demanding case: λ=2 with a 2-block, λ=−1 with a 2-block.
+    // 4×4 matrix where each eigenvalue has algebraic multiplicity 2
+    // and a single Jordan chain.  Locks down that the "by-eigenvalue
+    // outer loop, descending block size inner" ordering does not
+    // miss any chains when ≥2 distinct eigenvalues each carry a
+    // non-trivial chain.
+    fmpq_mat_t A, S, J, Sinv;
+    fmpq_mat_init(A, 4, 4);
+    fmpq_mat_init(S, 4, 4);
+    fmpq_mat_init(J, 4, 4);
+    fmpq_mat_init(Sinv, 4, 4);
+
+    // Block-diagonal: J_2(2) ⊕ J_2(-1).
+    set_si(A, 0, 0, 2); set_si(A, 0, 1, 1);
+    set_si(A, 1, 1, 2);
+    set_si(A, 2, 2, -1); set_si(A, 2, 3, 1);
+    set_si(A, 3, 3, -1);
+
+    std::vector<long> blocks;
+    ode::jordan_decomposition_exact(S, J, Sinv, blocks, A);
+
+    ASSERT_EQ(blocks.size(), 2u);
+    EXPECT_EQ(blocks[0], 2);
+    EXPECT_EQ(blocks[1], 2);
+
+    std::vector<long> eig_diag;
+    for (slong i = 0; i < 4; ++i) {
+        const fmpq* e = fmpq_mat_entry(J, i, i);
+        ASSERT_TRUE(fmpz_is_one(fmpq_denref(e)));
+        eig_diag.push_back(fmpz_get_si(fmpq_numref(e)));
+    }
+    std::sort(eig_diag.begin(), eig_diag.end());
+    EXPECT_EQ(eig_diag, (std::vector<long>{-1, -1, 2, 2}));
+
+    expect_reconstructs(A, S, J, Sinv);
+
+    fmpq_mat_clear(Sinv);
+    fmpq_mat_clear(J);
+    fmpq_mat_clear(S);
+    fmpq_mat_clear(A);
+}
+
 TEST(JordanTest, IrrationalEigenvalueThrows) {
     // A = [[0,1],[2,0]] -> eigenvalues +-sqrt(2) are not in Q.
     fmpq_mat_t A, S, J, Sinv;
