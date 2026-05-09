@@ -10,6 +10,7 @@
 #include "amflow/numeric/rational.hpp"
 #include "amflow/ode/blocks.hpp"
 
+#include <algorithm>
 #include <stdexcept>
 #include <vector>
 

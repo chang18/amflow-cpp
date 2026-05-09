@@ -12,6 +12,7 @@
 #include <flint/arb.h>
 #include <flint/fmpq.h>
 
+#include <algorithm>
 #include <cmath>
 #include <vector>
 

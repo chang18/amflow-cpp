@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Tests for amflow::qft::vacuum.
 
+#include <algorithm>
 #include <cmath>
 #include <gtest/gtest.h>
 

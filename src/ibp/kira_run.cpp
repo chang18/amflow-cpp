@@ -4,6 +4,7 @@
 
 #include "amflow/ibp/kira.hpp"
 
+#include <algorithm>
 #include <cctype>
 #include <chrono>
 #include <cstdlib>
