@@ -146,16 +146,26 @@ For current parity benchmarks at `eps = 1/1000` see
 
 ## Documentation map
 
+**For users** — read in this order:
+
+1. [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md) — step-by-step walk-through of one no-IBP example and one full Feynman-integral example.
+2. [`docs/JSON_SCHEMA.md`](docs/JSON_SCHEMA.md) — every field of every input/output, for all three CLI modes.
+3. [`docs/FAQ.md`](docs/FAQ.md) — common build / runtime / parity questions.
+
+**For contributors** — additionally:
+
 | Document | What it covers |
 |---|---|
-| [`AGENTS.md`](AGENTS.md) | Onboarding for AI coding agents (conventions, parity workflow) |
-| [`AUDIT.md`](AUDIT.md) | Current parity status, validated surface, benchmark inventory |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | TL;DR contribution rules + maintainer contact |
+| [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md) | Detailed dev workflow: tests, benchmarks, references, debugging, env-var trace flags |
+| [`AGENTS.md`](AGENTS.md) | AI-coding-agent onboarding (the AI-led development contract) |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Domain DAG and end-to-end data flow |
-| [`docs/INVARIANTS.md`](docs/INVARIANTS.md) | Project-wide rules that must stay true |
+| [`docs/INVARIANTS.md`](docs/INVARIANTS.md) | Project-wide rules that must stay true (precision, RAII, ODE-boundary traps) |
 | [`docs/REFERENCE_MAP.md`](docs/REFERENCE_MAP.md) | Upstream Mathematica symbol → C++ symbol mapping |
-| [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md) | Practical workflow: tests, benchmarks, references, debugging |
-| [`notes/mma_*_map.md`](notes/) | Upstream Mathematica source → C++ port maps |
-| [`reference/README.md`](reference/README.md) | How to clone the upstream MMA AMFlow for reference data regeneration |
+| [`AUDIT.md`](AUDIT.md) | Current parity status, validated surface, benchmark inventory |
+| [`notes/mma_*_map.md`](notes/) | Per-file upstream Mathematica source → C++ port maps |
+| [`reference/README.md`](reference/README.md) | How to clone the upstream MMA AMFlow locally for reference data regeneration |
+| [`tools/bench/README.md`](tools/bench/README.md) | Sampled-parity benchmark conventions and regeneration |
 
 ## Dependencies
 

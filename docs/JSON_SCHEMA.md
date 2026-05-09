@@ -1,0 +1,356 @@
+# `amflow_cli` JSON Schema Reference
+
+`amflow_cli` consumes a single JSON document and emits a single JSON
+document.  This page documents every field of every input/output, for
+all three top-level modes.
+
+The C++ entry point is `amflow::api::run_json(const json&)`
+([`include/amflow/api/run_json.hpp`](../include/amflow/api/run_json.hpp));
+this document and the implementation in
+[`src/api/run_json.cpp`](../src/api/run_json.cpp) must agree.
+
+> **Convention** — keys marked **required** must be present.  Keys
+> marked **optional** have a documented default.  Where a field
+> accepts multiple aliases, the first listed is preferred.
+
+---
+
+## Top-level shape
+
+```jsonc
+{
+  "mode":        "amflow" | "solve_integrals" | "black_box_amflow",
+  "options":     { ... },             // optional global options
+  // ... mode-specific keys (see below)
+}
+```
+
+If `mode` is omitted, `"amflow"` is assumed.  Output always contains
+the keys `mode` (echoed), `options` (effective options after applying
+`options`), and `result` (mode-specific shape).
+
+---
+
+## Mode `amflow` — raw ODE solve
+
+Mirrors `AMFlow[de, bc]` in upstream `DESolver.m`.  Solves
+`dI/dη = A(η)·I` with an asymptotic boundary specification at η = ∞
+and returns the value at η = 0.  No IBP, no Kira, no family.
+
+### Input
+
+| Key          | Required | Type   | Meaning |
+|---           |---       |---     |---      |
+| `mode`       | optional | string | Must be `"amflow"` (or omitted) |
+| `matrix`     | **required** | 2-D array | The rational ODE matrix `A(η)`, square `N × N`; see [Rational entries](#rational-entries) |
+| `boundaries` | **required** | array of arrays | `boundaries[i]` is the BC list for row `i`; each entry is `{ "mu": <complex>, "value": <complex> }` |
+| `options`    | optional | object | See [Global options](#global-options) |
+
+`boundaries.length` must equal `matrix.length`.
+
+### Output
+
+```jsonc
+{
+  "mode":   "amflow",
+  "result": [ <complex>, <complex>, ... ],   // length N
+  "options": { /* effective options */ }
+}
+```
+
+`result[i]` is the value `I_i(η = 0)`.
+
+### Minimal example
+
+```jsonc
+// 1×1 system, dI/dη = (1/η)·I, boundary I ~ η^1 at infinity → I(0) = 1
+{
+  "options": { "x_order": 30, "extra_x_order": 10, "silent_mode": true },
+  "matrix":     [[ { "num": ["1"], "den": ["0", "1"] } ]],
+  "boundaries": [[ { "mu": { "re": "1", "im": "0" },
+                    "value": { "re": "1", "im": "0" } } ]],
+  "mode": "amflow"
+}
+```
+
+(Run this with `./build/src/cli/amflow_cli examples/power_law.json`.)
+
+---
+
+## Mode `solve_integrals` — Laurent expansion in ε
+
+Mirrors `SolveIntegrals[jints, goal, order]` in upstream `AMFlow.m`.
+The full pipeline: family → ε-grid → Kira IBP → AMFSystem recursion →
+sampled values → Laurent fit.
+
+### Input
+
+| Key            | Required | Type   | Meaning |
+|---             |---       |---     |---      |
+| `mode`         | optional | string | Must be `"solve_integrals"` |
+| `family`       | **required** | object | The integral family — see [Family object](#family-object) |
+| `integrals` (alias: `jints`, `targets`) | **required** | array | Target integrals — see [Integral entry](#integral-entry) |
+| `goal_digits` (alias: `goal`) | **required** | integer | Decimal digits of accuracy in the Laurent coefficients |
+| `eps_order` (alias: `order`)  | **required** | integer | Highest ε order to fit (so result has `eps_order + 1 - leading_order` coefficients) |
+| `work_dir`     | optional | string  | Filesystem directory used for Kira intermediate files (default: a tmp dir) |
+| `amf_options`  | optional | object | See [AMF options](#amf-options); also carries `numeric_values` |
+| `options`      | optional | object | See [Global options](#global-options) |
+
+`amf_options.blackbox.numeric_values` typically supplies the numeric
+values of every kinematic invariant (e.g. `"s": "100"`, `"t": "-1"`).
+
+### Output
+
+```jsonc
+{
+  "mode":   "solve_integrals",
+  "result": [
+    {
+      "integral":      { "family": "...", "indices": [...] },
+      "leading_order": -2,                      // smallest ε power
+      "coefficients":  [
+        { "order": -2, "value": { "re": "...", "im": "..." } },
+        { "order": -1, "value": { ... } },
+        { "order":  0, "value": { ... } },
+        ...
+      ]
+    },
+    ...
+  ],
+  "options": { /* effective options */ }
+}
+```
+
+Each entry is the Laurent expansion `Σ_k coefficients[k].value · ε^(leading_order + k)`.
+
+---
+
+## Mode `black_box_amflow` — sampled, no Laurent fit
+
+Mirrors `BlackBoxAMFlow[jints, epslist, dir]`.  Returns each target
+integral evaluated at every supplied ε sample, **without** fitting a
+Laurent expansion.  Use this for parity comparison at single ε values
+or when you need control over the ε grid yourself.
+
+### Input
+
+| Key | Required | Type | Meaning |
+|---|---|---|---|
+| `mode`         | optional | string | Must be `"black_box_amflow"` |
+| `family`       | **required** | object | See [Family object](#family-object) |
+| `integrals` (alias: `jints`, `targets`) | **required** | array | See [Integral entry](#integral-entry) |
+| `eps_samples` (alias: `epslist`) | **required** | array of complex | The ε values to evaluate at; rationals like `"1/100"` are accepted |
+| `work_dir`     | optional | string | Same as in `solve_integrals` |
+| `amf_options`  | optional | object | See [AMF options](#amf-options) |
+| `options`      | optional | object | See [Global options](#global-options) |
+
+### Output
+
+```jsonc
+{
+  "mode":   "black_box_amflow",
+  "result": [
+    {
+      "integral": { "family": "...", "indices": [...] },
+      "samples":  [
+        { "eps":   { "re": "1/100", "im": "0" },
+          "value": { "re": "...",   "im": "..." } },
+        ...
+      ]
+    },
+    ...
+  ],
+  "options": { /* effective options */ }
+}
+```
+
+---
+
+## Family object
+
+Used by `solve_integrals` and `black_box_amflow`.
+
+| Key            | Required | Type | Meaning |
+|---             |---       |---   |---      |
+| `name` (alias: `family`) | **required** | string | Family name (used as `j[<name>, …]`) |
+| `loops`        | **required** | string[] | Loop momenta (e.g. `["l1", "l2"]`) |
+| `legs`         | **required** | string[] | External momenta (e.g. `["p1", "p2", "p3", "p4"]`) |
+| `propagators`  | **required** | string[] | Propagator denominators as algebraic strings (e.g. `"l^2 - msq"`) |
+| `conservation` | optional | object | Map of momentum → expression for momentum conservation rewrites (e.g. `{"p4": "-p1 - p2 - p3"}`) |
+| `replacement`  | optional | object | Map of scalar product → invariant (e.g. `{"(p1+p2)^2": "s"}`); used to rewrite kinematics in invariant variables |
+| `cut`          | optional | int[] | One entry per propagator, `1` = on shell / cut, `0` = uncut |
+| `prescription` | optional | int[] | One entry per propagator; `+1` / `-1` are the two ±i0 sign choices |
+
+**Cut and prescription must each have length equal to `propagators`** if
+present.
+
+### Family example
+
+```jsonc
+"family": {
+  "name": "box1",
+  "loops":   ["l"],
+  "legs":    ["p1", "p2", "p3", "p4"],
+  "conservation": { "p4": "-p1 - p2 - p3" },
+  "replacement":  {
+    "p1^2": "0", "p2^2": "0", "p3^2": "0", "p4^2": "0",
+    "(p1+p2)^2": "s",
+    "(p1+p3)^2": "t"
+  },
+  "propagators": [
+    "l^2",
+    "(l + p1)^2",
+    "(l + p1 + p2)^2",
+    "(l + p1 + p2 + p4)^2"
+  ]
+}
+```
+
+---
+
+## Integral entry
+
+Each entry of `integrals` / `jints` / `targets` is one of:
+
+```jsonc
+// (a) bare indices array — uses the outer family
+{ "indices": [1, 0, 1, 0] }
+
+// (b) override family
+{ "family": "box1", "indices": [1, 0, 1, 0] }
+```
+
+`indices` length must equal `propagators` length of the resolved
+family.  Negative indices encode irreducible scalar products
+(e.g. `[-2, 1, 1, 1]` = ISP rank 2 in slot 0).
+
+---
+
+## Global options
+
+Top-level `"options"` object.  All fields are **optional**; defaults
+are the upstream AMFlow defaults.
+
+| Key              | Type           | Default | Mirrors upstream |
+|---               |---             |---      |---               |
+| `working_pre`    | int (digits)   | 100     | `WorkingPre`     |
+| `chop_pre`       | int (digits)   | 20      | `ChopPre`        |
+| `rationalize_pre`| int (digits)   | 100     | `RationalizePre` |
+| `silent_mode`    | bool           | false   | `SilentMode`     |
+| `d0`             | rational ("p/q") or int | `"4"`  | `D0` — host space-time dimension |
+| `x_order`        | int            | 100     | `XOrder`         |
+| `extra_x_order`  | int            | 20      | `ExtraXOrder`    |
+| `learn_x_order`  | int            | -1      | `LearnXOrder`    |
+| `test_x_order`   | int            | 5       | `TestXOrder`     |
+| `run_radius`     | int            | 2       | `RunRadius`      |
+| `run_length`     | int            | 200     | `RunLength`      |
+| `run_candidate`  | int            | 10      | `RunCandidate`   |
+| `run_direction`  | `"Re"`/`"Im"`/`"NegRe"`/`"NegIm"` | `"NegIm"` | `RunDirection` |
+
+Precision values are **decimal digits** at the API; conversion to
+binary bits happens internally
+(see [`docs/INVARIANTS.md`](INVARIANTS.md) §1).
+
+---
+
+## AMF options
+
+`"amf_options"` is the per-recursion-tree configuration for the AMFSystem
+pipeline used by `solve_integrals` / `black_box_amflow`.  All fields are
+optional.
+
+| Key | Type | Default | Meaning |
+|---|---|---|---|
+| `amf_modes`     | string[] | `["Prescription", "Mass", "Propagator"]` | η-injection candidate modes (mirrors `AMFMode`) |
+| `ending_schemes`| string[] (`"Tradition"`/`"Cutkosky"`/`"SingleMass"`) | `["Tradition", "Cutkosky", "SingleMass"]` | Ending schemes tried in order |
+| `cache_root`    | string   | empty | Root for AMF subsystem caches; per-node directories are created underneath |
+| `direction`     | string   | upstream default | Override path direction for this run |
+| `max_recursion_depth` | int | unlimited | Hard cap on AMF subsystem recursion |
+| `blackbox` (alias: `bb`) | object | (see below) | Kira/Fermat/IBP knobs |
+
+### `amf_options.blackbox`
+
+| Key | Type | Default | Meaning |
+|---|---|---|---|
+| `numeric_values`   | object map<string,string\|number> | `{}` | Numeric values for kinematic invariants — *required for non-trivial families* (e.g. `{"s": "100", "t": "-1"}`) |
+| `ibp_rank`         | int | upstream default | `BlackBoxRank` floor |
+| `ibp_dot`          | int | upstream default | `BlackBoxDot` floor |
+| `n_thread`         | int | upstream default | `NThread` for Kira |
+| `integral_order`   | int | 5 | Kira `integral_ordering` |
+| `kira_executable`  | string | `/usr/local/bin/kira` | Path to `kira` |
+| `fermat_executable`| string | `/usr/share/Ferl7/fer64` | Path to `fer64` |
+| `work_dir`         | string | per-mode default | Override work dir at this level |
+| `log_file`         | string | `/tmp/amflow_cli_kira.log` | Where Kira stdout/stderr is appended |
+
+---
+
+## Rational entries
+
+Used in `mode: amflow` (matrix entries).  Two equivalent forms:
+
+```jsonc
+// (a) polynomial only, denominator implicitly 1
+{ "coeffs": ["c0", "c1", "c2", ...] }
+
+// (b) explicit numerator / denominator polynomials in η
+{ "num": ["a0", "a1", ...], "den": ["b0", "b1", ...] }
+```
+
+Each coefficient is parsed as an `fmpq` (rational); strings like
+`"3/7"`, `"-1"`, integers, and decimals are all accepted.  Index `i`
+in the array is the coefficient of `η^i`.
+
+Example:
+
+```jsonc
+// 1 / η  →  num = 1, den = 0 + 1·η = η
+{ "num": ["1"], "den": ["0", "1"] }
+
+// (3 + 5η - η²) / 1
+{ "coeffs": ["3", "5", "-1"] }
+```
+
+---
+
+## Complex values
+
+Used everywhere a single complex number appears (boundary `mu` /
+`value`, `eps_samples` entries, output).  Two equivalent forms:
+
+```jsonc
+// (a) explicit real / imag parts (each parsed as fmpq or arb decimal)
+{ "re": "1/2", "im": "0" }
+
+// (b) bare real scalar — imaginary part = 0
+"1/2"
+"-1.5"
+3
+```
+
+Output complex values always use form (a).
+
+---
+
+## Error handling
+
+The dispatcher throws `std::runtime_error` on any schema or parse
+failure; `amflow_cli` catches and writes the exception text to stderr,
+exiting non-zero.  Typical errors:
+
+| Message starts with | Cause |
+|---|---|
+| `unknown mode '...'`           | `mode` is not one of the three known values |
+| `missing required array '...'` | Required key missing |
+| `... must be an array`         | Wrong JSON type for an array-shaped key |
+| `... has N indices, expected M`| Integral indices length ≠ propagators length |
+| `boundaries length must match matrix size; got N vs M` | Boundary list cardinality mismatch in `mode: amflow` |
+| `failed to parse fmpq from '...'` | Coefficient string isn't a valid rational |
+
+---
+
+## See also
+
+- [`docs/USER_GUIDE.md`](USER_GUIDE.md) — step-by-step walkthrough.
+- [`docs/REFERENCE_MAP.md`](REFERENCE_MAP.md) — Mathematica → C++ symbol map (which upstream functions back which JSON modes).
+- [`examples/`](../examples) — five runnable JSON inputs.
+- [`src/api/run_json.cpp`](../src/api/run_json.cpp) — implementation; this document and that file must stay in sync.

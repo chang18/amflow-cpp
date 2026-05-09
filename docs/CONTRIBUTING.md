@@ -176,12 +176,10 @@ add new trace categories there when introducing them. Currently:
 | `AMFLOW_DEBUG_DBO=1` | Emit `determine_block_boundary_order` diagnostics |
 | `AMFLOW_DEBUG_PRECISE=1` | Verbose precision tracing in normalize / Jordan paths |
 | `AMFLOW_DEBUG_REGULAR=1` | Emit `regular_run` step-by-step trace |
-| `AMFLOW_DEBUG_SCHEME=1` | Emit `[scheme] ...` `EndingScheme` dispatch trace from `amf_system_setup_master` |
 | `AMFLOW_DEBUG_STAGES=1` | Emit per-stage system traces (Inf→Reg, RegRun, Zero) |
 | `AMFLOW_DEBUG_CT_PERM=1` | Emit `ct_perm` Cutkosky permutation trace |
-| `AMFLOW_DEBUG_DBO=1` | Emit `determine_block_boundary_order` diagnostics |
-| `AMFLOW_TRACE_AMFSYSTEM=1` | Gate Layer-16 debug-print scope when compiled in |
 | `AMFLOW_DEBUG_SCHEME=1` | Emit `[scheme] ...` EndingScheme dispatch trace from `amf_system_setup_master` (Cutkosky / SingleMass firing) |
+| `AMFLOW_TRACE_AMFSYSTEM=1` | Gate Layer-16 debug-print scope when compiled in |
 
 ## Adding tests
 

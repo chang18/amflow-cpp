@@ -9,7 +9,7 @@ upstream Mathematica AMFlow files
 Rules: MMA AMFlow is the spec; a C++ mismatch on a ported branch is a
 parity bug; current focus is sampled single-point parity at `eps = 1/1000`.
 
-Last updated: v1.0 release.
+Last updated: v1.0 release (single-commit history; live status is the green CI badge on the README).
 
 ---
 
@@ -109,7 +109,7 @@ Workflows backed by green local tests or committed sampled benchmarks:
 | `cutsunrise_2L` Cutkosky probe (L=2) | Matches MMA on `j[cutsunrise,1,1,1,0,0]` at `s=4, eps=1/100`; relative delta `~1.85e-31`; MMA wallclock `55s`, C++ wallclock `<1s`. `[scheme] Cutkosky fired: family=cutsunrise phase_loop_num=2 top_position={0,1,2}`; verifies the `(-1)^(L+1) = -1` sign flip at L=2. | [`tools/bench/cutsunrise_2L_eps001_mma_reference.json`](tools/bench/cutsunrise_2L_eps001_mma_reference.json), [`tools/bench/cutsunrise_2L_eps001_black_box_amflow_cpp.json`](tools/bench/cutsunrise_2L_eps001_black_box_amflow_cpp.json), [`tools/bench/cutsunrise_2L_eps001_black_box_amflow_mma.wl`](tools/bench/cutsunrise_2L_eps001_black_box_amflow_mma.wl) |
 | `cutbanana_3L` Cutkosky probe (L=3) | Matches MMA on `j[cutbanana,1,1,1,1,0,0,0,0,0]` at `s=4, eps=1/100`; relative delta `<1e-29`; MMA wallclock `93s`, C++ wallclock `~90s`. `[scheme] Cutkosky fired: family=cutbanana phase_loop_num=3 top_position={0,1,2,3}`; sign returns to `+1` at L=3 and exercises subsystem recursion `1 -> 2 -> 3 -> trivial`. **Requires `BlackBoxDot=5`** (matching `banana_3loop`) — set explicitly in both the MMA `*_mma.wl` and C++ `*_cpp.json`; AMFlow.m's `Max[$BlackBoxDot, JDot/@...]` floor cannot raise it on its own when every positive index is 1 (`JDot = 0`). | [`tools/bench/cutbanana_3L_eps001_mma_reference.json`](tools/bench/cutbanana_3L_eps001_mma_reference.json), [`tools/bench/cutbanana_3L_eps001_black_box_amflow_cpp.json`](tools/bench/cutbanana_3L_eps001_black_box_amflow_cpp.json), [`tools/bench/cutbanana_3L_eps001_black_box_amflow_mma.wl`](tools/bench/cutbanana_3L_eps001_black_box_amflow_mma.wl) |
 | `box1_d0_7_3` Laurent solve at `D0 = 7/3` | Matches MMA on `j[box1, 1, 0, 1, 0]` at `s=100, t=-1` to ~30 sig digits across orders 0..2 (`goal_digits=30, eps_order=4` → samples=12, internal `working_pre=182`, `x_order=364`). MMA wallclock `22.3s`, C++ wallclock `10.7s` (~2× speed ratio). Exercises the `(4-D0)/2` internal eps shift (AMFlow.m:1342, 1351) and `FitEps` Laurent fit in the user-facing eps (AMFlow.m:1356), the first end-to-end check that `GlobalOptions::d0` cancels cleanly in the user output. | [`tools/bench/box1_d0_7_3_solve_integrals_mma_reference.json`](tools/bench/box1_d0_7_3_solve_integrals_mma_reference.json), [`tools/bench/box1_d0_7_3_solve_integrals_cpp.json`](tools/bench/box1_d0_7_3_solve_integrals_cpp.json), [`tools/bench/box1_d0_7_3_solve_integrals_mma.wl`](tools/bench/box1_d0_7_3_solve_integrals_mma.wl) |
-| Raw MMA caches | Preserved | [`tools/bench/mma_refs/README.md`](tools/bench/mma_refs/README.md) |
+| Raw MMA caches | Regenerable; not tracked. See [`tools/bench/README.md`](tools/bench/README.md) §"Regenerating Mathematica caches" |
 
 ## 5. Workflow for sampled parity expansion
 
