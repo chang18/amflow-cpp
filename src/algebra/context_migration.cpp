@@ -11,6 +11,7 @@
 
 #include "amflow/algebra/context_migration.hpp"
 
+#include <algorithm>
 #include <map>
 #include <stdexcept>
 #include <utility>
