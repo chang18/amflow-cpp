@@ -60,3 +60,38 @@ TEST(ApiRunJsonTest, AmflowBoundariesSizeMismatchThrows) {
     };
     EXPECT_THROW(api::run_json(input), std::runtime_error);
 }
+
+// Mirrors audit divergence D5: the upstream `IBPRule` /
+// `CompensateRule` machinery for complex-valued numeric kinematics
+// (`Kira/interface.m:50-57`) is not ported.  The dispatcher must
+// reject the object form `{"re":..,"im":..}` in
+// `amf_options.blackbox.numeric_values` with a clear error rather
+// than silently truncating to the real part.  Locks down the
+// loud-rejection contract so a future regression cannot silently
+// re-enable a mishandled path.
+TEST(ApiRunJsonTest, BlackboxComplexNumericValueIsRejected) {
+    json input = {
+        {"mode", "black_box_amflow"},
+        {"family", {
+            {"family", "fam"},
+            {"loops", json::array({"l1"})},
+            {"legs", json::array()},
+            {"propagators", json::array({"l1*l1"})},
+        }},
+        {"targets", json::array({json::array({1})})},
+        {"eps_samples", json::array({json{{"re", "1/1000"}, {"im", "0"}}})},
+        {"amf_options", {{"blackbox", {{"numeric_values", {
+            {"s", {{"re", "100"}, {"im", "1"}}},
+        }}}}}},
+    };
+    try {
+        api::run_json(input);
+        FAIL() << "expected complex-form numeric_values to be rejected";
+    } catch (const std::runtime_error& e) {
+        const std::string what(e.what());
+        EXPECT_NE(what.find("complex-numeric"), std::string::npos)
+            << "error should name the unsupported feature, got: " << what;
+        EXPECT_NE(what.find("D5"), std::string::npos)
+            << "error should point at audit entry D5, got: " << what;
+    }
+}

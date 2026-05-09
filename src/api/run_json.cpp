@@ -276,9 +276,28 @@ void apply_blackbox_options(const json& obj, ibp::ReduceOptions& bb) {
                 "amf_options.blackbox.numeric_values must be an object");
         }
         for (auto it = nv.begin(); it != nv.end(); ++it) {
-            bb.numeric_values[it.key()] =
-                json_scalar_to_string(it.value(),
-                                       "amf_options.blackbox.numeric_values." + it.key());
+            const auto& v = it.value();
+            const std::string ctx_path =
+                "amf_options.blackbox.numeric_values." + it.key();
+            // Complex-numeric kinematics is intentionally NOT
+            // implemented in this version.  Upstream AMFlow's
+            // ComplexMode / IBPRule / CompensateRule machinery
+            // (`Kira/interface.m:50-57`, `488`, `519`) was
+            // investigated for v1.1 but deferred — see audit
+            // divergence D5 in `docs/AUDIT_MMA_PARITY.md` for the
+            // implementation-cost analysis.  Reject the object form
+            // (`{"re":..,"im":..}`) loudly here rather than silently
+            // truncating to the real part or returning a wrong answer.
+            if (v.is_object()) {
+                throw std::runtime_error(
+                    ctx_path + ": complex-numeric kinematics "
+                    "(object form `{\"re\":..,\"im\":..}`) is not "
+                    "implemented in this version. See "
+                    "`docs/AUDIT_MMA_PARITY.md` D5 for status. "
+                    "All numeric_values must be real scalars "
+                    "(integer, rational like \"1/100\", or decimal).");
+            }
+            bb.numeric_values[it.key()] = json_scalar_to_string(v, ctx_path);
         }
     }
 }
