@@ -222,6 +222,20 @@ reduce(const qft::FamilyConfig& fc,
         }
         std::size_t i = it->second;
         for (const auto& [coef_str, rhs_j] : kr.rhs) {
+            // Mirror Kira/interface.m:486 (AnalyticReduction): every
+            // J integral on the RHS of a Kira reduction must be in
+            // the master list.  Upstream Aborts with "wrong reduction
+            // results from Kira."; we throw with a more diagnostic
+            // message so the offending integral is identifiable.
+            if (master_index.find(target_key(rhs_j)) == master_index.end()) {
+                std::ostringstream msg;
+                msg << "ibp::black_box_reduce: Kira returned an RHS J "
+                       "integral that is not in the master list (target="
+                    << target_key(kr.lhs) << ", offending rhs="
+                    << target_key(rhs_j)
+                    << ").  This indicates an inconsistent Kira reduction.";
+                throw std::runtime_error(msg.str());
+            }
             DerivTerm dt;
             dt.coef = kira_parse_expression(out.red_ctx.ctx, coef_str);
             dt.integ = rhs_j;

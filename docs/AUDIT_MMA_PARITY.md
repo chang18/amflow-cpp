@@ -12,13 +12,17 @@ cover.
 |---|---|---|
 | 🟢 verified                  | 65 | — |
 | 🟡 unverified (oracle gap)    | 21 | Documented in §3 below; tracked for future bench expansion. |
-| 🔴 actual divergence          |  6 | 2 fixed in this release; 4 documented for follow-up (§2). |
+| 🔴 actual divergence          |  6 | **5 fixed**; 1 deferred to v1.1 (D5, ComplexMode — substantial feature work). |
 | ⚪ intentionally not ported   | 17 | — |
 
-Net assessment: **no oracle-validated path is wrong**.  All 🔴 items are
-either now fixed or latent (no oracle exercises them).  The audit is
-preventative, not corrective — its main output is the 🟡 list,
-which scopes the next round of benchmark expansion.
+Net assessment: **no oracle-validated path is wrong**, and after this
+release **no silent-wrong-result path remains**.  Five of the six 🔴
+items have been corrected — two by aligning defaults to upstream, one
+by adding a defensive Jacobian assert, one by raising on inconsistent
+Kira output, and one by replacing a silently-wrong Tradition-with-cut
+boundary code path with an explicit abort that names the limitation.
+Only D5 (Kira `ComplexMode` / imaginary-numeric pipeline) remains
+deferred to v1.1, as a feature add rather than a bug fix.
 
 ---
 
@@ -77,38 +81,45 @@ Full per-pass reports: `/tmp/audit_desolver.md`, `/tmp/audit_amflow.md`,
   had the redundant override removed.  All 12 committed bench `*_cpp.json`
   already set 80 or 100 explicitly, so they are unaffected.
 
-### D3. Boundary sub-system loses parent's `Cut` info — **deferred**
+### D3. Boundary sub-system loses parent's `Cut` info — **FIXED (detect-and-throw)**
 
 - **Upstream** `ReduceBoundary` (`AMFlow.m:790–803`): when the parent
   system has a non-empty `Cut`, projects the parent's cut propagators
   (after the region transform) onto the new boundary-sub-family's
   propagator basis and emits `cut_propagators:[...]` to Kira.  Aborts
   on `Count[cut, 1] != Count[Cut, 1]`.
-- **C++** `AMFSystem::build_boundary` (`src/pipeline/amfsystem.cpp:1452`):
-  hard-codes `cut={}` when constructing the boundary `FamilyConfig`.
-  The detection assertion is also missing.
-- **Latent** because every Cutkosky benchmark
-  (`cutbubble_1L`, `cutsunrise_2L`, `cutbanana_3L`,
-  `tt_cutkosky_probe`) clears `cut` at the parent level via the
-  Cutkosky scheme, never exercising the Tradition-with-cut path.
-- **Recommended fix**: project parent's `cut` through `region.transform`
-  in `build_boundary`, pass the result to `qft::FamilyConfig::build`,
-  raise on count mismatch.
+- **C++ (was)** `AMFSystem::build_boundary`
+  (`src/pipeline/amfsystem.cpp:1452`): hard-coded `cut={}` when
+  constructing the boundary `FamilyConfig` — silently dropped the
+  parent cut.
+- **Fix**: in `build_boundary`, before entering the boundary-family
+  loop, raise `std::runtime_error` if the parent `fc_->cut` has any
+  non-zero entry.  This converts the previous *silent-wrong-result*
+  bug into an explicit abort that names the limitation and points
+  users at the documented workaround (`EndingScheme=Cutkosky`).
+- **Why detect-and-throw rather than the proper projection?**  The
+  proper projection (lifting parent props through `region.transform`,
+  doing per-propagator symbolic comparison modulo `reduced_replacement`,
+  raising on count mismatch) is ~100 lines of new code that lives
+  across multiple contexts; introducing it for a code path that no
+  oracle currently exercises is itself a fresh-bug risk.  Loud abort
+  is the safe fix; the proper projection remains a v1.1 feature.
 
-### D4. `BoundaryIntegrands` Jacobian factor `|Det|^(4-2eps)` is silently dropped — **deferred (defended-by-precondition)**
+### D4. `BoundaryIntegrands` Jacobian factor `|Det|^(4-2eps)` is silently dropped — **FIXED (defensive assert)**
 
 - **Upstream** (`AMFlow.m:731-732`): multiplies integrands by
   `Abs[Det[Coefficient[#, Loop]&/@Values[trans]]]^(4-2*eps)` (the
   Jacobian of the loop redefinition).
-- **C++** `qft::boundary_integrands` (`src/qft/boundary.cpp`): no
-  Jacobian factor.
-- **Currently moot** because `branch_momenta`
-  (`src/qft/region.cpp:108–114`) asserts each propagator has unit
-  leading loop coefficient → `|Det| = ±1` → factor = 1.  Effectively
-  🟢-by-precondition but fragile if the precondition is ever relaxed.
-- **Recommended fix**: defensive assert that the computed Jacobian
-  equals `±1`, or compute it explicitly and raise the precondition
-  to "Jacobian must be unit".
+- **C++ (was)** `qft::boundary_integrands` (`src/qft/boundary.cpp`):
+  no Jacobian factor.  The omission was correct **only** because
+  `branch_momenta` (`src/qft/region.cpp:108–114`) enforces each
+  propagator's leading loop coefficient = 1, making the matrix `A`
+  in `branch_to_loop` a permutation matrix and `|det A| = 1`.
+- **Fix**: defensive assert in `branch_to_loop` (right after `det_A`
+  is computed and the singular case is handled): if `det_A` is not a
+  constant or `|det_A| ≠ 1`, raise `std::runtime_error`.  Catches
+  any future relaxation of the `branch_momenta` precondition before
+  the missing Jacobian factor produces wrong boundary integrands.
 
 ### D5. Kira `ComplexMode` / `CompensateRule` real-only filter unimplemented — **deferred**
 
@@ -124,16 +135,18 @@ Full per-pass reports: `/tmp/audit_desolver.md`, `/tmp/audit_amflow.md`,
   `kira_run.cpp` before assembling the `-s` arguments, plus a post-Kira
   substitution in `kira_parse.cpp`.  Non-trivial.
 
-### D6. RHS-not-in-master is silently dropped — **deferred**
+### D6. RHS-not-in-master is silently dropped — **FIXED (now throws)**
 
 - **Upstream** (`Kira/interface.m:486`): `Abort[]`s when
   `CoefficientArrays` reports a non-master residue (i.e., a J-integral
   appears on the right-hand side that is not in the masters list).
-- **C++** `reduce.cpp:344-360`: the diffeq matrix builder `continue`s
-  past unknown rhs J integrals.
-- **Diagnostic regression only** — healthy Kira runs are unaffected.
-- **Recommended fix**: throw `std::runtime_error` on unknown rhs
-  integral with the family / indices of the offender.
+- **C++ (was)** the rhs assembly path in `ibp::black_box_reduce`
+  (`src/ibp/reduce.cpp:218-230`) silently appended unknown rhs J
+  integrals; consumers later filtered them with `master_index.find`
+  + `continue`.
+- **Fix**: in `ibp::black_box_reduce`, before pushing an rhs entry,
+  look up `target_key(rhs_j)` in `master_index`; on miss, raise
+  `std::runtime_error` naming the offending target and rhs.
 
 ---
 
@@ -209,20 +222,20 @@ behaviour we already ported has changed.
 
 ## 6. Follow-up items (in rough priority order)
 
-1. **Port `Trivial` ending scheme** so the scheme dispatcher can never
-   exhaust without a fallback (D-class — minor; latent).
-2. **Project parent `cut` into boundary sub-system** (D3).
-3. **Defensive Jacobian assert in `boundary_integrands`** (D4).
-4. **`ComplexMode` / imaginary-numeric pipeline in Kira interface** (D5);
-   bigger feature.
-5. **Throw on RHS-not-in-master in `reduce.cpp`** (D6); one-line.
-6. **Pin source-comment line citations** to an upstream commit hash
+1. **Implement the proper Tradition-with-cut boundary projection**
+   (replace the D3 detect-and-throw with the AMFlow.m:790-803 mirror)
+   so users can run cut families through Tradition without hitting the
+   abort.
+2. **Port `Trivial` ending scheme** so the scheme dispatcher always has
+   a fallback (upstream `AMFlow.m:1016-1095`).
+3. **`ComplexMode` / imaginary-numeric pipeline in Kira interface**
+   (D5); bigger feature; v1.1.
+4. **Pin source-comment line citations** to an upstream commit hash
    and add a banner in `docs/REFERENCE_MAP.md` explaining the policy.
-7. **Add oracles for the 🟡 unverified branches** that touch user-
+5. **Add oracles for the 🟡 unverified branches** that touch user-
    reachable behaviour (priority: per-system Direction, multi-invariant
-   `LIBPDeriv`, Tradition-with-cut family, scaleless-via-`Numeric`).
-8. **Stale comment cleanup**: `qft/topology.cpp:340` references
-   `AnalyzeComponent` (the MMA name) for what is now `make_component`.
+   `LIBPDeriv`, Tradition-with-cut family once D3 is properly fixed,
+   scaleless-via-`Numeric`).
 
-None of these are release-blockers for v1.0.  Items 1, 2, 3, 5, 8 are
-small enough to bundle into a v1.1; items 4, 6, 7 are projects.
+None of these are release-blockers.  Items 2 and 4 are small enough to
+bundle into a follow-up patch release; items 1, 3, 5 are v1.1 work.

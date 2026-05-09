@@ -85,7 +85,7 @@ Public headers under `include/amflow/<domain>/`; implementation under
 | Core ODE solver (port of upstream `DESolver.m`) | Implemented; 12/12 oracle cases match MMA reference at `rel ~1e-30` |
 | AMFlow + Kira pipeline (upstream `AMFlow.m` core algorithms) | Implemented for the covered workflows |
 | Top-level entries (`amflow`, `black_box_amflow`, `solve_integrals`) | Implemented; exposed via `amflow_cli` JSON modes |
-| Line-level MMA parity audit (post-v1.0) | 65 🟢 verified, 21 🟡 unverified, 6 🔴 (4 deferred, 2 fixed in v1.0.1); see [`docs/AUDIT_MMA_PARITY.md`](docs/AUDIT_MMA_PARITY.md) |
+| Line-level MMA parity audit (post-v1.0) | 65 🟢 verified, 21 🟡 unverified, 6 🔴 (5 fixed, 1 deferred to v1.1); no silent-wrong-result paths remain. See [`docs/AUDIT_MMA_PARITY.md`](docs/AUDIT_MMA_PARITY.md) |
 | Wall-clock vs MMA on 12 oracles | ~1.5–2.5× speedup on Kira-light benches; comparable on Kira-heavy benches (both runtimes spend their wall in Kira); see [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md) |
 | `SolveIntegralsGaugeLink`, HQET / SCET / Wilson lines | Out of scope |
 

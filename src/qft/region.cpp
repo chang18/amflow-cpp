@@ -184,6 +184,41 @@ branch_to_loop(const FamilyConfig& fc,
     Mpoly det_A = A.det();
     if (det_A.is_zero()) return out;
 
+    // Defensive Jacobian-is-unit check (mirrors AMFlow.m:731-732, where
+    // upstream multiplies BoundaryIntegrands by `Abs[Det[...]]^(4-2eps)`).
+    // The C++ port omits the explicit Jacobian factor, which is correct
+    // *only* when |det_A| == 1.  By construction (`branch_momenta`
+    // enforces each branch propagator's leading loop coefficient = 1),
+    // the matrix `A` is a permutation matrix and `det_A` is the constant
+    // ±1.  If a future change relaxes that precondition, we want to
+    // catch it here rather than silently produce wrong boundary
+    // integrands.
+    if (!fmpz_mpoly_is_fmpz(det_A.raw(), rctx.ctx->raw())) {
+        throw std::runtime_error(
+            "branch_to_loop: loop-redefinition determinant is not a "
+            "constant; the missing |Det|^(4-2eps) Jacobian factor "
+            "(AMFlow.m:731-732) would produce incorrect boundary "
+            "integrands.  This indicates a violation of the unit-leading-"
+            "loop-coefficient precondition in branch_momenta.");
+    }
+    {
+        fmpz_t det_z;
+        fmpz_init(det_z);
+        fmpz_mpoly_get_fmpz(det_z, det_A.raw(), rctx.ctx->raw());
+        fmpz_t abs_det;
+        fmpz_init(abs_det);
+        fmpz_abs(abs_det, det_z);
+        const int abs_one = fmpz_is_one(abs_det);
+        fmpz_clear(det_z);
+        fmpz_clear(abs_det);
+        if (!abs_one) {
+            throw std::runtime_error(
+                "branch_to_loop: |det_A| != 1; the missing "
+                "|Det|^(4-2eps) Jacobian factor (AMFlow.m:731-732) "
+                "would produce incorrect boundary integrands.");
+        }
+    }
+
     MpolyMatrix adj = A.adjugate();
 
     out.map.reserve(static_cast<std::size_t>(L));

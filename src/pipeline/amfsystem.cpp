@@ -1430,6 +1430,37 @@ void AMFSystem::build_boundary() {
         // AMFSystemBoundaryCondition then flattens all entries across regions.
         // Store each family as its own RegionBoundary to keep that outer
         // multiplicity distinct from SingleMass multi-root systems.
+        //
+        // Upstream `ReduceBoundary` (AMFlow.m:790-803) projects the parent's
+        // `Cut` propagators (after the region transform) onto the boundary
+        // sub-family's propagator basis and emits the corresponding
+        // `cut_propagators` to Kira.  All the Cutkosky-mode benchmarks
+        // (cutbubble_1L / cutsunrise_2L / cutbanana_3L / tt_cutkosky_probe)
+        // clear the parent `Cut` at the Cutkosky setup point
+        // (`amf_system_setup_master`, AMFlow.m:1055), so this code path is
+        // never reached for them.  We have not (yet) implemented the
+        // Tradition-with-cut projection; rather than silently drop the
+        // parent cut and produce wrong masters, we abort here.  Any future
+        // fix should replace this guard with the actual projection
+        // (mirroring AMFlow.m:790-803).
+        bool parent_has_cut = false;
+        for (int c : fc_->cut) if (c == 1) { parent_has_cut = true; break; }
+        if (parent_has_cut) {
+            throw std::runtime_error(
+                "AMFSystem::build_boundary: parent system carries a "
+                "non-empty `cut` (length="
+                + std::to_string(fc_->cut.size())
+                + "), and the Tradition-scheme path that needs to "
+                "project that cut onto the boundary sub-family "
+                "propagator basis (mirror of AMFlow.m:790-803) is not "
+                "yet implemented in this port.  This case would "
+                "previously have silently produced incorrect boundary "
+                "masters.  Workaround: use `EndingScheme=Cutkosky` "
+                "(which clears the parent cut at setup, so the boundary "
+                "is built from an uncut sub-family).  See "
+                "docs/AUDIT_MMA_PARITY.md item D3.");
+        }
+
         for (auto& fam : fams) {
             // 1. Build sub-fc.
             std::vector<std::string> prop_strs;
