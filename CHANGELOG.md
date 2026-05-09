@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## Unreleased — post-v1.0 audit-driven patches
 
-Two patch-level commits on top of v1.0.0 (no version bump yet).
+Patch-level commits on top of v1.0.0 (no version bump yet).
 Together they close all silent-wrong-result paths surfaced by the
 post-release line-level MMA parity audit
 ([`docs/AUDIT_MMA_PARITY.md`](docs/AUDIT_MMA_PARITY.md)).
@@ -25,15 +25,19 @@ post-release line-level MMA parity audit
   reduction returns an RHS J-integral that is not in the master
   list, mirroring upstream `Kira/interface.m:486` `Abort`.  Prior
   behaviour silently dropped the offending row.  (Audit D6.)
-- `AMFSystem::build_boundary` (`src/pipeline/amfsystem.cpp:1452`)
-  now raises `std::runtime_error` if the parent system carries a
-  non-empty `Cut`, instead of silently dropping it.  The proper
-  fix — projecting parent's cut through `region.transform` onto the
-  boundary sub-family's propagator basis (mirroring upstream
-  `ReduceBoundary`, `AMFlow.m:790-803`) — is left to v1.1; the
-  loud-abort is the safe correction in the meantime, eliminating
-  the previous silent-wrong-result on Tradition-with-cut families.
-  Workaround: use `EndingScheme=Cutkosky`.  (Audit D3.)
+- **D3 — Tradition-with-cut boundary projection.**  v1.0 silently
+  dropped the parent system's `Cut` when constructing the boundary
+  sub-family.  The Phase 1A patch converted that to a loud abort.
+  **Phase 1B implements the full projection** mirroring upstream
+  `ReduceBoundary` (`AMFlow.m:790-803`): each parent cut prop is
+  passed through the bare `region.transform.map`; each fam.prop is
+  matched against the transformed cut props modulo
+  `reduced_replacement`; the new `sub_cut` is built and asserted to
+  preserve `Count[cut, 1]`; the result is passed to the
+  `qft::FamilyConfig::build` of the sub-family.  Backed by a new
+  oracle benchmark (`tradcut_phase_2L_eps001_*`) — 2-loop
+  Tradition-with-cut from upstream `examples/automatic_phasespace`,
+  matches MMA at relative error 2.68 × 10⁻³⁰.  (Audit D3.)
 - `branch_to_loop` (`src/qft/region.cpp`) gains a defensive assert
   that `det(A) = ±1` (constant), where `A` is the loop-redefinition
   matrix.  This catches any future relaxation of the `branch_momenta`
@@ -44,12 +48,32 @@ post-release line-level MMA parity audit
 ### Added
 - [`docs/AUDIT_MMA_PARITY.md`](docs/AUDIT_MMA_PARITY.md): line-level
   upstream-parity audit report.  65 🟢 verified / 21 🟡 unverified /
-  6 🔴 (5 fixed, 1 deferred to v1.1) / 17 ⚪ not ported.
+  6 🔴 (5 fully fixed, 1 deferred to v1.1) / 17 ⚪ not ported.
 - [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md): wall-clock baseline
   vs MMA on the 12 oracle benchmarks.  Median speedup ~2× on
   Kira-light benches; converges to ~1× on Kira-heavy benches.
+- [`docs/ROADMAP.md`](docs/ROADMAP.md): post-v1.0 development plan
+  (Phase 1 implementation completeness, Phase 2 oracle expansion,
+  Phase 3 ongoing diversification).
 - [`tools/bench/run_perf_audit.sh`](tools/bench/run_perf_audit.sh):
   shell driver to reproduce the perf run.
+- New oracle benchmark
+  [`tools/bench/tradcut_phase_2L_eps001_*`](tools/bench): the first
+  Tradition-with-cut parity test (D3 acceptance gate).
+- New ending scheme: `EndingScheme::Trivial`, auto-appended to the
+  user's `ending_schemes` list as a final fallback (mirror of
+  upstream `AMFlow.m:1034`).
+- New `solve_integrals` single-eps fast path: when
+  `numeric_values["eps"]` is supplied, skip the Laurent fit and
+  return the integral evaluated at that eps (mirror of
+  `AMFlow.m:1364-1374`).
+- New per-system path direction: `AMFSystem::setup()` computes the
+  η-touching loops' prescription consensus and overrides the global
+  `run_direction` for that system's ODE solve (mirror of
+  `AMFlow.m:981-991`).
+- Cutkosky setup now validates that all phase-volume component
+  masses are non-negative after `Numeric` substitution; raises
+  otherwise (mirror of `AMFlow.m:1050`).
 
 ### Known limitations (will not be addressed before v1.1)
 - **D5 — Kira `ComplexMode` / imaginary-numeric pipeline is not
@@ -59,9 +83,9 @@ post-release line-level MMA parity audit
   but the C++ port treats `numeric_values` as a flat real-valued
   map.  All 12 oracle benchmarks use purely-real numerics, so this
   surface is untested.  Substantial feature add planned for v1.1.
-- **`Trivial` ending scheme is not ported.**  Upstream auto-appends
-  `"Trivial"` to the user's `EndingScheme` list as a fallback when
-  none of `Tradition` / `Cutkosky` / `SingleMass` apply
+- ~~**`Trivial` ending scheme is not ported.**~~  Now ported (Phase 1A).
+  Upstream auto-appends `"Trivial"` to the user's `EndingScheme` list
+  as a fallback when none of `Tradition` / `Cutkosky` / `SingleMass` apply
   (`AMFlow.m:1016-1095`).  No oracle currently configures this
   fallback path.  Planned for v1.1.
 

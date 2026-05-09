@@ -33,23 +33,31 @@ Items are listed in execution order.
 | 4 | Per-system `AMFSystemDirection` (compute per-system Im / NegIm from prescriptions of η-touching loops) | `AMFlow.m:981-991` | ✅ done |
 | 5 | Pin in-source upstream-line citations to commit `efda1db` via REFERENCE_MAP banner | — | ✅ done |
 
-### Phase 1B — D3 proper Tradition-with-cut projection (~3 days)
+### Phase 1B — D3 proper Tradition-with-cut projection — ✅ done
 
-Replace the current detect-and-throw guard at
+Replaced the Phase 1A detect-and-throw guard at
 `src/pipeline/amfsystem.cpp:1452` with the real projection:
 
-- For each parent propagator with `cut[k] = 1`, transform via
-  `region.transform`.
-- For each new sub-family propagator, symbolic-compare modulo
-  `reduced_replacement` against the transformed cut props.
-- Set the new `cut[]` array; assert
-  `Count[cut, 1] == Count[parent_cut, 1]` (mirroring `AMFlow.m:801`).
-- Pass to `qft::FamilyConfig::build`.
+- For each parent propagator with `cut[k] == 1`, transform via the
+  bare `region.transform.map` (matches upstream `region[[1]]` — no
+  half-eta scaling) using `qft::apply_region_rule`.
+- Project the result back to `fc_with_eta_->ctx` via
+  `project_mfrac_by_name` (the bare transform is `__amf_*`-free).
+- For each `fam.prop[i]`, test
+  `is_zero(fc_with_eta_->apply_replacement(fam.prop[i] − cutde[j]))`
+  against each transformed parent cut prop; record a 1 in `sub_cut[i]`
+  on first match.
+- Raise on `Count(sub_cut, 1) != Count(parent.cut, 1)` (mirror of
+  `AMFlow.m:801` — "eta may have been inserted to cut denominators").
+- Pass `sub_cut` to `qft::FamilyConfig::build`.
 
-**Mandatory acceptance gate**: a new oracle benchmark with a
-Tradition-scheme cut family (Mathematica reference + C++ output
-matches at `rel ~ 1e-30`).  Without an oracle, the implementation
-cannot be trusted.
+**Acceptance gate**: new oracle
+[`tools/bench/tradcut_phase_2L_eps001_*`](../tools/bench) (2-loop
+Tradition-with-cut probe, family from upstream
+`examples/automatic_phasespace/run.wl`).  C++ matches MMA at
+relative error **2.68 × 10⁻³⁰** on `j[phase, 1, 0, 1, 0, 1, 0, 0]`
+(`s = 100, msq = 1, eps = 1/100`).  This is the only oracle
+covering Tradition-with-cut.
 
 ### Phase 1C — D5 ComplexMode / imaginary-numeric pipeline (~5 days)
 

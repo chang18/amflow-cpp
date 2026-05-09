@@ -1511,33 +1511,46 @@ void AMFSystem::build_boundary() {
         // multiplicity distinct from SingleMass multi-root systems.
         //
         // Upstream `ReduceBoundary` (AMFlow.m:790-803) projects the parent's
-        // `Cut` propagators (after the region transform) onto the boundary
-        // sub-family's propagator basis and emits the corresponding
-        // `cut_propagators` to Kira.  All the Cutkosky-mode benchmarks
-        // (cutbubble_1L / cutsunrise_2L / cutbanana_3L / tt_cutkosky_probe)
-        // clear the parent `Cut` at the Cutkosky setup point
-        // (`amf_system_setup_master`, AMFlow.m:1055), so this code path is
-        // never reached for them.  We have not (yet) implemented the
-        // Tradition-with-cut projection; rather than silently drop the
-        // parent cut and produce wrong masters, we abort here.  Any future
-        // fix should replace this guard with the actual projection
-        // (mirroring AMFlow.m:790-803).
+        // `Cut` propagators (after applying the region's bare LoopTransform)
+        // onto the boundary sub-family's propagator basis and emits the
+        // corresponding `cut_propagators` to Kira:
+        //
+        //   cutde = Pick[ReducedPropagator /. region[[1]], Cut, 1];
+        //   cut   = If[MemberQ[Expand[# - cutde] /. ReducedReplacement, 0],
+        //              1, 0]& /@ prop;
+        //   If[Count[cut, 1] =!= Count[Cut, 1], Abort[]];
+        //
+        // The parent `ReducedPropagator` here is the *eta-injected* version
+        // (the AMFSystemSetup config), so any cut prop that received an η
+        // injection (etac[k] != 0) carries an `eta` term.  After the bare
+        // LoopTransform the η term survives, and no eta-free fam.prop entry
+        // can match it under reduced_replacement → the count assertion
+        // fires, abort.  This is the upstream-intended behaviour ("eta may
+        // have been inserted to cut denominators").
+        std::vector<algebra::Mfrac> cutde_in_fc_eta;
+        long parent_cut_count = 0;
         bool parent_has_cut = false;
-        for (int c : fc_->cut) if (c == 1) { parent_has_cut = true; break; }
-        if (parent_has_cut) {
-            throw std::runtime_error(
-                "AMFSystem::build_boundary: parent system carries a "
-                "non-empty `cut` (length="
-                + std::to_string(fc_->cut.size())
-                + "), and the Tradition-scheme path that needs to "
-                "project that cut onto the boundary sub-family "
-                "propagator basis (mirror of AMFlow.m:790-803) is not "
-                "yet implemented in this port.  This case would "
-                "previously have silently produced incorrect boundary "
-                "masters.  Workaround: use `EndingScheme=Cutkosky` "
-                "(which clears the parent cut at setup, so the boundary "
-                "is built from an uncut sub-family).  See "
-                "docs/AUDIT_MMA_PARITY.md item D3.");
+        for (int c : fc_with_eta_->cut) if (c == 1) ++parent_cut_count;
+        if (parent_cut_count > 0) {
+            parent_has_cut = true;
+            cutde_in_fc_eta.reserve((std::size_t)parent_cut_count);
+            for (std::size_t k = 0; k < fc_with_eta_->cut.size(); ++k) {
+                if (fc_with_eta_->cut[k] != 1) continue;
+                const auto& parent_prop =
+                    fc_with_eta_->propagators_after_conservation[k];
+                // Apply the *bare* transform (region.transform.map), NOT
+                // the scaled rule from `region_rule(...)` — upstream uses
+                // `ReducedPropagator /. region[[1]]` where `region[[1]]` is
+                // just the LoopTransform without the half_eta scaling.
+                algebra::Mfrac transformed = qft::apply_region_rule(
+                    *fc_with_eta_, rctx, parent_prop, region.transform.map);
+                // The bare transform only references rctx loops/legs/
+                // invariants/eta (not __amf_eta, __amf_half_eta), so the
+                // result projects cleanly back to fc_with_eta_->ctx.
+                algebra::Mfrac in_eta_ctx =
+                    project_mfrac_by_name(transformed, fc_with_eta_->ctx);
+                cutde_in_fc_eta.push_back(std::move(in_eta_ctx));
+            }
         }
 
         for (auto& fam : fams) {
@@ -1546,7 +1559,47 @@ void AMFSystem::build_boundary() {
             prop_strs.reserve(fam.prop.size());
             for (auto& p : fam.prop) prop_strs.push_back(p.to_string());
 
-            // The sub-fc inherits everything from parent except prop.
+            // 1a. Project parent's `cut` onto fam.prop (mirrors
+            //     AMFlow.m:800-801).  An `i` in the new propagator list
+            //     is "cut" iff some transformed parent cut prop matches it
+            //     modulo `reduced_replacement`.  If the matched count
+            //     differs from the parent count, η was injected into a
+            //     cut denominator → abort.
+            std::vector<int> sub_cut(fam.prop.size(), 0);
+            if (parent_has_cut) {
+                long sub_cut_count = 0;
+                for (std::size_t i = 0; i < fam.prop.size(); ++i) {
+                    algebra::Mfrac fp_mfrac =
+                        algebra::Mfrac::from_mpoly(fam.prop[i].clone());
+                    for (std::size_t j = 0; j < cutde_in_fc_eta.size(); ++j) {
+                        algebra::Mfrac diff = fp_mfrac.clone();
+                        diff -= cutde_in_fc_eta[j].clone();
+                        algebra::Mfrac simplified =
+                            fc_with_eta_->apply_replacement(diff);
+                        if (simplified.is_zero()) {
+                            sub_cut[i] = 1;
+                            ++sub_cut_count;
+                            break;
+                        }
+                    }
+                }
+                if (sub_cut_count != parent_cut_count) {
+                    std::ostringstream m;
+                    m << "AMFSystem::build_boundary: parent cut propagator "
+                         "count mismatch in boundary sub-family (matched "
+                      << sub_cut_count << ", expected "
+                      << parent_cut_count
+                      << ").  Mirrors AMFlow.m:801: 'eta may have been "
+                         "inserted to cut denominators'.  This typically "
+                         "means the chosen η-injection point landed on a "
+                         "cut propagator; pick a different `EndingScheme` "
+                         "or rearrange the family so the cut props are "
+                         "η-free.";
+                    throw std::runtime_error(m.str());
+                }
+            }
+
+            // The sub-fc inherits everything from parent except prop + cut.
             // We give it a unique family name; users don't observe it.
             std::string sub_fam_name = fc_->family + "_b"
                 + std::to_string(system_id_) + "_r"
@@ -1559,7 +1612,7 @@ void AMFSystem::build_boundary() {
                 extract_conservation_strings(*fc_),
                 extract_replacement_strings(*fc_),
                 prop_strs,
-                /*cut*/ {},
+                std::move(sub_cut),
                 fc_->prescription);
 
             // 2. Collect all J integrals appearing in this family's terms.

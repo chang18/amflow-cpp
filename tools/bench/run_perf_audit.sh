@@ -25,6 +25,7 @@ BENCHES=(
   tools/bench/doublebox_sv_eps001_black_box_amflow_cpp.json
   tools/bench/tt_2loop_box_black_box_amflow_cpp.json
   tools/bench/tt_cutkosky_probe_eps001_black_box_amflow_cpp.json
+  tools/bench/tradcut_phase_2L_eps001_black_box_amflow_cpp.json
   tools/bench/tt_higher_rank_eps001_black_box_amflow_cpp.json
   tools/bench/vtx2_2loop_vertex_black_box_amflow_cpp.json
   tools/bench/vtx2_2loop_vertex_masters_only_cpp.json

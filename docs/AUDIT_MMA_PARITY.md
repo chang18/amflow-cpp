@@ -12,17 +12,18 @@ cover.
 |---|---|---|
 | 🟢 verified                  | 65 | — |
 | 🟡 unverified (oracle gap)    | 21 | Documented in §3 below; tracked for future bench expansion. |
-| 🔴 actual divergence          |  6 | **5 fixed**; 1 deferred to v1.1 (D5, ComplexMode — substantial feature work). |
+| 🔴 actual divergence          |  6 | **5 fully fixed; 1 deferred to v1.1** (D5, ComplexMode — substantial feature work).  D3 was upgraded from detect-and-throw (Phase 1A) to the proper projection (Phase 1B) with an oracle. |
 | ⚪ intentionally not ported   | 17 | — |
 
-Net assessment: **no oracle-validated path is wrong**, and after this
-release **no silent-wrong-result path remains**.  Five of the six 🔴
-items have been corrected — two by aligning defaults to upstream, one
-by adding a defensive Jacobian assert, one by raising on inconsistent
-Kira output, and one by replacing a silently-wrong Tradition-with-cut
-boundary code path with an explicit abort that names the limitation.
-Only D5 (Kira `ComplexMode` / imaginary-numeric pipeline) remains
-deferred to v1.1, as a feature add rather than a bug fix.
+Net assessment: **no oracle-validated path is wrong**, and **no
+silent-wrong-result path remains**.  Five of the six 🔴 items have
+been fully corrected — two by aligning defaults to upstream, one by
+adding a defensive Jacobian assert, one by raising on inconsistent
+Kira output, and one (D3) by implementing the full Tradition-with-cut
+boundary projection (Phase 1B), backed by a new oracle benchmark
+matching upstream at rel ~ 1e-30.  Only D5 (Kira `ComplexMode` /
+imaginary-numeric pipeline) remains deferred to v1.1, as a feature
+add rather than a bug fix.
 
 ---
 
@@ -81,29 +82,41 @@ Full per-pass reports: `/tmp/audit_desolver.md`, `/tmp/audit_amflow.md`,
   had the redundant override removed.  All 12 committed bench `*_cpp.json`
   already set 80 or 100 explicitly, so they are unaffected.
 
-### D3. Boundary sub-system loses parent's `Cut` info — **FIXED (detect-and-throw)**
+### D3. Boundary sub-system loses parent's `Cut` info — **FIXED (proper projection, Phase 1B)**
 
 - **Upstream** `ReduceBoundary` (`AMFlow.m:790–803`): when the parent
   system has a non-empty `Cut`, projects the parent's cut propagators
   (after the region transform) onto the new boundary-sub-family's
   propagator basis and emits `cut_propagators:[...]` to Kira.  Aborts
-  on `Count[cut, 1] != Count[Cut, 1]`.
-- **C++ (was)** `AMFSystem::build_boundary`
+  on `Count[cut, 1] != Count[Cut, 1]` ("eta may have been inserted to
+  cut denominators").
+- **C++ (was, v1.0)** `AMFSystem::build_boundary`
   (`src/pipeline/amfsystem.cpp:1452`): hard-coded `cut={}` when
   constructing the boundary `FamilyConfig` — silently dropped the
   parent cut.
-- **Fix**: in `build_boundary`, before entering the boundary-family
-  loop, raise `std::runtime_error` if the parent `fc_->cut` has any
-  non-zero entry.  This converts the previous *silent-wrong-result*
-  bug into an explicit abort that names the limitation and points
-  users at the documented workaround (`EndingScheme=Cutkosky`).
-- **Why detect-and-throw rather than the proper projection?**  The
-  proper projection (lifting parent props through `region.transform`,
-  doing per-propagator symbolic comparison modulo `reduced_replacement`,
-  raising on count mismatch) is ~100 lines of new code that lives
-  across multiple contexts; introducing it for a code path that no
-  oracle currently exercises is itself a fresh-bug risk.  Loud abort
-  is the safe fix; the proper projection remains a v1.1 feature.
+- **Phase 1A interim**: detect-and-throw if the parent had any cut.
+  Eliminated the silent-wrong-result risk but at the cost of refusing
+  Tradition-with-cut families entirely.
+- **Phase 1B fix**: full projection mirroring upstream.  For each
+  parent prop with `cut[k]==1`, apply the *bare* `region.transform.map`
+  (loops only, no `half_eta` scaling) via `qft::apply_region_rule`,
+  project the result back to `fc_with_eta_->ctx` via
+  `project_mfrac_by_name` (the bare transform is `__amf_*`-free so
+  no information is lost).  For each `fam.prop[i]`, test
+  `is_zero(fc_with_eta_->apply_replacement(fam.prop[i] − cutde[j]))`
+  for each transformed parent cut prop `cutde[j]`; record matches
+  into `sub_cut`.  Raise `std::runtime_error` if
+  `Count(sub_cut, 1) != Count(parent.cut, 1)` (mirror of
+  `AMFlow.m:801`).  Pass `sub_cut` to `qft::FamilyConfig::build`.
+- **Acceptance gate**: new oracle benchmark
+  [`tools/bench/tradcut_phase_2L_eps001_*`](../tools/bench)
+  derived from upstream `examples/automatic_phasespace/run.wl`
+  (2-loop, 7 propagators, cut={1,0,1,0,1,0,0}, prescription={0,0},
+  s=100, msq=1).  This is the only one of our oracles that
+  actually exercises the Tradition-with-cut code path; the cut
+  topology is not phase_volume so Cutkosky does not apply.  C++
+  matches Mathematica AMFlow at relative error
+  **2.68 × 10⁻³⁰** on `j[phase, 1, 0, 1, 0, 1, 0, 0]`.
 
 ### D4. `BoundaryIntegrands` Jacobian factor `|Det|^(4-2eps)` is silently dropped — **FIXED (defensive assert)**
 
