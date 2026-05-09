@@ -65,7 +65,9 @@ For complete field-level reference see
 > upstream MMA in three input regimes:
 >
 > 1. **Complex-valued numeric kinematics** — supply only real values
->    in `amf_options.blackbox.numeric_values`.  (Audit divergence D5.)
+>    in `amf_options.blackbox.numeric_values`.  The dispatcher
+>    actively rejects the object form `{"re":..,"im":..}` with a
+>    clear error.  (Audit divergence D5; deferred indefinitely.)
 > 2. **Tradition scheme on a family with non-empty `cut`** — use
 >    `EndingScheme=Cutkosky` for cut families, which clears the cut at
 >    setup time.  C++ aborts with a clear error in this case rather

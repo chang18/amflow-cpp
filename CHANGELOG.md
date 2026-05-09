@@ -74,15 +74,26 @@ post-release line-level MMA parity audit
 - Cutkosky setup now validates that all phase-volume component
   masses are non-negative after `Numeric` substitution; raises
   otherwise (mirror of `AMFlow.m:1050`).
+- `apply_blackbox_options` (`src/api/run_json.cpp`) now actively
+  rejects the complex-numeric object form
+  `{"re":..,"im":..}` in `amf_options.blackbox.numeric_values`
+  with a clear "not implemented" error pointing to audit divergence
+  D5.  Prior behaviour would have failed deeper in the parser with an
+  unclear message; the explicit rejection makes the feature gap
+  visible at the input boundary.
 
-### Known limitations (will not be addressed before v1.1)
+### Known limitations (deferred indefinitely)
 - **D5 — Kira `ComplexMode` / imaginary-numeric pipeline is not
   implemented.**  Users who need to evaluate at numeric kinematics
   with non-zero imaginary parts cannot do so via this port; the
   upstream filters such values through `IBPRule` / `CompensateRule`
   but the C++ port treats `numeric_values` as a flat real-valued
   map.  All 12 oracle benchmarks use purely-real numerics, so this
-  surface is untested.  Substantial feature add planned for v1.1.
+  surface is untested.  **Investigated post-v1.0 (2026-05-09) and
+  deferred indefinitely** — see [`docs/AUDIT_MMA_PARITY.md`](docs/AUDIT_MMA_PARITY.md)
+  D5 and [`docs/ROADMAP.md`](docs/ROADMAP.md) §"Phase 1C" for the
+  architectural trade-off (Q[i] algebra extension vs. parallel
+  acb-rational pipeline).
 - ~~**`Trivial` ending scheme is not ported.**~~  Now ported (Phase 1A).
   Upstream auto-appends `"Trivial"` to the user's `EndingScheme` list
   as a fallback when none of `Tradition` / `Cutkosky` / `SingleMass` apply

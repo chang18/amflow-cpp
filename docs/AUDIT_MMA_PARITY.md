@@ -12,7 +12,7 @@ cover.
 |---|---|---|
 | 🟢 verified                  | 65 | — |
 | 🟡 unverified (oracle gap)    | 21 | Documented in §3 below; tracked for future bench expansion. |
-| 🔴 actual divergence          |  6 | **5 fully fixed; 1 deferred to v1.1** (D5, ComplexMode — substantial feature work).  D3 was upgraded from detect-and-throw (Phase 1A) to the proper projection (Phase 1B) with an oracle. |
+| 🔴 actual divergence          |  6 | **5 fully fixed; 1 deferred indefinitely** (D5, ComplexMode — investigated post-v1.0 and found to require an algebra-layer extension; entry-point now rejects loudly).  D3 was upgraded from detect-and-throw (Phase 1A) to the proper projection (Phase 1B) with an oracle. |
 | ⚪ intentionally not ported   | 17 | — |
 
 Net assessment: **no oracle-validated path is wrong**, and **no
@@ -22,8 +22,11 @@ adding a defensive Jacobian assert, one by raising on inconsistent
 Kira output, and one (D3) by implementing the full Tradition-with-cut
 boundary projection (Phase 1B), backed by a new oracle benchmark
 matching upstream at rel ~ 1e-30.  Only D5 (Kira `ComplexMode` /
-imaginary-numeric pipeline) remains deferred to v1.1, as a feature
-add rather than a bug fix.
+imaginary-numeric pipeline) remains deferred — investigated
+post-v1.0 (2026-05-09) and deferred indefinitely after the
+implementation cost analysis (see §D5 below and `docs/ROADMAP.md`
+§"Phase 1C").  The JSON entry-point now actively rejects the
+complex-numeric form rather than silently mishandling it.
 
 ---
 
@@ -134,19 +137,29 @@ Full per-pass reports: `/tmp/audit_desolver.md`, `/tmp/audit_amflow.md`,
   any future relaxation of the `branch_momenta` precondition before
   the missing Jacobian factor produces wrong boundary integrands.
 
-### D5. Kira `ComplexMode` / `CompensateRule` real-only filter unimplemented — **deferred**
+### D5. Kira `ComplexMode` / `CompensateRule` real-only filter unimplemented — **deferred indefinitely; entry-point rejects loudly**
 
 - **Upstream** filters `IBPRule` to drop imaginary-part numerics from
   the Kira CLI input, then post-substitutes them via `CompensateRule`
   after `AnalyticReduction` (line 488) and `DifferentialEquation`
-  (line 516).
+  (line 519).
 - **C++** `KiraConfig::numeric_values` is a flat `map<string,string>`
   of pre-computed rational strings — no imaginary handling.  The 5th
   `IBPSystem` parameter `complexmode` has no C++ counterpart.
 - **Latent**: all 12 oracles use purely-real `numeric_values`.
-- **Recommended fix**: add an imaginary-extraction step in
-  `kira_run.cpp` before assembling the `-s` arguments, plus a post-Kira
-  substitution in `kira_parse.cpp`.  Non-trivial.
+- **Status (post-investigation, 2026-05-09)**: deferred indefinitely.
+  The JSON dispatcher (`apply_blackbox_options` in `src/api/run_json.cpp`)
+  now rejects the complex form `{"re":..,"im":..}` with an error that
+  points to this audit entry, rather than silently truncating to the
+  real part or producing a wrong answer.
+- **Why not a small patch**: the C++ algebra layer is over Q
+  (FLINT `fmpz_mpoly_q_t`); a complex kinematic invariant cannot be
+  substituted into an Mfrac as a value.  See
+  [`docs/ROADMAP.md`](ROADMAP.md) §"Phase 1C" for the two
+  implementation paths considered (Q[i] algebra extension vs.
+  parallel acb-rational pipeline) and their trade-offs.
+- **If revisited**: prefer the acb-rational-pipeline approach unless
+  complex symbolic Replacement rules become a project goal.
 
 ### D6. RHS-not-in-master is silently dropped — **FIXED (now throws)**
 
@@ -247,8 +260,12 @@ lives in [`docs/ROADMAP.md`](ROADMAP.md).  In summary:
 - **Phase 1B** — replace the D3 Tradition-with-cut detect-and-throw
   with the proper projection (mirror of upstream
   `AMFlow.m:790-803`); requires a new oracle benchmark.
-- **Phase 1C** — implement D5 (Kira `ComplexMode` / imaginary-numeric
-  pipeline); requires a new oracle with complex kinematics.
+- **Phase 1C** — D5 (Kira `ComplexMode` / imaginary-numeric pipeline)
+  was investigated post-v1.0 and **deferred indefinitely**.  See §D5
+  for the architectural reason and `docs/ROADMAP.md` §"Phase 1C" for
+  the two paths that would unblock it (Q[i] algebra extension or
+  acb-rational parallel pipeline).  The dispatcher now rejects the
+  complex-form input loudly.
 - **Phase 2** — convert each 🟡 in §3 above into either an oracle-
   validated 🟢 or a documented "theoretical equivalence" entry.
 - **Phase 3** — ongoing diversification of the oracle suite (loop

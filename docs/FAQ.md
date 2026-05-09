@@ -215,14 +215,19 @@ Full details: [`tools/bench/README.md`](../tools/bench/README.md).
 - HQET / SCET / Wilson-line workflows
 - IBP backends other than Kira (no FIRE / LiteRed / FiniteFlow / Blade)
 
-**Known limitations (planned for v1.1):**
+**Known limitations (deferred indefinitely):**
 - **Complex-valued numeric kinematics.**  Upstream filters
   imaginary-part numerics through `IBPRule` / `CompensateRule`
   (apply real parts to Kira, substitute imaginary parts after).
   This C++ port treats `amf_options.blackbox.numeric_values` as a
-  flat real-valued map; supplying a complex value will not produce
-  correct results.  Workaround: provide only purely-real numeric
-  values for now.  (Audit divergence D5.)
+  flat real-valued map.  As of 2026-05-09, the JSON dispatcher
+  actively rejects the object form `{"re":..,"im":..}` with a
+  loud error rather than silently mishandling it.  The feature was
+  investigated post-v1.0 and deferred indefinitely — see
+  [`docs/AUDIT_MMA_PARITY.md`](AUDIT_MMA_PARITY.md) D5 and
+  [`docs/ROADMAP.md`](ROADMAP.md) §"Phase 1C" for the architectural
+  trade-off (Q[i] algebra extension vs. acb-rational pipeline).
+  Workaround: provide only purely-real numeric values.
 - **Tradition scheme on a family with non-empty `cut`.**  The C++
   port currently aborts with a clear error in this case rather than
   computing a possibly-wrong answer.  Workaround: use

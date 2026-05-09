@@ -10,8 +10,11 @@ The audit
 left two kinds of work behind:
 
 1. **Known-incomplete implementation paths.**  Every "deferred" 🔴
-   item or "abort-instead-of-compute" stub.  These must be
-   implemented properly, not papered over.
+   item or "abort-instead-of-compute" stub.  Each is either
+   implemented properly, or — if the implementation cost is
+   incommensurate with the use case — explicitly deferred with a
+   *loud* entry-point rejection so users get a clear error rather
+   than a silent wrong answer.  Nothing is papered over.
 2. **Oracle-uncovered code paths.**  All 21 🟡 unverified branches.
    For each, either add an oracle benchmark that exercises it (turning
    🟡 → 🟢), or document it as a known-equivalent design choice
@@ -59,21 +62,46 @@ relative error **2.68 × 10⁻³⁰** on `j[phase, 1, 0, 1, 0, 1, 0, 0]`
 (`s = 100, msq = 1, eps = 1/100`).  This is the only oracle
 covering Tradition-with-cut.
 
-### Phase 1C — D5 ComplexMode / imaginary-numeric pipeline (~5 days)
+### Phase 1C — D5 ComplexMode / imaginary-numeric pipeline — **deferred indefinitely**
 
-Implement the upstream `IBPRule` / `CompensateRule` split for complex
-numeric kinematics:
+**Status (post-investigation, 2026-05-09)**: investigated and deferred;
+the JSON entry-point now actively rejects complex-form numeric values
+with a clear "not implemented" error rather than silently mishandling
+them.
 
-- Split `KiraConfig::numeric_values` into real-vs-complex during
-  `kira_run`; pass only real parts as `-s` arguments to Kira.
-- After Kira returns, apply the complex-numeric values via a
-  `CompensateRule`-style substitution in the parsed coefficient table
-  and DE matrix.
-- Wire through `ibp::black_box_reduce` and `ibp::black_box_diffeq`.
+**Why deferred**: the upstream `IBPRule` / `CompensateRule` split
+(`Kira/interface.m:50-57`, `488`, `519`) cannot be ported by the
+originally-imagined small patch.  The reason is structural — the C++
+algebra layer carries Mfracs over **Q** (FLINT `fmpz_mpoly_q_t`), so a
+complex kinematic invariant like `s = 1 + 2*I` cannot be substituted
+into an Mfrac as a value.  Two faithful-to-upstream paths were
+identified, both substantial:
 
-**Mandatory acceptance gate**: a new oracle benchmark with a
-non-real-numeric kinematic invariant (e.g., a Cutkosky probe with a
-genuinely complex kinematic point).
+- **Direction A** — promote `algebra::Mpoly` / `algebra::Mfrac` to
+  Q[i] (Gaussian rationals).  FLINT does *not* provide a
+  multivariate-polynomial type over Z[i], so the entire algebra-layer
+  arithmetic (add, mul, GCD, content/primitive, substitute, etc.)
+  would need a new Q[i]-coefficient implementation.  Cascades into
+  `numeric::FmpqPoly`/`RationalFunction`/`RationalMatrix`, since the
+  fundamental-matrix path consumes Mfracs and produces Q-rational
+  output.  Estimated **~2000 LOC + 1-2 weeks**.
+
+- **Direction B** — keep Mfracs over Q; defer the substitution of
+  complex invariants to the rational-function-construction step
+  (`mfrac_to_eta_rational`, `boundary_acbmat`).  Add a parallel
+  pipeline using `numeric::AcbPoly` / `AcbRationalFunction` /
+  `AcbRationalMatrix` (Arb provides `acb_poly_t` natively).  Mathematically
+  equivalent to Direction A by the universal property of polynomial
+  rings (substitution at the end commutes with rational-function
+  arithmetic).  Estimated **~1100 LOC + ~7 days**.
+
+**Workaround for end users**: real-only kinematics is the only
+supported regime.  The JSON dispatcher now rejects the object form
+`{"re":..,"im":..}` in `amf_options.blackbox.numeric_values` with an
+error that points to this audit divergence (D5).
+
+**If revisited**: build Direction B unless complex Replacement rules
+(not just complex Numeric) become a project goal.
 
 ---
 
