@@ -2,7 +2,6 @@
   "mode": "black_box_amflow",
   "options": {
     "chop_pre": 20,
-    "rationalize_pre": 20,
     "silent_mode": true
   },
   "family": {

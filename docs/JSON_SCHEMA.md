@@ -243,7 +243,7 @@ are the upstream AMFlow defaults.
 | `learn_x_order`  | int            | -1      | `LearnXOrder`    |
 | `test_x_order`   | int            | 5       | `TestXOrder`     |
 | `run_radius`     | int            | 2       | `RunRadius`      |
-| `run_length`     | int            | 200     | `RunLength`      |
+| `run_length`     | int            | 1000    | `RunLength`      |
 | `run_candidate`  | int            | 10      | `RunCandidate`   |
 | `run_direction`  | `"Re"`/`"Im"`/`"NegRe"`/`"NegIm"` | `"NegIm"` | `RunDirection` |
 

@@ -30,7 +30,7 @@ struct GlobalOptions {
     int  working_pre     = 100;     // decimal digits, global working precision
     int  chop_pre        = 20;      // |x| < 10^-chop_pre is treated as zero
     bool silent_mode     = false;   // suppress informational logging
-    int  rationalize_pre = 20;      // tolerance when rationalising floats
+    int  rationalize_pre = 100;     // tolerance when rationalising floats (mirrors upstream `RationalizePre = 100`)
 
     // Spacetime dimension D0 in d = D0 - 2*eps; eps -> 0 corresponds to d = D0.
     // Mirrors AMFlow.m's "D0" option (default 4).  Encoded as a rational
@@ -60,7 +60,7 @@ struct RunningOptions {
     };
 
     int       run_radius     = 2;
-    int       run_length     = 200;
+    int       run_length     = 1000;     // mirrors upstream `RunLength = 1000`
     int       run_candidate  = 10;
     Direction run_direction  = Direction::NegIm;
 

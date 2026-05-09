@@ -180,7 +180,6 @@ analytic answer.
   "mode": "solve_integrals",
   "options": {
     "chop_pre":        20,
-    "rationalize_pre": 20,
     "silent_mode":     true
   },
   "family": {

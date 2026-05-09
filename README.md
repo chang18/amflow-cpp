@@ -85,10 +85,13 @@ Public headers under `include/amflow/<domain>/`; implementation under
 | Core ODE solver (port of upstream `DESolver.m`) | Implemented; 12/12 oracle cases match MMA reference at `rel ~1e-30` |
 | AMFlow + Kira pipeline (upstream `AMFlow.m` core algorithms) | Implemented for the covered workflows |
 | Top-level entries (`amflow`, `black_box_amflow`, `solve_integrals`) | Implemented; exposed via `amflow_cli` JSON modes |
+| Line-level MMA parity audit (post-v1.0) | 65 🟢 verified, 21 🟡 unverified, 6 🔴 (4 deferred, 2 fixed in v1.0.1); see [`docs/AUDIT_MMA_PARITY.md`](docs/AUDIT_MMA_PARITY.md) |
+| Wall-clock vs MMA on 12 oracles | ~1.5–2.5× speedup on Kira-light benches; comparable on Kira-heavy benches (both runtimes spend their wall in Kira); see [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md) |
 | `SolveIntegralsGaugeLink`, HQET / SCET / Wilson lines | Out of scope |
 
 See [`AUDIT.md`](AUDIT.md) for the validated families and benchmark
-inventory.
+inventory; [`docs/AUDIT_MMA_PARITY.md`](docs/AUDIT_MMA_PARITY.md) for
+the line-level upstream-parity audit.
 
 ## Quick start
 
@@ -163,6 +166,8 @@ For current parity benchmarks at `eps = 1/1000` see
 | [`docs/INVARIANTS.md`](docs/INVARIANTS.md) | Project-wide rules that must stay true (precision, RAII, ODE-boundary traps) |
 | [`docs/REFERENCE_MAP.md`](docs/REFERENCE_MAP.md) | Upstream Mathematica symbol → C++ symbol mapping |
 | [`AUDIT.md`](AUDIT.md) | Current parity status, validated surface, benchmark inventory |
+| [`docs/AUDIT_MMA_PARITY.md`](docs/AUDIT_MMA_PARITY.md) | Line-level audit of the C++ port against upstream MMA AMFlow |
+| [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md) | Measured C++ vs MMA wall clocks on the 12 oracle benchmarks |
 | [`notes/mma_*_map.md`](notes/) | Per-file upstream Mathematica source → C++ port maps |
 | [`reference/README.md`](reference/README.md) | How to clone the upstream MMA AMFlow locally for reference data regeneration |
 | [`tools/bench/README.md`](tools/bench/README.md) | Sampled-parity benchmark conventions and regeneration |

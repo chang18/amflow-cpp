@@ -25,7 +25,7 @@ protected:
 TEST_F(NumericOptionsResetFixture, DefaultsMatchSpec) {
     EXPECT_EQ(dsn::working_pre(), 100);
     EXPECT_EQ(dsn::chop_pre(), 20);
-    EXPECT_EQ(dsn::rationalize_pre(), 20);
+    EXPECT_EQ(dsn::rationalize_pre(), 100);
     EXPECT_FALSE(dsn::silent_mode());
     EXPECT_EQ(dsn::d0(), "4");
 
@@ -35,7 +35,7 @@ TEST_F(NumericOptionsResetFixture, DefaultsMatchSpec) {
     EXPECT_EQ(dsn::test_x_order(), 5);
 
     EXPECT_EQ(dsn::run_radius(), 2);
-    EXPECT_EQ(dsn::run_length(), 200);
+    EXPECT_EQ(dsn::run_length(), 1000);
     EXPECT_EQ(dsn::run_candidate(), 10);
     EXPECT_EQ(dsn::run_direction(), dsn::RunningOptions::Direction::NegIm);
 }

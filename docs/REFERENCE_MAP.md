@@ -12,9 +12,12 @@ vendor it (see [`reference/README.md`](../reference/README.md)).
 - Upstream `ibp_interface/Kira/interface.m` and the small Kira-glue
   helpers.  Covered in Part III below.
 
-Line numbers cited below track the upstream `master` branch as of the
-v1.0.0 release of this port; if upstream has moved on, search by symbol
-name.
+Line numbers cited below track upstream master at the time of the
+v1.0.0 release.  Upstream has continued to develop since (see
+[`AUDIT_MMA_PARITY.md`](AUDIT_MMA_PARITY.md) §5 for the diff
+summary), so individual line numbers may be ~30 lines off in places.
+**Search by symbol name when in doubt.**  In-source `// Mirrors
+AMFlow.m:NNN` comments follow the same convention.
 
 Use this map as a navigation aid when you need to translate a
 Mathematica expression or trace why a result differs.
