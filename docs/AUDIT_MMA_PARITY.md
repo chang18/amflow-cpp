@@ -10,8 +10,8 @@ cover.
 
 | Severity | Count | Action taken |
 |---|---|---|
-| 🟢 verified                  | 65 | — |
-| 🟡 unverified (oracle gap)    | 21 | Documented in §3 below; tracked for future bench expansion. |
+| 🟢 verified                  | 66 | — |
+| 🟡 unverified (oracle gap)    | 20 | Documented in §3 below; tracked for future bench expansion.  Phase 2A reduces this count as oracles land (LIBPDeriv multi-invariant: 🟡 → 🟢, 2026-05-09). |
 | 🔴 actual divergence          |  6 | **5 fully fixed; 1 deferred indefinitely** (D5, ComplexMode — investigated post-v1.0 and found to require an algebra-layer extension; entry-point now rejects loudly).  D3 was upgraded from detect-and-throw (Phase 1A) to the proper projection (Phase 1B) with an oracle. |
 | ⚪ intentionally not ported   | 17 | — |
 
@@ -198,7 +198,7 @@ exercises them.  Each is a candidate for a future oracle.
 | `zero_sector_q` substitutes generic primes | `src/qft/topology.cpp:42-48` | Both are generic-point substitutions sufficient to detect scalelessness; benign. |
 | `region_power` skips `/.Numeric` | `src/qft/findregion.cpp:463-529` | Expression contains only `eps` + integer constants; benign by construction. |
 | `factorize_family` no-redef fallback | `src/pipeline/factorize.cpp:268-285` | Dead code on tested inputs (square / well-conditioned systems). |
-| `LIBPDeriv` multi-invariant case | `src/ibp/libp_deriv.cpp` | Single-invariant tested; multi-invariant unverified. |
+| ~~`LIBPDeriv` multi-invariant case~~ → 🟢 | `src/ibp/libp_deriv.cpp` | **Verified, scope clarified.**  Multi-invariant family (free-symbol invariants like `m1sq`, `m2sq` in distinct propagators, plus a Replacement-defined `s`) tested via `test_ibp_libp_deriv.cpp` `*TwoMassBubble*` cases.  Replacement-defined invariants (e.g. `s` from `p^2 -> s`) deliberately return all-zero — production AMFlow flow only differentiates w.r.t. `eta` (which lives directly in the propagator polynomial), so upstream's momentum-derivative chain-rule path (`LIBPDerivivative`, `Kira/interface.m`) is intentionally not ported.  See `include/amflow/ibp/libp_deriv.hpp` "Scope" block for the contract. |
 | `MasterRank`/`MasterDot` filter | `src/ibp/reduce.cpp` | Default `Infinity` is no-op. |
 | `kira_target.m` parser strictness | `src/ibp/kira_parse.cpp` | Custom tokenizer is not fuzzed. |
 | Coefficient parser fragility | `src/ibp/kira_parse.cpp` | No decimal-point support; integer exponents only.  Kira's normal output never trips this. |
