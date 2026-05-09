@@ -118,7 +118,7 @@ the triplet.
 | 🟡 item | Case to construct | Status |
 |---|---|---|
 | `analyze_block` topology choice | non-nested overlapping-closure block matrix | ✅ done (2026-05-10) — `test_ode_blocks.cpp` `AnalyzeBlock.NonNestedOverlapping_*` (Y-shape / mutual-plus-dependents / diamond), basis-invariant correctness locked + AnalyzeBlock0 output hand-traced |
-| `Calcx00` heuristic match-row vs symbolic Solve | rank-deficient boundary system | pending |
+| `Calcx00` heuristic match-row vs symbolic Solve | rank-deficient boundary system | ✅ done (2026-05-10) for the **full-rank** path — 6 existing `Calcx00_*` unit tests in `test_ode_zero.cpp` lock equivalence with hand-derived exact solutions; 12 oracle benches confirm at rel ~10⁻³⁰.  The genuinely rank-deficient case (acb-inverse fallback path at `zero.cpp:1199-1206`) remains 🟡 — Phase 3 synthetic-bench candidate |
 | Jordan block ordering | ODE block with ≥2 distinct eigenvalues | ✅ done (2026-05-10) — `test_ode_jordan.cpp` `*Distinct*` cases (2-/3-distinct-eigenvalue, mixed block sizes, similarity transform); end-to-end "no impact on final integral" independently locked by 12 oracle benches |
 | `LIBPDeriv` multi-invariant | family with two kinematic invariants and a derivative bench | ✅ done (2026-05-09) — `test_ibp_libp_deriv.cpp` `*TwoMassBubble*` covers free-symbol multi-invariant chain rule; Replacement-defined invariant scope documented in `include/amflow/ibp/libp_deriv.hpp` |
 
