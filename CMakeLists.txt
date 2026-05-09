@@ -34,7 +34,11 @@ option(AMFLOW_WARNINGS_AS_ERRORS "Treat warnings as errors" OFF)
 # Dependencies
 # ---------------------------------------------------------------------------
 find_package(PkgConfig REQUIRED)
-pkg_check_modules(FLINT REQUIRED IMPORTED_TARGET flint)
+pkg_check_modules(FLINT REQUIRED IMPORTED_TARGET flint>=3.0)
+# Some symbols we use (e.g. fmpz_mpoly_q_set_str_pretty,
+# fmpz_mpoly_evaluate_acb) require FLINT 3.x.  Ubuntu 22.04 ships
+# FLINT 2.8.4 in libflint-dev — that won't work; build FLINT from
+# source or use a distro / Conda channel with FLINT >= 3.0.
 
 if(NOT TARGET nlohmann_json::nlohmann_json)
     find_package(nlohmann_json 3.7.0 QUIET)

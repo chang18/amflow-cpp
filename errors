@@ -1,0 +1,66 @@
+Run cmake --build build -j
+[1/80] Building CXX object CMakeFiles/amflow.dir/src/architecture_marker.cpp.o
+[2/80] Building CXX object CMakeFiles/amflow.dir/src/numeric/log.cpp.o
+[3/80] Building CXX object CMakeFiles/amflow.dir/src/algebra/mpoly.cpp.o
+FAILED: [code=1] CMakeFiles/amflow.dir/src/algebra/mpoly.cpp.o
+/usr/bin/g++  -I/home/runner/work/amflow-cpp/amflow-cpp/include -O3 -DNDEBUG -std=c++17 -fPIC -Wall -Wextra -Wpedantic -Wno-unused-parameter -MD -MT CMakeFiles/amflow.dir/src/algebra/mpoly.cpp.o -MF CMakeFiles/amflow.dir/src/algebra/mpoly.cpp.o.d -o CMakeFiles/amflow.dir/src/algebra/mpoly.cpp.o -c /home/runner/work/amflow-cpp/amflow-cpp/src/algebra/mpoly.cpp
+/home/runner/work/amflow-cpp/amflow-cpp/src/algebra/mpoly.cpp: In static member function ‘static amflow::algebra::Mpoly amflow::algebra::Mpoly::from_string(std::shared_ptr<amflow::algebra::MpolyContext>, const std::string&, fmpz*)’:
+/home/runner/work/amflow-cpp/amflow-cpp/src/algebra/mpoly.cpp:188:14: error: ‘fmpz_mpoly_q_set_str_pretty’ was not declared in this scope; did you mean ‘fmpz_mpoly_set_str_pretty’?
+  188 |     int ok = fmpz_mpoly_q_set_str_pretty(
+      |              ^~~~~~~~~~~~~~~~~~~~~~~~~~~
+      |              fmpz_mpoly_set_str_pretty
+/home/runner/work/amflow-cpp/amflow-cpp/src/algebra/mpoly.cpp: In member function ‘void amflow::algebra::Mpoly::evaluate_acb(acb_ptr, acb_srcptr, long int) const’:
+/home/runner/work/amflow-cpp/amflow-cpp/src/algebra/mpoly.cpp:363:5: error: ‘fmpz_mpoly_evaluate_acb’ was not declared in this scope; did you mean ‘fmpz_mpoly_q_evaluate_acb’?
+  363 |     fmpz_mpoly_evaluate_acb(out, p_, values, prec, ctx_->raw());
+      |     ^~~~~~~~~~~~~~~~~~~~~~~
+      |     fmpz_mpoly_q_evaluate_acb
+[4/80] Building CXX object CMakeFiles/amflow.dir/src/numeric/acb_wrap.cpp.o
+[5/80] Building CXX object CMakeFiles/amflow.dir/src/numeric/options.cpp.o
+[6/80] Building CXX object CMakeFiles/amflow.dir/src/numeric/rational.cpp.o
+[7/80] Building CXX object CMakeFiles/amflow.dir/src/numeric/matrix.cpp.o
+[8/80] Building CXX object CMakeFiles/amflow.dir/src/algebra/mpoly_matrix.cpp.o
+ninja: build stopped: subcommand failed.
+
+
+
+Run cmake --build build -j
+[1/80] Building CXX object CMakeFiles/amflow.dir/src/architecture_marker.cpp.o
+[2/80] Building CXX object CMakeFiles/amflow.dir/src/numeric/log.cpp.o
+[3/80] Building CXX object CMakeFiles/amflow.dir/src/numeric/acb_wrap.cpp.o
+[4/80] Building CXX object CMakeFiles/amflow.dir/src/algebra/mpoly.cpp.o
+FAILED: [code=1] CMakeFiles/amflow.dir/src/algebra/mpoly.cpp.o
+/usr/bin/clang++  -I/home/runner/work/amflow-cpp/amflow-cpp/include -O3 -DNDEBUG -std=c++17 -fPIC -Wall -Wextra -Wpedantic -Wno-unused-parameter -MD -MT CMakeFiles/amflow.dir/src/algebra/mpoly.cpp.o -MF CMakeFiles/amflow.dir/src/algebra/mpoly.cpp.o.d -o CMakeFiles/amflow.dir/src/algebra/mpoly.cpp.o -c /home/runner/work/amflow-cpp/amflow-cpp/src/algebra/mpoly.cpp
+/home/runner/work/amflow-cpp/amflow-cpp/src/algebra/mpoly.cpp:188:14: error: use of undeclared identifier 'fmpz_mpoly_q_set_str_pretty'; did you mean 'fmpz_mpoly_set_str_pretty'?
+  188 |     int ok = fmpz_mpoly_q_set_str_pretty(
+      |              ^~~~~~~~~~~~~~~~~~~~~~~~~~~
+      |              fmpz_mpoly_set_str_pretty
+/usr/include/flint/fmpz_mpoly.h:159:5: note: 'fmpz_mpoly_set_str_pretty' declared here
+  159 | int fmpz_mpoly_set_str_pretty(fmpz_mpoly_t A, const char * str,
+      |     ^
+/home/runner/work/amflow-cpp/amflow-cpp/src/algebra/mpoly.cpp:189:9: error: cannot initialize a parameter of type 'fmpz_mpoly_struct *' with an lvalue of type 'fmpz_mpoly_q_t' (aka 'fmpz_mpoly_q_struct[1]')
+  189 |         q, expr.c_str(),
+      |         ^
+/usr/include/flint/fmpz_mpoly.h:159:44: note: passing argument to parameter 'A' here
+  159 | int fmpz_mpoly_set_str_pretty(fmpz_mpoly_t A, const char * str,
+      |                                            ^
+/home/runner/work/amflow-cpp/amflow-cpp/src/algebra/mpoly.cpp:363:5: error: use of undeclared identifier 'fmpz_mpoly_evaluate_acb'; did you mean 'fmpz_mpoly_q_evaluate_acb'?
+  363 |     fmpz_mpoly_evaluate_acb(out, p_, values, prec, ctx_->raw());
+      |     ^~~~~~~~~~~~~~~~~~~~~~~
+      |     fmpz_mpoly_q_evaluate_acb
+/usr/include/flint/fmpz_mpoly_q.h:291:6: note: 'fmpz_mpoly_q_evaluate_acb' declared here
+  291 | void fmpz_mpoly_q_evaluate_acb(acb_t res, const fmpz_mpoly_q_t f, acb_srcptr x, slong prec, const fmpz_mpoly_ctx_t ctx);
+      |      ^
+/home/runner/work/amflow-cpp/amflow-cpp/src/algebra/mpoly.cpp:363:34: error: cannot initialize a parameter of type 'const fmpz_mpoly_q_struct *' with an lvalue of type 'fmpz_mpoly_struct *const'
+  363 |     fmpz_mpoly_evaluate_acb(out, p_, values, prec, ctx_->raw());
+      |                                  ^~
+/usr/include/flint/fmpz_mpoly_q.h:291:64: note: passing argument to parameter 'f' here
+  291 | void fmpz_mpoly_q_evaluate_acb(acb_t res, const fmpz_mpoly_q_t f, acb_srcptr x, slong prec, const fmpz_mpoly_ctx_t ctx);
+      |                                                                ^
+4 errors generated.
+[5/80] Building CXX object CMakeFiles/amflow.dir/src/numeric/options.cpp.o
+[6/80] Building CXX object CMakeFiles/amflow.dir/src/numeric/matrix.cpp.o
+[7/80] Building CXX object CMakeFiles/amflow.dir/src/numeric/rational.cpp.o
+[8/80] Building CXX object CMakeFiles/amflow.dir/src/algebra/mpoly_matrix.cpp.o
+[9/80] Building CXX object CMakeFiles/amflow.dir/src/algebra/context_migration.cpp.o
+ninja: build stopped: subcommand failed.
+

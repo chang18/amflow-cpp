@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [main]
 
+env:
+  FLINT_VERSION: "3.4.0"
+
 jobs:
   build-and-test:
     name: build (Ubuntu, ${{ matrix.compiler }})
@@ -29,12 +32,44 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install build dependencies
+      - name: Install system build dependencies
+        # Note: NOT installing libflint-dev — Ubuntu's package (jammy 2.8.4)
+        # is too old; we need >= 3.4 for fmpz_mpoly_q_set_str_pretty,
+        # fmpz_mpoly_evaluate_acb, etc.  Built from source below.
         run: |
           sudo apt-get update
           sudo apt-get install -y \
             build-essential cmake pkg-config ninja-build \
-            libflint-dev libgtest-dev nlohmann-json3-dev
+            libgmp-dev libmpfr-dev \
+            libgtest-dev nlohmann-json3-dev
+
+      - name: Cache FLINT ${{ env.FLINT_VERSION }} build
+        id: cache-flint
+        uses: actions/cache@v4
+        with:
+          path: /opt/flint
+          key: flint-${{ env.FLINT_VERSION }}-${{ runner.os }}-${{ runner.arch }}-v1
+
+      - name: Build FLINT ${{ env.FLINT_VERSION }} from source
+        if: steps.cache-flint.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          cd $(mktemp -d)
+          curl -fsSL "https://github.com/flintlib/flint/releases/download/v${FLINT_VERSION}/flint-${FLINT_VERSION}.tar.gz" -o flint.tar.gz
+          tar -xzf flint.tar.gz
+          cd flint-${FLINT_VERSION}
+          ./bootstrap.sh
+          ./configure --prefix=/opt/flint --disable-static
+          make -j"$(nproc)"
+          sudo make install
+
+      - name: Expose FLINT to pkg-config / ldconfig
+        run: |
+          echo "PKG_CONFIG_PATH=/opt/flint/lib/pkgconfig" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=/opt/flint/lib" >> "$GITHUB_ENV"
+          echo "/opt/flint/lib" | sudo tee /etc/ld.so.conf.d/flint.conf
+          sudo ldconfig
+          pkg-config --modversion flint
 
       - name: Configure
         run: cmake -S . -B build -G Ninja -DAMFLOW_BUILD_DRIVER=ON
