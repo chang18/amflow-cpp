@@ -22,7 +22,7 @@ load-bearing rules.
   mismatch on a ported branch is a parity bug.
 - **This codebase was developed primarily by AI coding agents** (this
   document is the onboarding contract).  The maintainer
-  (<canyi@fizzlycode.com>) directs the work but does not line-review;
+  (<3250800970@qq.com>) directs the work but does not line-review;
   the parity contract — 12 oracle benchmarks under `tools/bench/` and
   the 508-case GoogleTest suite — is the gate every change must pass.
 

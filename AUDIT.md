@@ -83,8 +83,9 @@ Workflows backed by green local tests or committed sampled benchmarks:
   internal eps grid `cfg.eps_samples + (4-D0)/2` (AMFlow.m:1342 / 1351)
   and fits the Laurent expansion against the original user-facing grid
   (AMFlow.m:1356). `BlackBoxAMFlow` itself does not shift, matching MMA.
-  Unit-tested at `OptionsTest.D0Shift_*` and round-tripped through the
-  CLI in `Layer10Driver.EchoesOptionsBackInOutput`. End-to-end parity
+  Unit-tested at `NumericOptionsResetFixture.D0Shift_*` and the
+  options round-trip is covered by `ApiRunJsonTest.OptionsAreEchoedBack`.
+  End-to-end parity
   bench at `D0 != 4` committed: `box1_d0_7_3_solve_integrals` (1-loop
   box at `s=100, t=-1, D0=7/3`) matches MMA on `j[box1, 1, 0, 1, 0]`
   to ~30 sig digits across orders 0..2.

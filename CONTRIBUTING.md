@@ -45,4 +45,4 @@ For bug reports and feature requests, please open a GitHub issue at
 
 For collaboration inquiries, citation questions, or anything that
 doesn't fit a public issue, contact the maintainer at
-<canyi@fizzlycode.com>.
+<3250800970@qq.com>.

@@ -50,7 +50,7 @@ Mathematica reference.  The 12 oracle benchmarks under `tools/bench/`
 and the 508-case GoogleTest suite are the contract that the AI-led
 implementation has to honour for any change to land.
 
-Maintainer / contact: **canyi@fizzlycode.com** (please open a GitHub
+Maintainer / contact: **3250800970@qq.com** (please open a GitHub
 issue first when possible; use email for inquiries that don't fit a
 public issue).
 
@@ -188,7 +188,7 @@ AMFlow parity evidence and focused C++ regression tests.
 
 For questions, bug reports, or collaboration inquiries, open a GitHub
 issue at <https://github.com/chang18/amflow-cpp/issues>, or contact
-the maintainer at <canyi@fizzlycode.com>.
+the maintainer at <3250800970@qq.com>.
 
 ## License
 

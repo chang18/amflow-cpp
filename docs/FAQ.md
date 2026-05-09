@@ -2,7 +2,7 @@
 
 Common questions for users and packagers of AMFlow.cpp.  If your
 question isn't here, please [open a GitHub issue](https://github.com/chang18/amflow-cpp/issues)
-or contact the maintainer at <canyi@fizzlycode.com>.
+or contact the maintainer at <3250800970@qq.com>.
 
 ---
 
@@ -136,6 +136,29 @@ Likely culprits:
 implementation converts to bits internally.
 
 For more on the precision policy see [`docs/INVARIANTS.md`](INVARIANTS.md) §1.
+
+### Q. Can I compute in dimensions other than 4?
+
+Yes.  The host space-time dimension is `D = D₀ - 2ε`, where `D₀` is
+configurable via `options.d0` (rational `"p/q"` or integer; default
+`"4"`):
+
+```jsonc
+"options": {
+  "d0": "7/3"      // → D = 7/3 - 2ε
+}
+```
+
+This is supported in `solve_integrals` and `black_box_amflow` (mirrors
+upstream AMFlow.m's `D0` option).  The engine internally evaluates the
+family at `ε + (4 - D₀)/2` and fits the Laurent expansion against the
+user-facing grid, so `D₀` cancels cleanly at the API.
+
+Validated at the oracle bench
+[`tools/bench/box1_d0_7_3_solve_integrals_cpp.json`](../tools/bench/box1_d0_7_3_solve_integrals_cpp.json)
+(D₀ = 7/3, matches Mathematica AMFlow to ~30 sig digits).
+See [`docs/USER_GUIDE.md`](USER_GUIDE.md) §4.4 for a worked example
+and [`AUDIT.md`](../AUDIT.md) for the parity numbers.
 
 ---
 

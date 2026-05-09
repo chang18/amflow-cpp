@@ -260,7 +260,41 @@ The Laurent expansion is
 
 where `c_k = result[0].coefficients[k].value`.
 
-### 4.4 Adapting to your own integral
+### 4.4 Computing in non-4 spacetime dimensions
+
+By default the host space-time dimension is `D = 4 - 2ε` (so `ε → 0`
+recovers the physical four-dimensional value).  To work in a different
+dimension scheme — for instance `D = 7/3 - 2ε` — set
+`options.d0 = "<rational>"`:
+
+```jsonc
+{
+  "mode": "solve_integrals",
+  "options": {
+    "d0": "7/3",          // any rational "p/q" or integer; default "4"
+    "rationalize_pre": 100
+  },
+  "family":     { ... },
+  "integrals":  [ ... ],
+  "goal_digits": 30,
+  "eps_order":   4,
+  "amf_options": { "blackbox": { "numeric_values": { "s": "100", "t": "-1" } } }
+}
+```
+
+What happens internally: the user-facing ε grid stays user-facing,
+but the engine evaluates the family at `ε + (4 − D₀)/2` (mirroring
+upstream `AMFlow.m:1342`/`1351`) and fits the Laurent expansion against
+the original grid (mirroring `AMFlow.m:1356`).  This keeps `D₀`
+invisible at the API while letting it cancel cleanly inside the
+algorithm.
+
+A committed end-to-end oracle benchmark
+[`tools/bench/box1_d0_7_3_solve_integrals_cpp.json`](../tools/bench/box1_d0_7_3_solve_integrals_cpp.json)
+solves a 1-loop box at `D₀ = 7/3, s = 100, t = -1` and matches
+Mathematica AMFlow to ~30 significant digits across orders 0..2.
+
+### 4.5 Adapting to your own integral
 
 To solve a different integral, edit:
 
@@ -332,4 +366,4 @@ For details on every output field, see
 
 For questions not covered here or in the FAQ, open an issue at
 <https://github.com/chang18/amflow-cpp/issues> or contact the
-maintainer at <canyi@fizzlycode.com>.
+maintainer at <3250800970@qq.com>.
