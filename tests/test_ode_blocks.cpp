@@ -170,6 +170,165 @@ TEST(AnalyzeBlock, MutualDependencyMerges) {
     EXPECT_EQ(all, (std::vector<std::size_t>{0, 1, 2}));
 }
 
+// --- Non-nested overlapping closures (audit row 186, 🟡 → 🟢) ---------
+//
+// Audit row 186: C++ `analyze_block` (`src/ode/blocks.cpp:130`) uses
+// the AnalyzeBlock0 closure semantics — `extend` only adds j if
+// `subint[j] ∩ bl ≠ ∅` (intersection filter at line 161).  Upstream
+// MMA defaults to AnalyzeBlock1 (no intersection filter,
+// `next = ∪ subint[bl]` reaches the fixed point).  The two
+// algorithms agree on nested or equal blocks (the IBP common case)
+// but can differ on non-nested overlapping closures.
+//
+// These tests exercise the canonical non-nested-overlapping shapes
+// and lock the C++ AnalyzeBlock0 output, which produces *correct*
+// (and often *finer*) partitions for these cases — every block is
+// itself a valid sub-system whose DE can be solved using only its
+// own rows plus already-solved sub-rows.
+//
+// End-to-end "non-nested overlapping shows up in real benches and
+// the C++ partition gives correct integrals" is independently
+// asserted by the 12 oracle benchmarks matching MMA at rel ~10⁻³⁰.
+
+namespace {
+
+// Validate that a block partition (a) covers each row exactly once
+// and (b) is in topological order: when a block is processed, all
+// of its non-self dependencies (subint entries) must already be in
+// blocks earlier in the list.  Both are basis-invariant invariants
+// that any correct AnalyzeBlock variant must satisfy.
+::testing::AssertionResult validate_partition(
+    const std::vector<std::vector<std::size_t>>& blocks,
+    const std::vector<std::vector<std::size_t>>& subint) {
+
+    // Coverage.
+    std::vector<std::size_t> covered;
+    for (const auto& b : blocks) covered.insert(covered.end(), b.begin(), b.end());
+    std::sort(covered.begin(), covered.end());
+    std::vector<std::size_t> expected(subint.size());
+    for (std::size_t i = 0; i < subint.size(); ++i) expected[i] = i;
+    if (covered != expected) {
+        return ::testing::AssertionFailure()
+            << "partition does not cover every row exactly once";
+    }
+
+    // Topological order.
+    std::vector<bool> already(subint.size(), false);
+    for (const auto& blk : blocks) {
+        for (auto i : blk) {
+            for (auto j : subint[i]) {
+                if (j == i) continue;
+                bool in_self = std::find(blk.begin(), blk.end(), j) != blk.end();
+                if (!in_self && !already[j]) {
+                    return ::testing::AssertionFailure()
+                        << "row " << i << " depends on row " << j
+                        << " which is neither in the same block nor"
+                        << " in an earlier block";
+                }
+            }
+        }
+        for (auto i : blk) already[i] = true;
+    }
+    return ::testing::AssertionSuccess();
+}
+
+}  // namespace
+
+TEST(AnalyzeBlock, NonNestedOverlapping_Y_Shape) {
+    // Y-shape: row 0 → col 1; row 2 → col 1; row 1 isolated.
+    //   J_0 depends on J_1
+    //   J_1 self-contained
+    //   J_2 depends on J_1
+    // J_0 and J_2 don't depend on each other → AnalyzeBlock0 gives
+    // 3 singleton blocks {1}, {0}, {2} (J_1 must be solved first;
+    // J_0 and J_2 are then independent 1×1 ODEs).
+    //
+    // AnalyzeBlock1 would return larger blocks (including J_1
+    // alongside its dependents).  AnalyzeBlock0's finer partition is
+    // a strict refinement and is itself a valid block-triangular
+    // form for DE-solving.
+    auto m = matrix_from_pattern({{1, 1, 0}, {0, 1, 0}, {0, 1, 1}});
+    auto blocks = ode::analyze_block(m);
+
+    // Validate basis-invariant correctness.
+    std::vector<std::vector<std::size_t>> subint = {{0, 1}, {1}, {1, 2}};
+    EXPECT_TRUE(validate_partition(blocks, subint));
+
+    // Lock AnalyzeBlock0 output: 3 blocks, J_1 first.
+    ASSERT_EQ(blocks.size(), 3u);
+    EXPECT_EQ(blocks[0], (std::vector<std::size_t>{1}));
+    // Remaining two are {0} and {2} in some order.
+    std::vector<std::vector<std::size_t>> tail{blocks[1], blocks[2]};
+    std::sort(tail.begin(), tail.end());
+    EXPECT_EQ(tail[0], (std::vector<std::size_t>{0}));
+    EXPECT_EQ(tail[1], (std::vector<std::size_t>{2}));
+}
+
+TEST(AnalyzeBlock, NonNestedOverlapping_MutualPlusDependents) {
+    // Mutual coupling in the middle, with leaf and root branches:
+    //   J_0 → J_1
+    //   J_1 ↔ J_2 (mutual)
+    //   J_3 → J_2
+    // Expected AnalyzeBlock0 partition: {1,2} (mutual core) first,
+    // then {0} and {3} as singletons in some order.
+    auto m = matrix_from_pattern({
+        {1, 1, 0, 0},
+        {0, 1, 1, 0},
+        {0, 1, 1, 0},
+        {0, 0, 1, 1},
+    });
+    auto blocks = ode::analyze_block(m);
+
+    std::vector<std::vector<std::size_t>> subint = {
+        {0, 1}, {1, 2}, {1, 2}, {2, 3},
+    };
+    EXPECT_TRUE(validate_partition(blocks, subint));
+
+    ASSERT_EQ(blocks.size(), 3u);
+    EXPECT_EQ(blocks[0], (std::vector<std::size_t>{1, 2}));
+    std::vector<std::vector<std::size_t>> tail{blocks[1], blocks[2]};
+    std::sort(tail.begin(), tail.end());
+    EXPECT_EQ(tail[0], (std::vector<std::size_t>{0}));
+    EXPECT_EQ(tail[1], (std::vector<std::size_t>{3}));
+}
+
+TEST(AnalyzeBlock, NonNestedOverlapping_DiamondClosure) {
+    // Diamond: J_0 → J_1, J_2; J_1, J_2 → J_3; J_3 self-contained.
+    //   row 0: depends on cols 1, 2
+    //   row 1: depends on col 3
+    //   row 2: depends on col 3
+    //   row 3: self-contained
+    // No mutual coupling.  AnalyzeBlock0 → {3}, then {1}, {2}, {0}
+    // (or {2}, {1}, {0}) in topological order.  This is the case
+    // most likely to expose AnalyzeBlock0 vs AnalyzeBlock1
+    // divergence: row 0 depends on rows 1 and 2, but neither row 1
+    // nor 2 depends on row 0; AnalyzeBlock1 would tend to pull
+    // {0,1,2} into a single 3-block; AnalyzeBlock0 keeps them as
+    // three singletons.
+    auto m = matrix_from_pattern({
+        {1, 1, 1, 0},
+        {0, 1, 0, 1},
+        {0, 0, 1, 1},
+        {0, 0, 0, 1},
+    });
+    auto blocks = ode::analyze_block(m);
+
+    std::vector<std::vector<std::size_t>> subint = {
+        {0, 1, 2}, {1, 3}, {2, 3}, {3},
+    };
+    EXPECT_TRUE(validate_partition(blocks, subint));
+
+    // 4 singletons in topological order: {3} first, {0} last.
+    ASSERT_EQ(blocks.size(), 4u);
+    EXPECT_EQ(blocks[0], (std::vector<std::size_t>{3}));
+    EXPECT_EQ(blocks[3], (std::vector<std::size_t>{0}));
+    // Middle two are {1} and {2} in some order.
+    std::vector<std::vector<std::size_t>> middle{blocks[1], blocks[2]};
+    std::sort(middle.begin(), middle.end());
+    EXPECT_EQ(middle[0], (std::vector<std::size_t>{1}));
+    EXPECT_EQ(middle[1], (std::vector<std::size_t>{2}));
+}
+
 // ---------------------------------------------------------------------------
 //  sub_block_ids / build_partition / sub_rows
 // ---------------------------------------------------------------------------

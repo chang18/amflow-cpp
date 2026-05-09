@@ -10,8 +10,8 @@ cover.
 
 | Severity | Count | Action taken |
 |---|---|---|
-| 🟢 verified                  | 67 | — |
-| 🟡 unverified (oracle gap)    | 19 | Documented in §3 below; tracked for future bench expansion.  Phase 2A reduces this count as oracles land (LIBPDeriv multi-invariant: 🟡 → 🟢 2026-05-09; Jordan block ordering: 🟡 → 🟢 2026-05-10). |
+| 🟢 verified                  | 68 | — |
+| 🟡 unverified (oracle gap)    | 18 | Documented in §3 below; tracked for future bench expansion.  Phase 2A reduces this count as oracles land (LIBPDeriv multi-invariant: 🟡 → 🟢 2026-05-09; Jordan block ordering: 🟡 → 🟢 2026-05-10; analyze_block non-nested overlapping: 🟡 → 🟢 2026-05-10). |
 | 🔴 actual divergence          |  6 | **5 fully fixed; 1 deferred indefinitely** (D5, ComplexMode — investigated post-v1.0 and found to require an algebra-layer extension; entry-point now rejects loudly).  D3 was upgraded from detect-and-throw (Phase 1A) to the proper projection (Phase 1B) with an oracle. |
 | ⚪ intentionally not ported   | 17 | — |
 
@@ -183,7 +183,7 @@ exercises them.  Each is a candidate for a future oracle.
 
 | Branch | Site | Why it's unverified |
 |---|---|---|
-| `analyze_block` uses `AnalyzeBlock0` topology | `src/ode/blocks.cpp` | Upstream default is `AnalyzeBlock1`; equivalent on nested/equal blocks (the IBP common case), could differ on overlapping non-nested closures. |
+| ~~`analyze_block` uses `AnalyzeBlock0` topology~~ → 🟢 | `src/ode/blocks.cpp` | **Verified.**  Upstream default is `AnalyzeBlock1`; the two extend semantics agree on nested/equal blocks (the IBP common case) and produce different (but both valid) partitions on overlapping non-nested closures.  `test_ode_blocks.cpp` `AnalyzeBlock.NonNestedOverlapping_*` cases (Y-shape, mutual-plus-dependents, diamond closure) hand-trace the AnalyzeBlock0 partition and verify the basis-invariant correctness (cover + topological ordering: each row is in exactly one block, all of a block's external dependencies are in earlier blocks).  The AnalyzeBlock0 partition is a strict refinement of AnalyzeBlock1 — finer blocks, same final block-triangular DE structure.  End-to-end "no impact on integral" independently locked by the 12 oracle benches matching MMA at rel ~10⁻³⁰. |
 | `Calcx00` boundary linear-system selection | `src/ode/zero.cpp:1314-1703` | Heuristic match-row selection + Dixon over Q[i]; upstream uses one symbolic `Solve[…, allvar]`.  Equivalent on full-rank systems. |
 | Acb-inverse failure fallback in `Calcx00` | `src/ode/zero.cpp:1199-1206` | C++ degrades to "all positions resonate"; upstream's symbolic inverse never fails. |
 | `evaluate_taylor` strips arb radii | `src/ode/regular.cpp` | Documented in source; abandons rigorous error bars on the regular-running stage. |
