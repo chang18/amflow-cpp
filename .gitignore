@@ -29,3 +29,6 @@ tools/math_ref/cache/
 # Upstream Mathematica AMFlow — populate via clone or symlink locally;
 # never tracked here.  See reference/README.md.
 reference/amflow-master/
+
+# Locally-pasted error logs (e.g. CI failure paste-ins) — never commit.
+errors
