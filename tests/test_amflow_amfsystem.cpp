@@ -114,6 +114,61 @@ TEST(AmfsystemTest, SingleMassEnhancement_NumericResolvesSymbolToOne_FlowsViaSin
         << " on [msq] would reject this case).";
 }
 
+// --- factorize_family mass=-1 detection enhancement (audit row 194, 🟡 → 🟢)
+//
+// Same enhancement pattern as SingleMassQ above: C++
+// `find_mass_minus_one` (`src/pipeline/amfsystem.cpp:2394`) applies
+// `numeric_values` to each mass entry before testing for literal
+// `-1`, while upstream's `Position[..., -1]` (AMFlow.m
+// SingleMassSetupMaster) tests literally.  This allows a family
+// like `{l^2 - msq}` with `Numeric = {msq -> 1}` to flow through
+// SingleMass scheme: after factorize_family the loop-promotion
+// produces a propagator whose substituted mass is the literal
+// `-1` the algorithm expects.  Without the enhancement, only
+// families written with literal `1` would work; the enhancement
+// transparently lifts symbolic mass parameters to the same
+// behavior when Numeric resolves them.
+//
+// End-to-end test: run `pipeline::amf_system_setup_master` on
+// the symbolic-mass tadpole with `numeric_values={msq:1}` and
+// verify the SingleMass scheme produces a strictly-smaller
+// ending sub-system (the test pattern matches
+// `SingleMassSetup_TadpoleStrictlyShrinksToEndingSystem` above
+// but with a symbolic-mass family + Numeric).
+
+TEST(AmfsystemTest, FactorizeFamilyMassMinusOne_NumericResolvesSymbolic) {
+    // Tadpole `{l^2 - msq}` with Numeric={msq: 1}.  The enhancement
+    // path:
+    //   1. ending_q(SingleMass) returns false (single_mass_q_numeric
+    //      detects [1] as single-mass after substitution).
+    //   2. single_mass_setup_master runs factorize_family on the
+    //      legs-zeroed propagators.
+    //   3. find_mass_minus_one substitutes msq -> 1 into the
+    //      factorize_family-output mass list and identifies the
+    //      drop propagator (whose post-loop-promotion mass is
+    //      literal -1 after substitution).
+    //   4. setup completes, producing an ending sub-system.
+    auto fc = qft::FamilyConfig::build(
+        "tad_sym_2b4", {"l"}, {}, {}, {}, {"l^2 - msq"});
+
+    pipeline::AMFSystemOptions opts;
+    opts.ending_schemes = {pipeline::EndingScheme::SingleMass};
+    opts.bb.numeric_values["msq"] = "1";
+    std::vector<qft::JIntegral> preferred{
+        qft::JIntegral("tad_sym_2b4", {2})};
+
+    auto systems = pipeline::amf_system_setup_master(fc, preferred, opts);
+    ASSERT_EQ(systems.size(), 1u);
+
+    const auto& child = *systems[0];
+    EXPECT_TRUE(child.is_ending())
+        << "with Numeric={msq:1}, SingleMass scheme should produce an"
+        << " ending sub-system on this symbolic-mass tadpole.  The C++"
+        << " find_mass_minus_one enhancement is what allows this case"
+        << " to flow (literal-upstream Position[..., -1] would miss).";
+    EXPECT_LT(child.family().n_loops(), fc.n_loops());
+}
+
 TEST(AmfsystemTest, CutkoskyEndingQ_PhaseVolumeComponentSelectsScheme) {
     auto fc = qft::FamilyConfig::build(
         "cutbubble", {"l"}, {"p"}, {}, {{"p^2", "s"}},

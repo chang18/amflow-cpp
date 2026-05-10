@@ -127,7 +127,7 @@ the triplet.
 | 🟡 item | Case | Status |
 |---|---|---|
 | `SingleMassQ` literal-vs-Numeric | mass left symbolic without `Numeric` | ✅ done (2026-05-10) — qft-layer `single_mass_q` stays upstream-literal; pipeline wrapper `single_mass_q_numeric` is the deliberate Numeric-substitution enhancement, locked by `test_qft_amfmode.cpp` `SingleMassQ_*` (2) + `test_amflow_amfsystem.cpp` `SingleMassEnhancement_*` (2) |
-| `factorize_family` mass=−1 detection | likewise | pending |
+| `factorize_family` mass=−1 detection | likewise | ✅ done (2026-05-11) — `find_mass_minus_one` applies Numeric before literal `-1` test (same enhancement pattern as SingleMassQ); end-to-end locked by `test_amflow_amfsystem.cpp` `FactorizeFamilyMassMinusOne_NumericResolvesSymbolic` |
 | `MasterRank`/`MasterDot` non-default filter | explicit filter values | ✅ done (2026-05-10) — intentionally not exposed; C++ pins to upstream default `Infinity` (no filter); contract documented in `include/amflow/ibp/reduce.hpp` and audit row |
 | `r = nonzero(top) + IBPDot` arithmetic | non-trivial `IBPDot` value | ✅ done (2026-05-10) — `test_ibp_kira.cpp` `WriteJobs_R_*` (zero/non-trivial IBPDot, mixed pattern, non-binary defensive); C++ formula tightened to `count_if(!= 0)` to match upstream literal |
 

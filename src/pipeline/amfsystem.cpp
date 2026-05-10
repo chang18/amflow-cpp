@@ -2391,6 +2391,17 @@ single_mass_setup_master(const qft::FamilyConfig& fc,
                            const AMFSystemOptions& opts);
 
 // Find Position[mass_list, -1] (under numeric sub).  Returns -1 if not found.
+//
+// Same C++ enhancement pattern as `single_mass_q_numeric` above
+// (see audit row 193, locked by SingleMassEnhancement_* tests):
+// upstream's `Position[ToSquareAll[prop][[2]], -1]` tests the mass
+// list literally, while this routine first applies `numeric_q` so
+// a symbolic mass like `msq` with `Numeric = {msq -> -1}` (or
+// effectively -1 after the SingleMass loop-promotion's sign flip
+// on a `Numeric = {msq -> 1}` original family) resolves to the
+// expected literal `-1`.  Audit row 194; locked by
+// `tests/test_amflow_amfsystem.cpp`
+// `FactorizeFamilyMassMinusOne_NumericResolvesSymbolic`.
 long find_mass_minus_one(const std::vector<algebra::Mfrac>& masses,
                             const std::map<std::string, FmpqHolder>& numeric_q) {
     for (std::size_t k = 0; k < masses.size(); ++k) {
