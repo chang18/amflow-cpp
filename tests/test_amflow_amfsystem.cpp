@@ -212,6 +212,51 @@ TEST(AmfsystemTest, CutkoskySetupMaster_ClearsCutAndPrescriptionForSystem) {
     EXPECT_EQ(std::count(root.etac().begin(), root.etac().end(), -1), 1);
 }
 
+// --- Cutkosky physical-mass safety check (audit row 195, 🟡 → 🟢) ---------
+//
+// Phase 1A added the upstream `AMFlow.m:1050` guard at
+// `src/pipeline/amfsystem.cpp:2911-2953`: abort if a phase-volume
+// component's mass is negative after `Numeric` substitution
+// (negative squared masses are unphysical for a Cutkosky cut and
+// would otherwise produce silently meaningless numbers).  No
+// production-scale oracle bench triggers this branch because all 4
+// committed Cutkosky benches use positive masses.
+//
+// This test constructs a Cutkosky family with `Numeric` set to a
+// negative phase-volume-component mass and verifies the guard
+// fires with the expected error message.
+
+TEST(AmfsystemTest, CutkoskySetupMaster_NegativePhaseMassAbortsWithUpstreamMessage) {
+    // 1-loop cutbubble with msq as the phase-volume mass.  Cutkosky
+    // is the relevant scheme (Tradition would trigger the D3
+    // tradition-with-cut projection, which is fine but tests a
+    // different code path).
+    auto fc = qft::FamilyConfig::build(
+        "cutbubble_negm", {"l"}, {"p"}, {}, {{"p^2", "s"}},
+        {"l^2 - msq", "(l + p)^2 - msq"},
+        /*cut=*/{1, 1});
+
+    pipeline::AMFSystemOptions opts;
+    opts.ending_schemes = {pipeline::EndingScheme::Cutkosky};
+    // Negative msq → unphysical squared mass on the phase-volume
+    // component.  The guard at amfsystem.cpp:2944-2952 should fire.
+    opts.bb.numeric_values["msq"] = "-1";
+    opts.bb.numeric_values["s"]   = "100";
+    std::vector<qft::JIntegral> preferred{
+        qft::JIntegral("cutbubble_negm", {1, 1})};
+
+    try {
+        pipeline::amf_system_setup_master(fc, preferred, opts);
+        FAIL() << "expected Cutkosky setup to abort on negative msq";
+    } catch (const std::runtime_error& e) {
+        const std::string what(e.what());
+        EXPECT_NE(what.find("negative"), std::string::npos)
+            << "error should explain the negative-mass cause; got: " << what;
+        EXPECT_NE(what.find("AMFlow.m:1050"), std::string::npos)
+            << "error should cite the upstream reference; got: " << what;
+    }
+}
+
 TEST(AmfsystemTest, SingleMassSetup_TadpoleStrictlyShrinksToEndingSystem) {
     auto fc = qft::FamilyConfig::build(
         "tad", {"l"}, {}, {}, {}, {"l^2 - 1"});
