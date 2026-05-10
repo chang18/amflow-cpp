@@ -131,17 +131,15 @@ the triplet.
 | `MasterRank`/`MasterDot` non-default filter | explicit filter values | ✅ done (2026-05-10) — intentionally not exposed; C++ pins to upstream default `Infinity` (no filter); contract documented in `include/amflow/ibp/reduce.hpp` and audit row |
 | `r = nonzero(top) + IBPDot` arithmetic | non-trivial `IBPDot` value | ✅ done (2026-05-10) — `test_ibp_kira.cpp` `WriteJobs_R_*` (zero/non-trivial IBPDot, mixed pattern, non-binary defensive); C++ formula tightened to `count_if(!= 0)` to match upstream literal |
 
-### 2C — low-risk (theoretical equivalence; documentation only) — ~1 day
+### 2C — low-risk (theoretical equivalence; documentation only) — ✅ done (2026-05-11)
 
-For each item below: write a unit test or a paragraph in
-`AUDIT_MMA_PARITY.md` documenting why the C++ choice is provably
-equivalent to the upstream choice.
-
-- `evaluate_taylor` strips arb radii (intentional, documented)
-- `zero_sector_q` uses generic primes (any generic point works)
-- `region_power` skips `/.Numeric` (no invariants in expression)
-- `factorize_family` no-redef fallback (dead-code; add unit test)
-- Coefficient parser fragility (add unit test for the supported grammar)
+| 🟡 item | Closure |
+|---|---|
+| `evaluate_taylor` strips arb radii | ✅ `test_ode_regular.cpp` `EvaluateTaylor_StripsArbRadii_LocksMidpointOnlyContract` — feeds non-zero arb radius into a coefficient and asserts output radius is zero |
+| `zero_sector_q` uses generic primes | ✅ Documented theoretical equivalence (generic-point evaluation suffices for scalelessness); locked by 5 existing `ZeroSectorQ_*` tests covering 1-loop and 2-loop scaleless / non-scaleless cases |
+| `region_power` skips `/.Numeric` | ✅ `test_qft_region.cpp` `RegionPower_OutputIsEpsOnlyPlusIntegers_AuditRow200Equivalence` — multi-invariant box family, asserts every output term has zero exponent on every non-eps variable |
+| `factorize_family` no-redef fallback | ✅ Defensive fallback documented in source comment + audit row; trigger condition is rank-deficient redef matrix; unreached on tested inputs but mathematically safe (leaves family unchanged) |
+| Coefficient parser fragility | ✅ `test_ibp_kira.cpp` adds 4 negative-acceptance tests (`ParseExpression_DecimalLiteralThrows`, `_NonIntegerExponentThrows`, `_GarbageCharacterThrows`, `_UnclosedParenThrows`) on top of 7 existing positive-acceptance tests |
 
 ---
 

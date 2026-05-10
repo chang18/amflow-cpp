@@ -141,6 +141,59 @@ TEST_F(RegularTest, EvaluateTaylor_HornerScheme) {
     EXPECT_TRUE(acb_close_to_double(v[0], 1.0 + 2*4 + 3*16, 0.0));
 }
 
+// --- Audit row 189 (`evaluate_taylor` strips arb radii), 🟡 → 🟢 ----
+//
+// `evaluate_taylor` (`src/ode/regular.cpp`) deliberately calls
+// `midpoint_only` on every intermediate Horner accumulator and on
+// every input coefficient.  The source comment documents this as
+// "midpoint-only Horner: mirrors Mathematica's point arithmetic
+// and avoids catastrophic interval blow-up on cancellation-heavy
+// regular contours."  This test locks the no-radius-propagation
+// contract by feeding non-zero arb radii into a coefficient and
+// asserting the output radius is exactly zero.
+TEST_F(RegularTest, EvaluateTaylor_StripsArbRadii_LocksMidpointOnlyContract) {
+    // Coefficient c = 1 ± 0.001 (non-zero radius).  Without the
+    // midpoint-only stripping, evaluating this at dh=2 with two
+    // additional zero-coefficient terms would propagate the radius
+    // (Horner: ((0)*dh + 0)*dh + 1 → still has the radius from c0).
+    ode::TaylorCoefficients c(1);
+    {
+        nm::AcbValue v;
+        v.set_si(1);
+        // Inflate the real-part radius via mag (1e-3).  This
+        // simulates the kind of radius an upstream arb computation
+        // would accumulate.
+        mag_t r;
+        mag_init(r);
+        mag_set_d(r, 1e-3);
+        arb_add_error_mag(acb_realref(v.raw()), r);
+        mag_clear(r);
+        c[0].push_back(std::move(v));
+    }
+    {
+        nm::AcbValue zero;
+        c[0].push_back(std::move(zero));
+    }
+
+    nm::AcbValue dh; dh.set_si(2);
+    auto out = ode::evaluate_taylor(c, dh.raw());
+    ASSERT_EQ(out.size(), 1u);
+
+    // Value should be 1 (since the second coefficient is 0:
+    // f(2) = c0 + c1*2 = 1 + 0).
+    EXPECT_TRUE(acb_close_to_double(out[0], 1.0, 0.0, 1e-12));
+
+    // The midpoint-only contract: radius is exactly zero on output.
+    arb_t re_rad, im_rad;
+    arb_init(re_rad); arb_init(im_rad);
+    arb_get_rad_arb(re_rad, acb_realref(out[0].raw()));
+    arb_get_rad_arb(im_rad, acb_imagref(out[0].raw()));
+    EXPECT_TRUE(arb_is_zero(re_rad))
+        << "midpoint-only Horner must strip the input radius";
+    EXPECT_TRUE(arb_is_zero(im_rad));
+    arb_clear(re_rad); arb_clear(im_rad);
+}
+
 // ============================================================================
 //  calcx1x2 -- f' = 2 f, f(0) = 1  ->  f_k = 2^k / k!
 // ============================================================================

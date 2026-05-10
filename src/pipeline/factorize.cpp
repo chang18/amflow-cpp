@@ -266,6 +266,21 @@ factorize_family(const qft::FamilyConfig& fc,
                 fcomp.propagators.push_back(std::move(d_new));
             }
         } else {
+            // Defensive no-redef fallback — fires when the
+            // loop-redefinition matrix M (constructed at lines
+            // 137-186) has fewer pivots than `n_tbl` after RREF,
+            // i.e. when the heuristic to-be-loop selection from
+            // U-poly's first monomial doesn't span a complete
+            // loop basis.  In that case we cannot apply the
+            // standard loop redefinition; fall through to the
+            // trivial "use original loops + original propagators"
+            // structure.  No production input from the 12 oracle
+            // benches reaches this branch (audit row 196: dead code
+            // on tested inputs), but the fallback is mathematically
+            // safe — it leaves the family unchanged and downstream
+            // FactorizeFamily consumers handle the unfactorized
+            // output the same way they would handle a
+            // single-component family.
             for (long jc = 0; jc < L; ++jc) {
                 fcomp.loops.push_back(fc.loops[(std::size_t)jc]);
             }

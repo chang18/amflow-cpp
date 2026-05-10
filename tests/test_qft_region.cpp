@@ -295,6 +295,67 @@ TEST(RegionTest, RegionPower_OneLoopBubble) {
     EXPECT_LE(deg_eps, 1);
 }
 
+// --- Audit row 200 (`region_power` skips `/.Numeric`), 🟡 → 🟢 -----
+//
+// `region_power` (`src/qft/findregion.cpp:463-529`) constructs the
+// per-integral exponent value as
+//     val = sum_scale * (2 - eps) - sum_p
+// where `sum_scale` and `sum_p` are integer accumulators (the
+// scale-vector sum and the eta-bearing-propagator index sum).
+// `eps` is the only symbol that survives — no kinematic
+// invariants (s, t, msq, ...) ever enter the expression.
+// Upstream applies `/. Numeric` after constructing this expression
+// (`AMFlow.m`); since the expression contains nothing that
+// `Numeric` could substitute, the upstream operation is a no-op
+// for any well-formed Numeric.  The C++ omission is therefore
+// provably equivalent.
+//
+// This test locks the precondition: every term in the output
+// polynomial has all non-eps variables at exponent 0.
+
+TEST(RegionTest, RegionPower_OutputIsEpsOnlyPlusIntegers_AuditRow200Equivalence) {
+    // Use a multi-invariant family so the `/. Numeric` no-op claim
+    // is testable with non-trivial Numeric values.  The output
+    // expression should still contain only `eps` and integers.
+    auto fc = qft::FamilyConfig::build(
+        "box_for_audit200", {"l"}, {"p1", "p2", "p3", "p4"},
+        {{"p4", "-p1 - p2 - p3"}},
+        {{"p1^2", "0"}, {"p2^2", "0"}, {"p3^2", "0"},
+         {"(p1 + p2)^2", "s"}, {"(p2 + p3)^2", "t"}},
+        {"l^2", "(l + p1)^2", "(l + p1 + p2)^2",
+         "(l + p1 + p2 + p3)^2"});
+    auto rctx = qft::make_region_context(fc);
+    auto pctx = qft::make_powers_context(fc);
+    auto regs = qft::find_all_region(fc, rctx, {0, 1, 2, 3});
+    ASSERT_FALSE(regs.empty());
+
+    qft::JIntegral integ("box_for_audit200", {1, 1, 1, 1});
+    auto powers = qft::region_power(fc, rctx, pctx, regs.front(), {integ});
+    ASSERT_EQ(powers.size(), 1u);
+
+    // Walk every term of numerator and denominator; every variable
+    // other than `eps` must have exponent 0.
+    auto only_eps = [&](const alg::Mpoly& p) -> bool {
+        auto ctx = p.ctx();
+        long len = fmpz_mpoly_length(p.raw(), ctx->raw());
+        std::vector<unsigned long> exp((std::size_t)ctx->n_vars());
+        for (long t = 0; t < len; ++t) {
+            fmpz_mpoly_get_term_exp_ui(exp.data(), p.raw(), t, ctx->raw());
+            for (long v = 0; v < ctx->n_vars(); ++v) {
+                if (v == pctx.eps_var) continue;
+                if (exp[(std::size_t)v] != 0) return false;
+            }
+        }
+        return true;
+    };
+
+    EXPECT_TRUE(only_eps(powers[0].numerator()))
+        << "region_power output numerator should be eps-only — applying"
+        << " `/.Numeric` would be a no-op (audit row 200 equivalence).";
+    EXPECT_TRUE(only_eps(powers[0].denominator()))
+        << "region_power output denominator should be eps-only.";
+}
+
 TEST(RegionTest, ToCompleteExplicit_OneLoopBubble_AlreadyComplete) {
     auto fc = qft::FamilyConfig::build(
         "bubble", {"l"}, {"p"}, {}, {{"p^2", "s"}},

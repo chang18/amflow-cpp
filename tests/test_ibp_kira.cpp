@@ -95,6 +95,58 @@ TEST(KiraTest, ParseExpression_TrailingInputThrows) {
                  std::runtime_error);
 }
 
+// --- Coefficient parser grammar lock (audit row 204, 🟡 → 🟢) ---------
+//
+// `kira_parse_expression` (`src/ibp/kira_parse.cpp`) supports a
+// strict subset of Mathematica algebraic syntax — Kira's coefficient
+// output uses only integer literals, identifiers (registered in
+// the MpolyContext), unary `-`, binary `+ - * /`, and `^` followed
+// by an integer.  No decimals, no fractional/symbolic exponents.
+// Audit row 204 calls this "fragile" because the parser is not
+// fuzzed; production correctness comes from the fact that Kira's
+// normal output never trips the unsupported forms.
+//
+// These negative-acceptance tests lock the contract: any input
+// that uses an unsupported lexical form throws (no silent partial
+// parse, no swallow of the remainder).  Positive-acceptance is
+// covered by the seven `ParseExpression_*` tests above.
+
+TEST(KiraTest, ParseExpression_DecimalLiteralThrows) {
+    auto ctx = std::make_shared<alg::MpolyContext>(
+        std::vector<std::string>{"d"});
+    // "1.5" — decimal point in a numeric literal.
+    EXPECT_THROW(ibp::kira_parse_expression(ctx, "1.5"), std::runtime_error);
+}
+
+TEST(KiraTest, ParseExpression_NonIntegerExponentThrows) {
+    auto ctx = std::make_shared<alg::MpolyContext>(
+        std::vector<std::string>{"d"});
+    // "d^d" — RHS of `^` must be an integer literal, not an identifier.
+    EXPECT_THROW(ibp::kira_parse_expression(ctx, "d^d"), std::runtime_error);
+    // "d^(2+1)" — RHS of `^` must be a *literal* integer, not even
+    // a parenthesised expression that evaluates to one.
+    EXPECT_THROW(ibp::kira_parse_expression(ctx, "d^(2+1)"),
+                 std::runtime_error);
+}
+
+TEST(KiraTest, ParseExpression_GarbageCharacterThrows) {
+    auto ctx = std::make_shared<alg::MpolyContext>(
+        std::vector<std::string>{"d"});
+    // "#" — outside the supported lexical alphabet.
+    EXPECT_THROW(ibp::kira_parse_expression(ctx, "d # 2"),
+                 std::runtime_error);
+    // "@" — same.
+    EXPECT_THROW(ibp::kira_parse_expression(ctx, "@d"),
+                 std::runtime_error);
+}
+
+TEST(KiraTest, ParseExpression_UnclosedParenThrows) {
+    auto ctx = std::make_shared<alg::MpolyContext>(
+        std::vector<std::string>{"d"});
+    EXPECT_THROW(ibp::kira_parse_expression(ctx, "(d + 1"),
+                 std::runtime_error);
+}
+
 TEST(KiraTest, WriteConfig_OneLoopBubble_HasExpectedYaml) {
     auto fc = qft::FamilyConfig::build(
         "bubble", {"l"}, {"p"}, {}, {{"p^2", "s"}},
