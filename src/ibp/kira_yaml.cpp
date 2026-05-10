@@ -206,8 +206,21 @@ void kira_write_jobs(const KiraConfig& cfg,
     if (!fc) throw std::invalid_argument("kira_write_jobs: fc is null");
 
     std::string fam = fc->family;
-    long n_top = std::count(cfg.top_pattern.begin(),
-                              cfg.top_pattern.end(), 1);
+    // Mirrors upstream `r = Length[TopSector] - Count[TopSector, 0] +
+    // IBPDot` (Kira/interface.m yaml emit) — i.e. count of non-zero
+    // entries in top_pattern, plus IBPDot.  In production
+    // `qft::get_top_sector` returns a strict 0/1 vector
+    // (`src/qft/jintegral.cpp:131`), so for the production-relevant
+    // shape `count(==1)` and `count(!=0)` agree.  Use the
+    // count-non-zero form here for internal consistency with
+    // `top_pattern_to_int_str` (line 65) and `positions_where_one`
+    // (line 73), both of which already treat any non-zero entry as
+    // "present", and to match the upstream formula literally so the
+    // yaml output stays parity-correct under any future relaxation
+    // of `get_top_sector`'s 0/1 guarantee.
+    long n_top = std::count_if(cfg.top_pattern.begin(),
+                                cfg.top_pattern.end(),
+                                [](int v) { return v != 0; });
     long r = n_top + cfg.ibp_dot;
 
     std::string top_int = top_pattern_to_int_str(cfg.top_pattern);

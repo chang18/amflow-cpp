@@ -124,12 +124,12 @@ the triplet.
 
 ### 2B — medium-risk — ~2 days
 
-| 🟡 item | Case |
-|---|---|
-| `SingleMassQ` literal-vs-Numeric | mass left symbolic without `Numeric` |
-| `factorize_family` mass=−1 detection | likewise |
-| `MasterRank`/`MasterDot` non-default filter | explicit filter values |
-| `r = nonzero(top) + IBPDot` arithmetic | non-trivial `IBPDot` value |
+| 🟡 item | Case | Status |
+|---|---|---|
+| `SingleMassQ` literal-vs-Numeric | mass left symbolic without `Numeric` | pending |
+| `factorize_family` mass=−1 detection | likewise | pending |
+| `MasterRank`/`MasterDot` non-default filter | explicit filter values | pending |
+| `r = nonzero(top) + IBPDot` arithmetic | non-trivial `IBPDot` value | ✅ done (2026-05-10) — `test_ibp_kira.cpp` `WriteJobs_R_*` (zero/non-trivial IBPDot, mixed pattern, non-binary defensive); C++ formula tightened to `count_if(!= 0)` to match upstream literal |
 
 ### 2C — low-risk (theoretical equivalence; documentation only) — ~1 day
 

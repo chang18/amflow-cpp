@@ -10,8 +10,8 @@ cover.
 
 | Severity | Count | Action taken |
 |---|---|---|
-| 🟢 verified                  | 69 | — |
-| 🟡 unverified (oracle gap)    | 17 | Documented in §3 below; tracked for future bench expansion.  Phase 2A reduces this count as oracles land (LIBPDeriv multi-invariant: 🟡 → 🟢 2026-05-09; Jordan block ordering, analyze_block non-nested overlapping, Calcx00 boundary linear-system selection: all 🟡 → 🟢 2026-05-10).  The Calcx00 acb-inverse fallback (rank-deficient case) remains 🟡 pending a synthetic rank-deficient bench in Phase 3. |
+| 🟢 verified                  | 70 | — |
+| 🟡 unverified (oracle gap)    | 16 | Documented in §3 below; tracked for future bench expansion.  Phase 2A reduces this count as oracles land (LIBPDeriv multi-invariant: 🟡 → 🟢 2026-05-09; Jordan block ordering, analyze_block non-nested overlapping, Calcx00 boundary linear-system selection: all 🟡 → 🟢 2026-05-10).  Phase 2B continues (`r = nonzero(top) + IBPDot` arithmetic: 🟡 → 🟢 2026-05-10).  The Calcx00 acb-inverse fallback (rank-deficient case) remains 🟡 pending a synthetic rank-deficient bench in Phase 3. |
 | 🔴 actual divergence          |  6 | **5 fully fixed; 1 deferred indefinitely** (D5, ComplexMode — investigated post-v1.0 and found to require an algebra-layer extension; entry-point now rejects loudly).  D3 was upgraded from detect-and-throw (Phase 1A) to the proper projection (Phase 1B) with an oracle. |
 | ⚪ intentionally not ported   | 17 | — |
 
@@ -203,7 +203,7 @@ exercises them.  Each is a candidate for a future oracle.
 | `kira_target.m` parser strictness | `src/ibp/kira_parse.cpp` | Custom tokenizer is not fuzzed. |
 | Coefficient parser fragility | `src/ibp/kira_parse.cpp` | No decimal-point support; integer exponents only.  Kira's normal output never trips this. |
 | Diffeq nested reduce raises rank/dot via second `apply_jdot_jrank_floor` | `src/ibp/reduce.cpp` | Conservative; never lower than upstream. |
-| `r = nonzero(top) + IBPDot` arithmetic match | `src/ibp/kira_yaml.cpp` | Spot-checked but not exhaustively. |
+| ~~`r = nonzero(top) + IBPDot` arithmetic match~~ → 🟢 | `src/ibp/kira_yaml.cpp` | **Verified + tightened.**  C++ originally counted only `1` entries (`std::count(..., 1)`), which agreed with upstream's `Length[TopSector] - Count[TopSector, 0]` only because `qft::get_top_sector` always emits 0/1.  Defensive fix at `src/ibp/kira_yaml.cpp:209` switches to `count_if(... != 0)` to match the upstream formula literally and stay parity-correct under any future relaxation of `get_top_sector`'s 0/1 guarantee.  Unit tests `test_ibp_kira.cpp` `KiraTest.WriteJobs_R_*` cover zero-/non-trivial-IBPDot, mixed-presence top_pattern, and a non-binary entry. |
 
 ---
 

@@ -180,6 +180,149 @@ TEST(KiraTest, WriteJobs_MastersMode) {
     fs::remove_all(dir);
 }
 
+// --- r = nonzero(top_pattern) + IBPDot arithmetic (audit row 206, 🟡 → 🟢) -
+//
+// Lock the formula `r = Length[TopSector] - Count[TopSector, 0] +
+// IBPDot` (Kira/interface.m yaml emit) against the C++ implementation
+// at `src/ibp/kira_yaml.cpp` (post-fix: `count_if(... != 0)` so the
+// formula matches upstream literally).  These tests cover:
+//
+//   1. zero IBPDot (production default) — most common case;
+//   2. non-trivial IBPDot — exercises the `+ ibp_dot` term;
+//   3. mixed-presence top_pattern with several zeros and ones —
+//      exercises the count-of-nonzero semantic;
+//   4. defensive: a non-binary top_pattern entry (e.g. `2`) is
+//      counted as "present" matching upstream's nonzero semantics
+//      (production `get_top_sector` only emits 0/1 but the writer
+//      should remain parity-correct under any future relaxation).
+//
+// Each test reads the emitted jobs.yaml and asserts the `r:` field
+// has the expected integer value.
+
+namespace {
+
+// Extract the first `r: <int>` value from a jobs.yaml string.
+long extract_r_from_jobs(const std::string& jobs) {
+    auto pos = jobs.find("r: ");
+    if (pos == std::string::npos) return -1;
+    auto start = pos + 3;
+    auto end = jobs.find_first_of(",}\n", start);
+    if (end == std::string::npos) return -1;
+    return std::stol(jobs.substr(start, end - start));
+}
+
+}  // namespace
+
+TEST(KiraTest, WriteJobs_R_ZeroIbpDot_AllOnes) {
+    auto fc = qft::FamilyConfig::build(
+        "bubble", {"l"}, {"p"}, {}, {{"p^2", "s"}},
+        {"l^2 - msq", "(l - p)^2 - msq"});
+
+    ibp::KiraConfig cfg;
+    cfg.fc = &fc;
+    cfg.top_pattern = {1, 1};
+    cfg.ibp_dot = 0;
+
+    std::string dir =
+        (fs::temp_directory_path() / "amflow_kira_r_t1").string();
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    ibp::kira_write_jobs(cfg, dir, ibp::KiraReductionMode::Masters);
+
+    auto jobs = read_file(dir + "/jobs.yaml");
+    EXPECT_EQ(extract_r_from_jobs(jobs), 2)
+        << "r should equal nonzero(top_pattern) + ibp_dot = 2 + 0";
+
+    fs::remove_all(dir);
+}
+
+TEST(KiraTest, WriteJobs_R_NontrivialIbpDot) {
+    // Larger family so we can vary the dot meaningfully.
+    auto fc = qft::FamilyConfig::build(
+        "box", {"l"}, {"p1", "p2", "p3", "p4"},
+        {{"p4", "-p1 - p2 - p3"}},
+        {{"p1^2", "0"}, {"p2^2", "0"}, {"p3^2", "0"},
+         {"(p1 + p2)^2", "s"}, {"(p2 + p3)^2", "t"}},
+        {"l^2", "(l + p1)^2", "(l + p1 + p2)^2",
+         "(l + p1 + p2 + p3)^2"});
+
+    ibp::KiraConfig cfg;
+    cfg.fc = &fc;
+    cfg.top_pattern = {1, 1, 1, 1};
+    cfg.ibp_dot = 3;
+
+    std::string dir =
+        (fs::temp_directory_path() / "amflow_kira_r_t2").string();
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    ibp::kira_write_jobs(cfg, dir, ibp::KiraReductionMode::Masters);
+
+    auto jobs = read_file(dir + "/jobs.yaml");
+    EXPECT_EQ(extract_r_from_jobs(jobs), 7)
+        << "r should equal nonzero(top_pattern) + ibp_dot = 4 + 3";
+
+    fs::remove_all(dir);
+}
+
+TEST(KiraTest, WriteJobs_R_MixedZerosAndOnes) {
+    // Sub-sector top_pattern: only a strict subset of propagators
+    // active.  Confirms the "count nonzero" semantics matches upstream
+    // for a non-trivial sparse pattern.
+    auto fc = qft::FamilyConfig::build(
+        "box", {"l"}, {"p1", "p2", "p3", "p4"},
+        {{"p4", "-p1 - p2 - p3"}},
+        {{"p1^2", "0"}, {"p2^2", "0"}, {"p3^2", "0"},
+         {"(p1 + p2)^2", "s"}, {"(p2 + p3)^2", "t"}},
+        {"l^2", "(l + p1)^2", "(l + p1 + p2)^2",
+         "(l + p1 + p2 + p3)^2"});
+
+    ibp::KiraConfig cfg;
+    cfg.fc = &fc;
+    cfg.top_pattern = {1, 0, 1, 0};   // 2 nonzeros
+    cfg.ibp_dot = 2;
+
+    std::string dir =
+        (fs::temp_directory_path() / "amflow_kira_r_t3").string();
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    ibp::kira_write_jobs(cfg, dir, ibp::KiraReductionMode::Masters);
+
+    auto jobs = read_file(dir + "/jobs.yaml");
+    EXPECT_EQ(extract_r_from_jobs(jobs), 4)
+        << "r should equal nonzero(top_pattern) + ibp_dot = 2 + 2";
+
+    fs::remove_all(dir);
+}
+
+TEST(KiraTest, WriteJobs_R_NonBinaryEntryCountedAsNonzero) {
+    // Defensive: production `get_top_sector` always emits 0/1, but
+    // the yaml writer should remain parity-correct (matching
+    // upstream's `Length - Count(0)` formula) under any relaxation
+    // of that guarantee.  Lock the count-nonzero semantic by
+    // injecting a `2` into top_pattern and verifying it is treated
+    // the same as a `1`.
+    auto fc = qft::FamilyConfig::build(
+        "bubble", {"l"}, {"p"}, {}, {{"p^2", "s"}},
+        {"l^2 - msq", "(l - p)^2 - msq"});
+
+    ibp::KiraConfig cfg;
+    cfg.fc = &fc;
+    cfg.top_pattern = {2, 1};   // 2 nonzeros (one of which is non-1)
+    cfg.ibp_dot = 1;
+
+    std::string dir =
+        (fs::temp_directory_path() / "amflow_kira_r_t4").string();
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    ibp::kira_write_jobs(cfg, dir, ibp::KiraReductionMode::Masters);
+
+    auto jobs = read_file(dir + "/jobs.yaml");
+    EXPECT_EQ(extract_r_from_jobs(jobs), 3)
+        << "r should equal nonzero(top_pattern) + ibp_dot = 2 + 1";
+
+    fs::remove_all(dir);
+}
+
 TEST(KiraTest, WriteJobs_ReduceMode) {
     auto fc = qft::FamilyConfig::build(
         "bubble", {"l"}, {"p"}, {}, {{"p^2", "s"}},
