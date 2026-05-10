@@ -43,6 +43,77 @@ TEST(AmfsystemTest, EndingQ_SingleMassScheme_GeneralVacuumStopsImmediately) {
                                    pipeline::EndingScheme::SingleMass, opts));
 }
 
+// --- SingleMass enhancement: numeric-substituted single-mass detection -----
+//
+// Audit row 193, 🟡 → 🟢.
+//
+// Upstream's SingleMassQ (`AMFlow.m`) tests `info.mass[k]` literally
+// (`Count[mass, 1] === 1 && Count[mass, 0] === Length-1`).  C++
+// `pipeline::single_mass_q_numeric` (`src/pipeline/amfsystem.cpp:803`)
+// is an enhancement: it applies `numeric_values` to the mass list
+// before the literal test.  This means the C++ port recognises a
+// family like `{l^2, (l-p)^2 - msq}` with `numeric_values={msq: 1}`
+// as single-mass (post-substitution mass list `[0, 1]`), while
+// upstream rejects it because the literal mass list still contains
+// the symbol `msq` rather than `1`.
+//
+// Consequence: C++ flows this family via SingleMass scheme, while
+// upstream falls through to the next scheme (Cutkosky / Tradition /
+// Trivial).  The final integral value is the same — SingleMass
+// scheme is mathematically valid for the substituted single-mass
+// case — but the dispatcher path differs.  No oracle bench exposes
+// this dispatcher difference because all 12 oracles use families
+// whose component analysis already produces literal `0` / `1`
+// masses.
+//
+// These tests lock the C++ enhancement contract:
+//   1. Without numeric: pipeline matches upstream (literal-only).
+//   2. With numeric resolving the symbol to `1`: C++ enhancement
+//      fires, scheme reported as applicable.
+
+TEST(AmfsystemTest, SingleMassEnhancement_NoNumeric_MatchesUpstreamLiteral) {
+    // Tadpole with a single free-symbol mass `msq`, NO numeric_values
+    // supplied.  Upstream's literal SingleMassQ rejects (mass list is
+    // [msq], neither 1 nor 0), so the system is "already ending under
+    // SingleMass" (= scheme NOT applicable, ending_q returns true).
+    // C++ pipeline with empty numeric_q reduces single_mass_q_numeric
+    // to the same literal test → also reports already-ending.
+    auto fc = qft::FamilyConfig::build(
+        "tad_sym_a", {"l"}, {}, {}, {}, {"l^2 - msq"});
+
+    pipeline::AMFSystemOptions opts;   // empty numeric_values
+    std::vector<qft::JIntegral> preferred{qft::JIntegral("tad_sym_a", {1})};
+
+    EXPECT_TRUE(pipeline::ending_q(fc, preferred,
+                                   pipeline::EndingScheme::SingleMass, opts))
+        << "without numeric_values, both literal-upstream and C++ pipeline"
+        << " should report this tadpole as already-ending under SingleMass"
+        << " (mass list is symbolic [msq], neither literally 1 nor 0).";
+}
+
+TEST(AmfsystemTest, SingleMassEnhancement_NumericResolvesSymbolToOne_FlowsViaSingleMass) {
+    // Same tadpole + numeric_values = {msq: 1}.  Post-substitution
+    // mass list is [1] — a literal single-mass shape (n_one = 1,
+    // n_zero = 0 = Length - 1 ✓).  C++ enhancement detects this and
+    // reports SingleMass scheme as applicable (ending_q returns
+    // false).  Upstream's literal SingleMassQ on the un-substituted
+    // mass list [msq] would still reject this case — this is the
+    // load-bearing C++ enhancement contract.
+    auto fc = qft::FamilyConfig::build(
+        "tad_sym_b", {"l"}, {}, {}, {}, {"l^2 - msq"});
+
+    pipeline::AMFSystemOptions opts;
+    opts.bb.numeric_values["msq"] = "1";
+    std::vector<qft::JIntegral> preferred{qft::JIntegral("tad_sym_b", {1})};
+
+    EXPECT_FALSE(pipeline::ending_q(fc, preferred,
+                                    pipeline::EndingScheme::SingleMass, opts))
+        << "with numeric_values={msq:1}, the C++ enhancement should detect"
+        << " the substituted [1] mass list as single-mass and report"
+        << " SingleMass scheme as applicable (the literal upstream check"
+        << " on [msq] would reject this case).";
+}
+
 TEST(AmfsystemTest, CutkoskyEndingQ_PhaseVolumeComponentSelectsScheme) {
     auto fc = qft::FamilyConfig::build(
         "cutbubble", {"l"}, {"p"}, {}, {{"p^2", "s"}},

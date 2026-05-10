@@ -292,6 +292,48 @@ TEST(AMFModeTest, EndingQ_OnlyTadpoleSector) {
     EXPECT_TRUE(qft::ending_q(info[0]));
 }
 
+// --- SingleMassQ literal-vs-symbolic divergence (audit row 193, 🟡 → 🟢) -
+//
+// Lock the contract that `qft::single_mass_q` is **upstream-literal**:
+// it tests `info.mass[k]` for being literal `0` or literal `1`
+// without applying any substitution (mirrors upstream's
+// `Count[mass, 1] === 1 && Count[mass, 0] === Length-1`,
+// AMFlow.m).  A free-symbol mass like `msq` in the propagator does
+// NOT count as a "mass = 1" here even if the user later supplies
+// `Numeric = {msq -> 1}` — the pipeline-level wrapper
+// `single_mass_q_numeric` (`src/pipeline/amfsystem.cpp:803`) is the
+// C++ enhancement that substitutes Numeric before testing, see
+// audit row 193 and the matching pipeline test
+// `AmfsystemTest.SingleMassEnhancement_*`.
+TEST(AMFModeTest, SingleMassQ_FreeSymbolMassReturnsFalse_LiteralUpstreamSemantic) {
+    // Tadpole with a free-symbol mass `msq`, NO Numeric supplied.
+    // Mass list literally is `[msq]`, which is neither 1 nor 0.
+    // Upstream-faithful literal SingleMassQ → false.
+    auto fc = qft::FamilyConfig::build(
+        "tadpole_sym", {"l"}, {}, {}, {}, {"l^2 - msq"});
+    auto info = qft::analyze_top_sector(fc, {0});
+    ASSERT_FALSE(info.empty());
+    EXPECT_TRUE(qft::vacuum_q(info[0]));   // cut all zero
+    EXPECT_FALSE(qft::single_mass_q(info[0]))
+        << "qft::single_mass_q must test literally; symbolic mass `msq`"
+        << " is not literal `1`, so the component is vacuum-but-not-single-mass.";
+    EXPECT_FALSE(qft::ending_q(info[0]));
+}
+
+TEST(AMFModeTest, SingleMassQ_MixedLiteralAndSymbolicMassReturnsFalse) {
+    // Bubble with one massless and one symbolic-mass propagator:
+    //   p_0 = l^2          (mass = 0 literal)
+    //   p_1 = (l-p)^2 - msq (mass = msq symbolic)
+    // qft::single_mass_q tests literally: count(==1) = 0 ≠ 1 → false.
+    auto fc = qft::FamilyConfig::build(
+        "bub_mixed_sym", {"l"}, {"p"}, {}, {{"p^2", "s"}},
+        {"l^2", "(l - p)^2 - msq"});
+    auto info = qft::analyze_top_sector(fc, {0, 1});
+    ASSERT_FALSE(info.empty());
+    EXPECT_FALSE(qft::single_mass_q(info[0]))
+        << "Symbolic msq in mass list must not be detected as the literal `1`";
+}
+
 TEST(AMFModeTest, AMFCandidateComponent_GeneralVacuumFallsBackToBranch) {
     auto fc = qft::FamilyConfig::build(
         "vacuum_branch", {"l"}, {}, {}, {},

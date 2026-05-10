@@ -800,6 +800,25 @@ bool vacuum_q_numeric(const qft::TopSectorComponentInfo& info,
     return qft::vacuum_q(info);
 }
 
+// Substitute Numeric values into the mass list before applying the
+// literal "exactly one mass=1, all others mass=0" test.  Upstream's
+// `SingleMassQ` (`AMFlow.m`) tests literally and rejects any
+// symbolic mass entry; this C++ enhancement recognises the case
+// where the user-supplied `Numeric` map resolves the symbols to
+// the literal `0` / `1` shape, allowing SingleMass scheme to fire
+// on families like `{l^2 - msq}` with `Numeric = {msq -> 1}`.
+//
+// Equivalence: with empty `numeric_q`, this collapses to the
+// literal upstream test (no substitution).  When `numeric_q`
+// resolves the symbolic masses to literal 0/1, the substituted
+// shape is mathematically a single-mass family and SingleMass
+// scheme is a valid flow path — the final integral is the same
+// as upstream's, just dispatched via SingleMass earlier instead
+// of falling through to the next scheme.  Locked by
+// `tests/test_amflow_amfsystem.cpp` `SingleMassEnhancement_*` and
+// `tests/test_qft_amfmode.cpp` `SingleMassQ_*` (the latter
+// confirms the qft layer's `single_mass_q` remains
+// upstream-literal).  Audit row 193.
 bool single_mass_q_numeric(const qft::TopSectorComponentInfo& info,
                               const std::map<std::string, FmpqHolder>& numeric_q) {
     if (!vacuum_q_numeric(info, numeric_q)) return false;
