@@ -10,8 +10,8 @@ cover.
 
 | Severity | Count | Action taken |
 |---|---|---|
-| 🟢 verified                  | 70 | — |
-| 🟡 unverified (oracle gap)    | 16 | Documented in §3 below; tracked for future bench expansion.  Phase 2A reduces this count as oracles land (LIBPDeriv multi-invariant: 🟡 → 🟢 2026-05-09; Jordan block ordering, analyze_block non-nested overlapping, Calcx00 boundary linear-system selection: all 🟡 → 🟢 2026-05-10).  Phase 2B continues (`r = nonzero(top) + IBPDot` arithmetic: 🟡 → 🟢 2026-05-10).  The Calcx00 acb-inverse fallback (rank-deficient case) remains 🟡 pending a synthetic rank-deficient bench in Phase 3. |
+| 🟢 verified                  | 71 | — |
+| 🟡 unverified (oracle gap)    | 15 | Documented in §3 below; tracked for future bench expansion.  Phase 2A reduces this count as oracles land (LIBPDeriv multi-invariant: 🟡 → 🟢 2026-05-09; Jordan block ordering, analyze_block non-nested overlapping, Calcx00 boundary linear-system selection: all 🟡 → 🟢 2026-05-10).  Phase 2B continues (`r = nonzero(top) + IBPDot` arithmetic, MasterRank/MasterDot intentional non-exposure: 🟡 → 🟢 2026-05-10).  The Calcx00 acb-inverse fallback (rank-deficient case) remains 🟡 pending a synthetic rank-deficient bench in Phase 3. |
 | 🔴 actual divergence          |  6 | **5 fully fixed; 1 deferred indefinitely** (D5, ComplexMode — investigated post-v1.0 and found to require an algebra-layer extension; entry-point now rejects loudly).  D3 was upgraded from detect-and-throw (Phase 1A) to the proper projection (Phase 1B) with an oracle. |
 | ⚪ intentionally not ported   | 17 | — |
 
@@ -199,7 +199,7 @@ exercises them.  Each is a candidate for a future oracle.
 | `region_power` skips `/.Numeric` | `src/qft/findregion.cpp:463-529` | Expression contains only `eps` + integer constants; benign by construction. |
 | `factorize_family` no-redef fallback | `src/pipeline/factorize.cpp:268-285` | Dead code on tested inputs (square / well-conditioned systems). |
 | ~~`LIBPDeriv` multi-invariant case~~ → 🟢 | `src/ibp/libp_deriv.cpp` | **Verified, scope clarified.**  Multi-invariant family (free-symbol invariants like `m1sq`, `m2sq` in distinct propagators, plus a Replacement-defined `s`) tested via `test_ibp_libp_deriv.cpp` `*TwoMassBubble*` cases.  Replacement-defined invariants (e.g. `s` from `p^2 -> s`) deliberately return all-zero — production AMFlow flow only differentiates w.r.t. `eta` (which lives directly in the propagator polynomial), so upstream's momentum-derivative chain-rule path (`LIBPDerivivative`, `Kira/interface.m`) is intentionally not ported.  See `include/amflow/ibp/libp_deriv.hpp` "Scope" block for the contract. |
-| `MasterRank`/`MasterDot` filter | `src/ibp/reduce.cpp` | Default `Infinity` is no-op. |
+| ~~`MasterRank`/`MasterDot` filter~~ → 🟢 | `src/ibp/reduce.cpp` | **Documented as intentionally not exposed.**  Upstream's `MasterRank` / `MasterDot` (`Kira/interface.m:425-426,453`) is a manual post-Kira filter for pseudo-master removal — upstream's own CHANGELOG describes it as "only use if you believe that some pseudo master integrals have appeared in the list".  C++ `ibp::ReduceOptions` does not expose these knobs; the effective behavior pins both to the upstream default `Infinity` (no filter), which is exactly the regime exercised by all 12 oracle benches at rel ~10⁻³⁰.  If a real pseudo-master case ever surfaces, the filter is a one-line `select` post `kira_read_masters` plus a JSON knob — added when needed, not preemptively (YAGNI).  Header comment `include/amflow/ibp/reduce.hpp` documents the contract. |
 | `kira_target.m` parser strictness | `src/ibp/kira_parse.cpp` | Custom tokenizer is not fuzzed. |
 | Coefficient parser fragility | `src/ibp/kira_parse.cpp` | No decimal-point support; integer exponents only.  Kira's normal output never trips this. |
 | Diffeq nested reduce raises rank/dot via second `apply_jdot_jrank_floor` | `src/ibp/reduce.cpp` | Conservative; never lower than upstream. |

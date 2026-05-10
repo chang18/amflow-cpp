@@ -128,7 +128,7 @@ the triplet.
 |---|---|---|
 | `SingleMassQ` literal-vs-Numeric | mass left symbolic without `Numeric` | pending |
 | `factorize_family` mass=−1 detection | likewise | pending |
-| `MasterRank`/`MasterDot` non-default filter | explicit filter values | pending |
+| `MasterRank`/`MasterDot` non-default filter | explicit filter values | ✅ done (2026-05-10) — intentionally not exposed; C++ pins to upstream default `Infinity` (no filter); contract documented in `include/amflow/ibp/reduce.hpp` and audit row |
 | `r = nonzero(top) + IBPDot` arithmetic | non-trivial `IBPDot` value | ✅ done (2026-05-10) — `test_ibp_kira.cpp` `WriteJobs_R_*` (zero/non-trivial IBPDot, mixed pattern, non-binary defensive); C++ formula tightened to `count_if(!= 0)` to match upstream literal |
 
 ### 2C — low-risk (theoretical equivalence; documentation only) — ~1 day

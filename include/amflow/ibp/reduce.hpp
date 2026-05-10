@@ -36,6 +36,18 @@ struct ReduceOptions {
 
     std::string work_dir;
     std::string log_file;
+
+    // Note: upstream's `MasterRank` / `MasterDot` post-Kira master
+    // filter (`Kira/interface.m:425-426,453`) is intentionally NOT
+    // exposed in this struct.  Upstream documents these options as
+    // a manual override "only use if you believe that some pseudo
+    // master integrals have appeared in the list" (CHANGELOG).
+    // C++ effectively pins them to the upstream default `Infinity`
+    // (no filter), which matches the regime exercised by all 12
+    // oracle benches at rel ~10⁻³⁰.  See AUDIT_MMA_PARITY.md row
+    // 202.  If a future user case actually surfaces a pseudo-master
+    // problem, the filter is a one-line `select` post
+    // `kira_read_masters` plus a JSON knob; until then YAGNI.
 };
 
 struct ReductionContext {
