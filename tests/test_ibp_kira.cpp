@@ -526,3 +526,127 @@ TEST(KiraTest, ReadTargetTable_HandlesMultipleRules) {
     EXPECT_EQ(rules[1].rhs.size(), 2u);
     EXPECT_EQ(rules[1].rhs[1].first, "d");
 }
+
+// --- kira_target.m parser strictness (audit row 203, 🟡 → 🟢) ----------
+//
+// `kira_read_target_table` parses Kira's kira2math-emitted reduction
+// table.  The tokenizer is custom and was flagged by the audit as
+// "not fuzzed".  Production Kira output never produces malformed
+// rules, but the parser should still reject malformed input cleanly
+// rather than silently producing a partial or wrong rule set.
+//
+// These tests cover the canonical malformed shapes:
+//   1. LHS not a valid JIntegral (missing parens, garbage chars)
+//   2. RHS term without a J integral (bare coefficient)
+//   3. Missing file is *accepted* — returns empty (mirrors the
+//      "no targets requested" Kira mode); existing
+//      ReadMasters_MissingFileReturnsEmpty tests the analogous
+//      behavior for masters.  This is the only "missing input
+//      becomes empty output, not an error" exception in the
+//      parser; lock it explicitly so future refactors don't
+//      change the contract.
+
+namespace {
+
+// Write a synthetic kira_target.m to a fresh temp dir.  Returns
+// the dir path so the test can call kira_read_target_table on it.
+std::string write_synthetic_target_table(const std::string& subdir,
+                                          const std::string& fam,
+                                          const std::string& content) {
+    std::string dir = (fs::temp_directory_path() / subdir).string();
+    fs::remove_all(dir);
+    fs::create_directories(dir + "/results/" + fam);
+    {
+        std::ofstream f(dir + "/results/" + fam + "/kira_target.m");
+        f << content;
+    }
+    return dir;
+}
+
+}  // namespace
+
+TEST(KiraTest, ReadTargetTable_MissingFileReturnsEmpty) {
+    auto fc = qft::FamilyConfig::build(
+        "bubble", {"l"}, {"p"}, {}, {{"p^2", "s"}},
+        {"l^2 - msq", "(l - p)^2 - msq"});
+    std::string dir = (fs::temp_directory_path()
+                       / "amflow_kira_target_t_missing").string();
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    // No results/bubble/kira_target.m written.
+    auto rules = ibp::kira_read_target_table(fc, dir);
+    EXPECT_TRUE(rules.empty())
+        << "missing kira_target.m should produce empty rules, not throw";
+    fs::remove_all(dir);
+}
+
+TEST(KiraTest, ReadTargetTable_MalformedLHSThrows) {
+    auto fc = qft::FamilyConfig::build(
+        "bubble", {"l"}, {"p"}, {}, {{"p^2", "s"}},
+        {"l^2 - msq", "(l - p)^2 - msq"});
+    // LHS is garbage that doesn't parse as a JIntegral.
+    std::string dir = write_synthetic_target_table(
+        "amflow_kira_target_t_lhs", "bubble",
+        "{\n"
+        "  garbage_no_parens -> 3 * bubble(1,1)\n"
+        "}\n");
+    EXPECT_THROW(ibp::kira_read_target_table(fc, dir),
+                 std::runtime_error)
+        << "malformed LHS should raise";
+    fs::remove_all(dir);
+}
+
+TEST(KiraTest, ReadTargetTable_RHSTermWithoutJIntegralThrows) {
+    auto fc = qft::FamilyConfig::build(
+        "bubble", {"l"}, {"p"}, {}, {{"p^2", "s"}},
+        {"l^2 - msq", "(l - p)^2 - msq"});
+    // RHS contains a coefficient with no `* J(...)` part.  Note `0`
+    // is allowed (filtered out as a zero rule), but a non-zero bare
+    // coefficient must raise.
+    std::string dir = write_synthetic_target_table(
+        "amflow_kira_target_t_rhs", "bubble",
+        "{\n"
+        "  bubble(2,1) -> 3\n"
+        "}\n");
+    EXPECT_THROW(ibp::kira_read_target_table(fc, dir),
+                 std::runtime_error)
+        << "RHS term without J integral should raise";
+    fs::remove_all(dir);
+}
+
+TEST(KiraTest, ReadTargetTable_NoOuterBraceReturnsEmpty) {
+    auto fc = qft::FamilyConfig::build(
+        "bubble", {"l"}, {"p"}, {}, {{"p^2", "s"}},
+        {"l^2 - msq", "(l - p)^2 - msq"});
+    // File present but has no `{...}` block.  This shape would
+    // result from an upstream Kira misconfiguration.  Locked
+    // behavior: parse silently produces empty (callers detect
+    // empty masters and abort with a clear message).
+    std::string dir = write_synthetic_target_table(
+        "amflow_kira_target_t_nobrace", "bubble",
+        "totally garbage content with no braces\n");
+    auto rules = ibp::kira_read_target_table(fc, dir);
+    EXPECT_TRUE(rules.empty())
+        << "no-outer-brace input should yield empty rules";
+    fs::remove_all(dir);
+}
+
+TEST(KiraTest, ReadTargetTable_RHSZeroFiltered) {
+    // Positive sanity: a rule with `-> 0` produces a valid rule
+    // with empty rhs.  This is the "zero reduction" pattern (the
+    // target reduces to nothing), and the parser must filter the
+    // literal `0` term without throwing.
+    auto fc = qft::FamilyConfig::build(
+        "bubble", {"l"}, {"p"}, {}, {{"p^2", "s"}},
+        {"l^2 - msq", "(l - p)^2 - msq"});
+    std::string dir = write_synthetic_target_table(
+        "amflow_kira_target_t_zero", "bubble",
+        "{\n"
+        "  bubble(2,1) -> 0\n"
+        "}\n");
+    auto rules = ibp::kira_read_target_table(fc, dir);
+    ASSERT_EQ(rules.size(), 1u);
+    EXPECT_TRUE(rules[0].rhs.empty())
+        << "literal `0` RHS should yield a rule with empty rhs vector";
+    fs::remove_all(dir);
+}

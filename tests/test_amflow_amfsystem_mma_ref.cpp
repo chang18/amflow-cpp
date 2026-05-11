@@ -158,6 +158,109 @@ TEST(AmfsystemMmaRefTest, EndingTadpole_J2_UsesExplicitBoundaryJson) {
     }
 }
 
+// --- Ending-master Kira reduction loop (audit row 197, 🟡 → 🟢) -------
+//
+// `solve_ending_master_value` (`src/pipeline/amfsystem.cpp:718-792`)
+// is the C++-only path that lowers an arbitrary ending master
+// through repeated `ibp::reduce` calls until every leaf hits either
+// (a) the builtin Vacuum[L,n] table or (b) an explicit_boundary
+// value supplied by the user.  Upstream's `AMFSystemSetupMaster`
+// aborts at the ending step unless the user supplies a `Solution`
+// for every master; C++ relaxes that constraint.
+//
+// `EndingTadpole_J2_UsesExplicitBoundaryJson` (above) exercises the
+// short-circuit path (try_builtin_ending_value finds an
+// explicit_boundary for J[tad, 2]).  This test exercises the
+// load-bearing recursive lowering path: it provides J[tad, 2] as
+// a preferred master with NO explicit_boundary, forcing the
+// solver to:
+//   1. Vacuum table miss on J[2] (n_props = 0 in the all-ones
+//      counter; vacuum_known(1, 0) is false).
+//   2. Call get_ending_reduction → ibp::reduce on J[2].
+//   3. Receive Kira's IBP identity J[2] = (ε-1)/m² * J[1].
+//   4. Recurse on J[1] → Vacuum table hits (vacuum_known(1, 1)
+//      is true), returning the closed-form Γ(ε-1) value.
+//   5. Multiply by the IBP coefficient at ε, return J[2] numeric
+//      value.
+//
+// Reference data is the same JSON used by
+// `EndingTadpole_J2_UsesExplicitBoundaryJson`; the test asserts
+// the recursive-lowering output matches the MMA Laurent
+// evaluation at the same two eps points.
+
+TEST(AmfsystemMmaRefTest, EndingTadpole_J2_RecursiveKiraLoweringMatchesReference) {
+    if (!kira_available()) {
+        GTEST_SKIP() << "Kira/Fermat not installed";
+    }
+
+    auto fc = qft::FamilyConfig::build(
+        "tad", {"l"}, {}, {}, {}, {"l^2 - msq"});
+
+    pipeline::AMFSystemOptions opts;
+    opts.bb.kira_executable   = "/usr/local/bin/kira";
+    opts.bb.fermat_executable = "/usr/share/Ferl7/fer64";
+    opts.bb.numeric_values["msq"] = "1";
+    opts.cache_root = (fs::temp_directory_path() /
+                       "amflow_amfsys_mma_tad_recursive_lowering").string();
+    fs::remove_all(opts.cache_root);
+
+    // Deliberately do NOT set opts.explicit_boundary["tad|2"].
+    // The solver must derive J[2] from J[1] via the recursive Kira
+    // reduction loop.
+
+    std::vector<qft::JIntegral> preferred;
+    preferred.push_back(qft::JIntegral("tad", {1}));
+    preferred.push_back(qft::JIntegral("tad", {2}));
+    std::vector<int> zero_etac(1, 0);
+
+    pipeline::AMFSystem sys(std::move(fc), preferred, zero_etac,
+                            pipeline::EndingScheme::Tradition, opts);
+    EXPECT_TRUE(sys.is_ending());
+    sys.setup();
+
+    const auto refs_eps_100 = load_math_ref_values(
+        source_root() / "tests/data/math_ref/tadpole_1L.json", 1.0 / 100.0);
+    const auto refs_eps_50 = load_math_ref_values(
+        source_root() / "tests/data/math_ref/tadpole_1L.json", 1.0 / 50.0);
+
+    std::vector<numeric::AcbValue> epslist;
+    for (long denom : {100, 50}) {
+        numeric::AcbValue eps;
+        fmpq_t q;
+        fmpq_init(q);
+        fmpq_set_si(q, 1, denom);
+        acb_set_fmpq(eps.raw(), q, 200);
+        fmpq_clear(q);
+        epslist.push_back(std::move(eps));
+    }
+
+    sys.solve(epslist);
+
+    ASSERT_EQ(sys.solutions().size(), 2u);
+
+    const std::array<std::map<std::string, std::complex<double>>, 2> refs = {
+        refs_eps_100, refs_eps_50
+    };
+    for (std::size_t k = 0; k < refs.size(); ++k) {
+        for (const auto& target : preferred) {
+            const auto key = j_to_math_ref_key(target);
+            const auto it = refs[k].find(key);
+            ASSERT_NE(it, refs[k].end());
+
+            const auto& got =
+                lookup_solution_value(sys, sys.solutions()[k], target);
+            EXPECT_NEAR(acb_real_mid(got), it->second.real(), 1e-6)
+                << "eps slot " << k << " " << target.to_string()
+                << " real part (recursive Kira-lowering path);"
+                << " expected " << it->second.real()
+                << ", got " << acb_real_mid(got);
+            EXPECT_NEAR(acb_imag_mid(got), it->second.imag(), 1e-6)
+                << "eps slot " << k << " " << target.to_string()
+                << " imag part";
+        }
+    }
+}
+
 TEST(AmfsystemMmaRefTest, BubblePipeline_MatchesMathReferenceJson) {
     if (!kira_available()) {
         GTEST_SKIP() << "Kira/Fermat not installed";

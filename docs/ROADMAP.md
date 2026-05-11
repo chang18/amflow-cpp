@@ -143,9 +143,25 @@ the triplet.
 
 ---
 
-## Phase 3 — Active oracle expansion (ongoing, ~10+ days cumulative)
+## Phase 3 — Tail audit closures + Active oracle expansion (ongoing, ~10+ days cumulative)
 
-Beyond the 🟡 list, **diversify** the oracle set so that
+### 3.A–3.E — Final 5 🟡 closures (all done 2026-05-11)
+
+The 5 🟡 audit rows that survived through Phase 2 are now all 🟢:
+
+| 🟡 item | Closure approach |
+|---|---|
+| 3.A Diffeq nested reduce conservative rank/dot floor | Audit equivalence paragraph: inner `apply_jdot_jrank_floor` is applied to already-floored opts, so effective `(rank, dot) >=` upstream's analogous step.  Larger IBP system is a superset of smaller one — final reduction rules match. |
+| 3.B `kira_target.m` parser strictness | 5 new negative-acceptance tests (`ReadTargetTable_*`): missing-file/no-brace → empty (silent OK), malformed LHS / RHS-without-J → throw, literal `0` RHS → filtered |
+| 3.C Auto-applied `Vacuum[L,n]` table | All 5 (L, n) entries already had per-entry numeric reference tests in `test_qft_vacuum.cpp`; coverage probe + unknown-throws also locked.  Audit row promoted with reference. |
+| 3.D Ending-master Kira reduction loop | New end-to-end test `EndingTadpole_J2_RecursiveKiraLoweringMatchesReference`: provides J[tad, 2] preferred without explicit_boundary, forces Kira-lowering loop to derive J[2] from J[1] via IBP identity; matches MMA Laurent at two eps points (Kira-gated, ~4.5s) |
+| 3.E `Calcx00` acb-inverse fallback (rank-deficient) | Documented as **conservative numerical safety net**: after `normalize_mat`, `a00` is Jordan-form so the fallback is unreachable in well-behaved precision; the "all-resonate" treatment is mathematically conservative-but-correct (downstream pair constraints resolve spurious log terms to zero).  Synthetic trigger requires unrealistic chop_pre or bypassing normalize_mat — both outside production usage. |
+
+After 3.A–E, the audit table contains **86 🟢 / 0 🟡 / 6 🔴 (5 fixed + 1 deferred D5) / 17 ⚪**.
+
+### Oracle diversity expansion (ongoing, no fixed end)
+
+Beyond the (now-empty) 🟡 list, **diversify** the oracle set so that
 "we-didn't-think-of-this" bugs have a chance to surface.
 
 | Diversity axis | Current coverage | Target additions |
