@@ -9,6 +9,15 @@ on:
 env:
   FLINT_VERSION: "3.4.0"
 
+  # Opt JavaScript-based actions (e.g. `actions/checkout@v4`,
+  # `actions/cache@v4`) into the Node.js 24 runtime ahead of the
+  # platform-forced switch on 2026-06-02 and the Node.js 20 runner
+  # removal on 2026-09-16.  Removes the per-run deprecation noise
+  # and validates Node 24 compatibility now; becomes a no-op once
+  # upstream releases `@v5` of these actions with native node24
+  # `runs.using` declarations.
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   build-and-test:
     name: build (Ubuntu, ${{ matrix.compiler }})
