@@ -177,17 +177,23 @@ First L=4 diversity-axis bench: 4-loop equal-mass banana sunrise
   resolved).  Bench is in `run_perf_audit.sh` rotation with a
   marker comment.
 
-D7 fix paths (any one closes the row):
-1. Iterative master discovery — detect extra inner masters, rerun
-   `libp_deriv` on them, re-invoke inner Reduce, repeat until
-   stable.  Typical convergence 1-2 iterations.
-2. Single-Kira-call refactor — restructure `ibp::diffeq` to mirror
-   upstream's single-invocation pattern (one IBPSystem call, both
-   master detection and target reduction read from the same Kira
-   work_dir).  Cleaner but larger change.
-3. Use inner masters as basis — drop the strict equality check;
-   use `reduce_res.masters` directly.  Requires recomputing
-   `libp_deriv` for the extras.
+D7 fix (upstream-faithful, single path — earlier 3-candidate list
+was engineering workarounds, not faithful to upstream's actual
+`BlackBoxReduce` structure):
+
+Extend C++ `ibp::reduce` to mirror upstream's two-Kira-call
+`BlackBoxReduce` semantics — first a Masters-mode call with
+`select_mandatory_recursively` (sector-wide enumeration), then a
+Reduce-mode call with `select_mandatory_list` (specific targets),
+both sharing the same `$ReductionDirectory` and the same
+`(IBPRank, IBPDot)`.  This makes the outer reduce in
+`black_box_amflow_single` return the full master list (10 for
+L=4 banana at dot=5), which propagates as `preferred_` into
+AMFSystem, which makes the diffeq preheat run at the same
+`(rank, dot)` as the inner reduce, which makes the master-count
+equality check pass by construction.  Concurrently remove the
+redundant `apply_jdot_jrank_floor` re-floor inside `reduce()` at
+`src/ibp/reduce.cpp:177` for the diffeq-invoked path.
 
 ### Oracle diversity expansion (ongoing, no fixed end)
 

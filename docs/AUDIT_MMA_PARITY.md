@@ -209,19 +209,61 @@ Full per-pass reports: `/tmp/audit_desolver.md`, `/tmp/audit_amflow.md`,
   accepts.  Not silent-wrong (loud throw), but C++ refuses to compute
   where upstream would succeed.  The MMA reference value is committed
   in the bench triplet for verifying any future fix.
-- **Fix candidates** (any of these would close the row):
-  1. *Iterative master discovery* — after inner Reduce, detect extra
-     masters not in preheat; rerun `libp_deriv` on them; add results
-     to `all_ints`; invoke inner Reduce again; repeat until master
-     set is stable.  Converges in 1-2 iterations on typical families.
-  2. *Single-Kira-call refactor* — restructure `ibp::diffeq` to make
-     one Kira invocation that handles both master detection and
-     target reduction (mirrors upstream's structure).  Larger change
-     but cleanly eliminates the divergence source.
-  3. *Use inner masters as basis* — drop the strict check; use
-     `reduce_res.masters` directly as `out.sortedmasters`.  Requires
-     recomputing `libp_deriv` for the extra masters (else the diffeq
-     misses contributions).  Halfway point between (1) and (2).
+- **Deeper root cause (upstream-faithful diagnosis)**: the master-count
+  mismatch in `ibp::diffeq` is a *consequence*, not the source.  The
+  primary divergence is upstream a step earlier — in
+  `BlackBoxReduce[jints, {}]` (called from `BlackBoxAMFlowSingle` to
+  expand the user's targets into a complete master set before
+  AMFSystem setup).  Upstream `BlackBoxReduce` is a two-Kira-call
+  sequence in a single shared `$ReductionDirectory`:
+  1. `IBPSystem[top, rank, dot, preferred, ...]` — writes a yaml
+     with `select_mandatory_recursively`, asking Kira for a
+     **sector-wide master enumeration** at `(rank, dot)`.  For L=4
+     banana at `(rank=0, dot=5)` this returns 10 masters.
+  2. `AnalyticReduction[jints]` — same dir, rewrites yaml with
+     `select_mandatory_list` for the specific targets, runs Kira a
+     second time at the SAME `(rank, dot)`.  Reads the (now
+     overwritten) masters file — must be a `SubsetQ` of the first
+     run's masters (or upstream Aborts).
+  C++ `ibp::reduce(jints, /*preferred=*/{})` (`src/pipeline/solve_integrals.cpp:727`)
+  does only the second step — `kira_write_jobs(Reduce)` with
+  `select_mandatory_list[target]` — and reads back only **1 master**
+  (the user's target itself).  The full 10-master sector enumeration
+  upstream gets from step 1 is missing.  AMFSystem then sets
+  `preferred_` to that 1 master; the diffeq preheat sees
+  `jpreferred=[1 elem with JDot=0]`, so
+  `apply_jdot_jrank_floor(opts, {jpreferred}, dot+1)` → dot=5; the
+  inner reduce at dot=6 (derivatives shift dot to 6) finds the
+  11th master — and the strict equality check trips.
+  Upstream has the analogous flow already: its AMFSystem 1
+  receives `jpreferred = 10 masters` (from the outer
+  `BlackBoxReduce[jints, {}]`), so the preheat already runs at
+  `dot = max(5, 5+1) = 6`, the inner runs at the same dot=6, and
+  Kira returns the same 11 masters in both — `SubsetQ` passes.
+- **Fix (upstream-faithful)**: extend C++ `ibp::reduce` to mirror
+  upstream's two-Kira-call `BlackBoxReduce` semantics:
+  1. **First Kira call (Masters mode, sector-wide enumeration)** —
+     write yaml with `select_mandatory_recursively` at the floored
+     `(rank, dot)`; run Kira; read `masters_mma` file.
+  2. **Second Kira call (Reduce mode, target reduction)** — same
+     dir, same `(rank, dot)`, write yaml with
+     `select_mandatory_list` for the targets; run Kira; read
+     `target_table.m`.
+  Both calls share the same dir and the same `(rank, dot)`, so the
+  master list they see is by-construction consistent.  Then:
+  - `black_box_amflow_single` (`solve_integrals.cpp:727`) gets back
+    the **full master list** as `reduction.masters`; AMFSystem
+    setup receives all 10 masters as `preferred_`; the diffeq
+    preheat sees `JDot_max(jpreferred)=5` and uses `dot=6`; the
+    inner reduce at dot=6 returns the same 11 masters; the
+    strict equality check passes by construction.
+  - Also: remove the redundant `apply_jdot_jrank_floor` re-floor at
+    `src/ibp/reduce.cpp:177` for the inner call invoked from
+    `ibp::diffeq` (the inner call should use the preheat's
+    `(rank, dot)`, not re-floor over `{all_ints, preferred}`).
+- **Status**: oracle artefact committed (MMA reference + cpp.json +
+  mma.wl); C++ side flagged BLOCKED in the bench's `cpp_sampled_status`
+  with the architectural explanation.  Tracked as Phase 3.F follow-up.
 - **Status**: oracle artefact committed (MMA reference + cpp.json +
   mma.wl); C++ side flagged BLOCKED in the bench's `cpp_sampled_status`
   with the architectural explanation.  Tracked as Phase 3.F follow-up.
