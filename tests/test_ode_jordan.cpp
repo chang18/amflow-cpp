@@ -9,6 +9,8 @@
 #include <flint/fmpq.h>
 #include <flint/fmpq_mat.h>
 
+#include <algorithm>
+#include <functional>
 #include <stdexcept>
 #include <vector>
 
