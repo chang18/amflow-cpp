@@ -159,7 +159,7 @@ The 5 🟡 audit rows that survived through Phase 2 are now all 🟢:
 
 After 3.A–E, the audit table contains **86 🟢 / 0 🟡 / 6 🔴 (5 fixed + 1 deferred D5) / 17 ⚪**.
 
-### 3.F — L=4 banana oracle (2026-05-11) — **MMA reference committed; C++ BLOCKED on D7**
+### 3.F — L=4 banana oracle (2026-05-11) + D7 fix (2026-05-12) — **completed, matches MMA at rel 7.2 × 10⁻³¹**
 
 First L=4 diversity-axis bench: 4-loop equal-mass banana sunrise
 (family `banana4`, 4 loops + 1 external leg, 5 massive propagators
@@ -177,23 +177,37 @@ First L=4 diversity-axis bench: 4-loop equal-mass banana sunrise
   resolved).  Bench is in `run_perf_audit.sh` rotation with a
   marker comment.
 
-D7 fix (upstream-faithful, single path — earlier 3-candidate list
-was engineering workarounds, not faithful to upstream's actual
-`BlackBoxReduce` structure):
+D7 fix landed 2026-05-12 (`src/ibp/reduce.cpp` `reduce` and
+`diffeq`):
 
-Extend C++ `ibp::reduce` to mirror upstream's two-Kira-call
-`BlackBoxReduce` semantics — first a Masters-mode call with
-`select_mandatory_recursively` (sector-wide enumeration), then a
-Reduce-mode call with `select_mandatory_list` (specific targets),
-both sharing the same `$ReductionDirectory` and the same
-`(IBPRank, IBPDot)`.  This makes the outer reduce in
-`black_box_amflow_single` return the full master list (10 for
-L=4 banana at dot=5), which propagates as `preferred_` into
-AMFSystem, which makes the diffeq preheat run at the same
-`(rank, dot)` as the inner reduce, which makes the master-count
-equality check pass by construction.  Concurrently remove the
-redundant `apply_jdot_jrank_floor` re-floor inside `reduce()` at
-`src/ibp/reduce.cpp:177` for the diffeq-invoked path.
+- Both functions now do a Masters-mode preheat call (sector-wide
+  enumeration via `select_mandatory_recursively`) followed by a
+  Reduce-mode call (`select_mandatory_list` for the specific
+  targets), at the SAME `(rank, dot)`.  Each call runs in its own
+  subdirectory (`<work_dir>/masters_preheat/` and
+  `<work_dir>/target_reduce/`) because our Kira 2.x release
+  refuses to share a `$ReductionDirectory` between the two calls
+  (the Masters-mode `run_initiate: masters` doesn't register the
+  `-s` numeric substitutions, so the subsequent Reduce-mode call
+  Aborts with `Kira::update_auxiliary_file: Last Kira run set 0
+  variables to numeric values, this time you request N`).
+  Upstream MMA shares one dir and relies on Kira's tmp/-based
+  incremental state; we accept the small overhead of re-running
+  the IBP setup in the second dir for the architectural-parity
+  guarantee.
+- `ibp::diffeq` no longer calls `reduce()` for the inner step
+  (which would have re-floored `(rank, dot)` over the derivative
+  integrals — the original L=4-banana bug).  Instead it inlines
+  the Reduce-mode Kira invocation at `opts_eff`'s `(rank, dot)`,
+  mirroring upstream's `AnalyticReduction` which inherits
+  `IBPRank`/`IBPDot` globals from `IBPSystem`.
+- Both functions add a SubsetQ guard on the Reduce-mode master
+  file against the Masters-mode sector enumeration, mirroring
+  upstream's `If[!SubsetQ[masters, str], Abort["inconsistent
+  masters from Kira"]]`.
+
+Locked by L=4 banana oracle (rel 7.2 × 10⁻³¹ / 1.6 × 10⁻³⁰, 399 s).
+All 545 pre-existing tests remain green.
 
 ### Oracle diversity expansion (ongoing, no fixed end)
 

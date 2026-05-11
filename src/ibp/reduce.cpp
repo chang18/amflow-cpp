@@ -178,16 +178,81 @@ reduce(const qft::FamilyConfig& fc,
 
     KiraConfig cfg = make_kira_config(fc, top_pattern, opts_eff);
 
-    fs::create_directories(opts.work_dir);
-    kira_write_config(cfg, opts.work_dir);
-    kira_write_jobs(cfg, opts.work_dir, KiraReductionMode::Reduce);
-    kira_write_preferred(preferred, fc, opts.work_dir);
-    kira_write_targets(targets, fc, opts.work_dir);
+    // Mirror upstream `BlackBoxReduce` (Kira/interface.m): a two-Kira-call
+    // sequence at the same `(rank, dot)`.  First call (`IBPSystem`) is
+    // `select_mandatory_recursively` for a sector-wide master
+    // enumeration; second call (`AnalyticReduction`) is
+    // `select_mandatory_list` for the specific targets.  Upstream
+    // shares one `$ReductionDirectory` between the two calls; our
+    // Kira 2.x version refuses to do that because the Masters-mode
+    // `run_initiate: masters` doesn't register the `-s` numeric
+    // substitutions, so the subsequent Reduce-mode call sees a stale
+    // auxiliary state and Aborts with `Kira::update_auxiliary_file:
+    // Last Kira run set 0 variables to numeric values, this time you
+    // request N.`  We therefore run the two calls in *separate*
+    // subdirectories (`masters_preheat/` and `target_reduce/`) — both
+    // at the same `(rank, dot)`, so Kira returns consistent master
+    // lists — and bridge them with the SubsetQ check below mirroring
+    // upstream's
+    // `If[!SubsetQ[masters, str], Abort["inconsistent masters from Kira"]]`.
+    // See `docs/AUDIT_MMA_PARITY.md` §D7 for the full root-cause
+    // analysis and the L=4 banana oracle that exposed the bug.
+    const std::string masters_dir = opts.work_dir + "/masters_preheat";
+    const std::string reduce_dir  = opts.work_dir + "/target_reduce";
 
-    kira_run(cfg, opts.work_dir, opts.log_file);
+    // === Step 1: Masters-mode preheat (sector-wide enumeration) ===
+    fs::remove_all(masters_dir);
+    fs::create_directories(masters_dir);
+    kira_write_config(cfg, masters_dir);
+    kira_write_preferred(preferred, fc, masters_dir);
+    kira_write_jobs(cfg, masters_dir, KiraReductionMode::Masters);
+    kira_run(cfg, masters_dir, opts.log_file);
 
-    out.masters = kira_read_masters(fc, opts.work_dir);
-    auto raw_rules = kira_read_target_table(fc, opts.work_dir);
+    out.masters = kira_read_masters(fc, masters_dir);
+    if (out.masters.empty()) {
+        throw std::runtime_error(
+            "ibp::reduce: no masters from Kira's Masters-mode preheat");
+    }
+    sort_integrals_like_amflow(out.masters);
+
+    // Snapshot the canonical (preheat) master set for the SubsetQ check.
+    auto sector_master_keys = std::set<std::string>();
+    for (const auto& m : out.masters) {
+        std::ostringstream key;
+        key << m.family();
+        for (long v : m.indices()) key << "|" << v;
+        sector_master_keys.insert(key.str());
+    }
+
+    // === Step 2: Reduce-mode (target reduction in a sibling subdir) ===
+    fs::remove_all(reduce_dir);
+    fs::create_directories(reduce_dir);
+    kira_write_config(cfg, reduce_dir);
+    kira_write_preferred(out.masters, fc, reduce_dir);  // pin the basis
+    kira_write_targets(targets, fc, reduce_dir);
+    kira_write_jobs(cfg, reduce_dir, KiraReductionMode::Reduce);
+    kira_run(cfg, reduce_dir, opts.log_file);
+
+    // SubsetQ guard: Reduce-mode masters file must be ⊆ Masters-mode
+    // sector enumeration.  Both Kira calls ran at the same
+    // `(rank, dot)`, so by construction this holds; firing the throw
+    // indicates Kira-side nondeterminism.
+    auto reduce_masters = kira_read_masters(fc, reduce_dir);
+    for (const auto& m : reduce_masters) {
+        std::ostringstream key;
+        key << m.family();
+        for (long v : m.indices()) key << "|" << v;
+        if (sector_master_keys.find(key.str()) == sector_master_keys.end()) {
+            throw std::runtime_error(
+                "ibp::reduce: inconsistent masters from Kira "
+                "(Reduce-mode master '" + m.to_string() + "' is absent "
+                "from the Masters-mode sector enumeration at the same "
+                "(rank, dot); mirrors upstream "
+                "`AnalyticReduction: inconsistent masters from Kira`).");
+        }
+    }
+
+    auto raw_rules = kira_read_target_table(fc, reduce_dir);
 
     std::map<std::string, std::size_t> master_index;
     for (std::size_t i = 0; i < out.masters.size(); ++i) {
@@ -272,48 +337,68 @@ diffeq(const qft::FamilyConfig& fc,
     ReduceOptions opts_eff =
         apply_jdot_jrank_floor(opts, {&jpreferred}, true);
 
-    {
-        KiraConfig cfg = make_kira_config(fc, top_pattern, opts_eff);
-        fs::create_directories(opts.work_dir);
-        kira_write_config(cfg, opts.work_dir);
-        kira_write_jobs(cfg, opts.work_dir, KiraReductionMode::Masters);
-        kira_write_preferred(jpreferred, fc, opts.work_dir);
-        kira_run(cfg, opts.work_dir, opts.log_file);
-    }
-    auto masters = kira_read_masters(fc, opts.work_dir);
+    KiraConfig cfg = make_kira_config(fc, top_pattern, opts_eff);
+
+    // Mirror upstream `BlackBoxDiffeq` (Kira/interface.m): a two-Kira-call
+    // sequence at the same `(rank, dot)`.  Same separate-subdir
+    // pattern as in `ibp::reduce` above (see the matching block for
+    // the rationale).  Preheat is the sector-wide master enumeration;
+    // the second call reduces the libp_deriv-derived integral list
+    // against those masters.  Both Kira runs use `opts_eff`'s
+    // `(rank, dot)` (we intentionally do NOT re-floor over `all_ints`
+    // for the inner call — that re-flooring was the L=4-banana
+    // master-count mismatch bug fixed in audit row D7).
+    const std::string masters_dir = opts.work_dir + "/masters_preheat";
+    const std::string reduce_dir  = opts.work_dir + "/target_reduce";
+
+    // === Step 1: Masters-mode preheat (sector-wide enumeration) ===
+    fs::remove_all(masters_dir);
+    fs::create_directories(masters_dir);
+    kira_write_config(cfg, masters_dir);
+    kira_write_preferred(jpreferred, fc, masters_dir);
+    kira_write_jobs(cfg, masters_dir, KiraReductionMode::Masters);
+    kira_run(cfg, masters_dir, opts.log_file);
+
+    auto masters = kira_read_masters(fc, masters_dir);
     if (masters.empty()) {
         throw std::runtime_error("ibp::diffeq: no masters from Kira");
     }
-
     sort_integrals_like_amflow(masters);
-
     out.sortedmasters = masters;
 
-    std::vector<std::vector<std::vector<DerivTerm>>> der(vars.size());
-    std::set<std::string> all_int_keys;
     auto int_key = [](const qft::JIntegral& j) {
         std::ostringstream k; k << j.family();
         for (long v : j.indices()) k << "|" << v;
         return k.str();
     };
+
+    // Snapshot the preheat master set for the SubsetQ check below.
+    std::set<std::string> preheat_master_keys;
+    for (const auto& m : masters) preheat_master_keys.insert(int_key(m));
+
+    // Compute libp_deriv on each preheat master per requested
+    // variable.  Mirrors upstream `der = ComputeDerivative[masters, #]&/@vars`.
+    std::vector<std::vector<std::vector<DerivTerm>>> der(vars.size());
     for (std::size_t v = 0; v < vars.size(); ++v) {
         der[v].reserve(masters.size());
         for (const auto& m : masters) {
             auto raw = libp_deriv(fc, m, vars[v]);
             auto simp = simplify_terms(std::move(raw));
-            for (const auto& t : simp) {
-                all_int_keys.insert(int_key(t.integ));
-            }
             der[v].push_back(std::move(simp));
         }
     }
 
+    // Collect the unique integrals appearing in any derivative term,
+    // plus the masters themselves (so the Reduce-mode call's target
+    // list covers the basis).  Mirrors upstream
+    // `integrals = Cases[der, _?(Head[#]===Symbol["j"]&), Infinity] //
+    // DeleteDuplicates`.
     std::vector<qft::JIntegral> all_ints;
     {
         std::set<std::string> seen;
-        for (auto& vec : der) {
-            for (auto& terms : vec) {
-                for (auto& t : terms) {
+        for (const auto& vec : der) {
+            for (const auto& terms : vec) {
+                for (const auto& t : terms) {
                     std::string k = int_key(t.integ);
                     if (seen.insert(k).second) all_ints.push_back(t.integ);
                 }
@@ -325,24 +410,85 @@ diffeq(const qft::FamilyConfig& fc,
         }
     }
 
-    ReduceOptions reduce_opts = opts_eff;
-    reduce_opts.work_dir = opts.work_dir + "/reduce";
-    auto reduce_res = reduce(fc, all_ints, jpreferred,
-                              top_pattern, reduce_opts);
+    // === Step 2: Reduce-mode (target reduction in a sibling subdir) ===
+    // Same `(rank, dot)` as preheat — NO re-floor over `all_ints`.
+    // The re-floor used to be applied implicitly by the nested
+    // `reduce()` call's own `apply_jdot_jrank_floor(opts, {targets,
+    // preferred}, false)`; bypassing the nested call and writing the
+    // Reduce yaml directly here preserves `opts_eff`'s `(rank, dot)`.
+    fs::remove_all(reduce_dir);
+    fs::create_directories(reduce_dir);
+    kira_write_config(cfg, reduce_dir);
+    kira_write_preferred(masters, fc, reduce_dir);  // pin the basis
+    kira_write_targets(all_ints, fc, reduce_dir);
+    kira_write_jobs(cfg, reduce_dir, KiraReductionMode::Reduce);
+    kira_run(cfg, reduce_dir, opts.log_file);
 
-    std::map<std::string, std::size_t> rule_index;
-    for (std::size_t i = 0; i < all_ints.size(); ++i) {
-        rule_index[int_key(all_ints[i])] = i;
+    // SubsetQ guard mirrors upstream's
+    // `If[!SubsetQ[masters, str], Abort["inconsistent masters from Kira"]]`.
+    auto reduce_masters = kira_read_masters(fc, reduce_dir);
+    for (const auto& m : reduce_masters) {
+        if (preheat_master_keys.find(int_key(m)) == preheat_master_keys.end()) {
+            throw std::runtime_error(
+                "ibp::diffeq: inconsistent masters from Kira "
+                "(Reduce-mode master '" + m.to_string() + "' is absent "
+                "from the Masters-mode sector enumeration at the same "
+                "(rank, dot); mirrors upstream "
+                "`AnalyticReduction: inconsistent masters from Kira`).");
+        }
     }
 
-    if (reduce_res.masters.size() != masters.size()) {
-        throw std::runtime_error(
-            "ibp::diffeq: master count differs between Masters and Reduce calls");
-    }
+    auto raw_rules = kira_read_target_table(fc, reduce_dir);
 
     std::map<std::string, std::size_t> master_index;
     for (std::size_t i = 0; i < masters.size(); ++i) {
         master_index[int_key(masters[i])] = i;
+    }
+
+    // Parse `raw_rules` (target_table.m) into a lhs-keyed map of
+    // DerivTerm lists.  Identity rule for any `all_ints` element that
+    // is itself a master and didn't appear as an explicit rule LHS.
+    std::map<std::string, std::vector<DerivTerm>> rule_by_lhs;
+    for (const auto& kr : raw_rules) {
+        std::vector<DerivTerm> dts;
+        dts.reserve(kr.rhs.size());
+        for (const auto& [coef_str, rhs_j] : kr.rhs) {
+            // Mirror Kira/interface.m:486 (AnalyticReduction RHS-in-master
+            // guard); also the C++ D6 fix.  Now that the SubsetQ guard
+            // above passes, RHS-not-in-master can only fire on a Kira
+            // internal inconsistency.
+            if (master_index.find(int_key(rhs_j)) == master_index.end()) {
+                std::ostringstream msg;
+                msg << "ibp::diffeq: Kira returned an RHS J integral "
+                       "that is not in the master list (target="
+                    << int_key(kr.lhs) << ", offending rhs="
+                    << int_key(rhs_j)
+                    << ").  This indicates an inconsistent Kira reduction.";
+                throw std::runtime_error(msg.str());
+            }
+            DerivTerm dt;
+            dt.coef = kira_parse_expression(out.red_ctx.ctx, coef_str);
+            dt.integ = rhs_j;
+            dts.push_back(std::move(dt));
+        }
+        rule_by_lhs[int_key(kr.lhs)] = std::move(dts);
+    }
+    for (const auto& integ : all_ints) {
+        auto k = int_key(integ);
+        if (rule_by_lhs.count(k)) continue;
+        auto mit = master_index.find(k);
+        if (mit != master_index.end()) {
+            DerivTerm dt;
+            dt.coef = Mfrac::one(out.red_ctx.ctx);
+            dt.integ = integ;
+            // `vector<DerivTerm>{std::move(dt)}` would go through
+            // initializer_list which copies — DerivTerm holds a
+            // move-only Mfrac, so the copy is deleted.  Build the
+            // single-element vector via push_back instead.
+            std::vector<DerivTerm> identity_rule;
+            identity_rule.push_back(std::move(dt));
+            rule_by_lhs[k] = std::move(identity_rule);
+        }
     }
 
     out.diffeq.reserve(vars.size());
@@ -356,14 +502,12 @@ diffeq(const qft::FamilyConfig& fc,
                 out.diffeq[v][row].push_back(Mfrac::zero(out.red_ctx.ctx));
             }
             for (const auto& dt : der[v][row]) {
-                std::string ik = int_key(dt.integ);
-                auto rit = rule_index.find(ik);
-                if (rit == rule_index.end()) {
+                auto rit = rule_by_lhs.find(int_key(dt.integ));
+                if (rit == rule_by_lhs.end()) {
                     continue;
                 }
-                const auto& rule = reduce_res.rules[rit->second];
                 Mfrac coef_lifted = lift_to_red_ctx(dt.coef, out.red_ctx);
-                for (const auto& mt : rule) {
+                for (const auto& mt : rit->second) {
                     auto mit = master_index.find(int_key(mt.integ));
                     if (mit == master_index.end()) continue;
                     Mfrac product = coef_lifted.clone();

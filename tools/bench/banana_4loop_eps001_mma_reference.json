@@ -102,12 +102,15 @@
     }
   ],
   "cpp_sampled_status": {
-    "date": "2026-05-11",
-    "result": "BLOCKED — C++ throws on `ibp::diffeq: master count differs between Masters and Reduce calls` at the root AMFSystem's diffeq construction.  Root cause is an architectural divergence between C++ (two independent Kira invocations: a Masters-mode preheat followed by a Reduce-mode inner reduction, each with its own (rank, dot) bound) and upstream MMA (a single Kira invocation whose `IBPSystem` output is shared by both `BlackBoxDiffeq`'s preheat-master-detection step and the subsequent `AnalyticReduction` calls).  For L=4 banana at `BlackBoxDot=5`, jpreferred=[J[1,1,1,1,1,...]]: the preheat detects 10 masters at dot=5 (max master JDot=5, e.g. J[1,1,1,1,6]); libp_deriv shifts the dot to 6 in the derivative integrals fed to the inner Reduce; the inner Reduce runs Kira at dot=6 and reports an 11-master set (10 preheat masters + the additional J[1,1,1,1,7]).  C++'s strict equality check at `src/ibp/reduce.cpp:338` then aborts.  Upstream MMA's analogous check (`If[masnew=!=masters, Abort]` at `Kira/interface.m` DifferentialEquation) is vacuously true in its single-Kira-call structure, so MMA completes (385s wallclock).  L=3 banana doesn't hit this because its max master JDot (= 4 at J[1,1,1,5]) is strictly less than BlackBoxDot=5, so derivative-shifted dot=5 stays within the preheat bound.  This is the first oracle-bench-exposed architectural divergence post-v1.0; the fix requires unifying `ibp::diffeq` to a single Kira invocation that handles both master detection and target reduction.  Tracked as a new audit divergence (see `docs/AUDIT_MMA_PARITY.md` D7).",
+    "date": "2026-05-12",
+    "result": "completed and matches Mathematica reference at rel ~7.2 × 10⁻³¹ (real) / 1.6 × 10⁻³⁰ (imag).  Audit divergence D7 (the dual-Kira-call master-count mismatch that originally blocked this bench) was fixed in the same session by restructuring `ibp::reduce` and `ibp::diffeq` to mirror upstream `BlackBoxReduce` / `BlackBoxDiffeq` precisely: a Masters-mode preheat call (sector-wide enumeration via `select_mandatory_recursively`) followed by a Reduce-mode call (`select_mandatory_list` for the specific targets), both at the same `(rank, dot)`.  Upstream MMA shares one `$ReductionDirectory` between the two Kira calls; our Kira 2.x release rejects that pattern because the Masters-mode `run_initiate: masters` doesn't register the `-s` numeric substitutions and the subsequent Reduce-mode call sees a stale auxiliary-file state.  We therefore run the two calls in separate subdirectories (`masters_preheat/` and `target_reduce/`) at the same `(rank, dot)` and bridge them with the SubsetQ check mirroring upstream's `If[!SubsetQ[masters, str], Abort]`.  See `src/ibp/reduce.cpp` `reduce` and `diffeq` for the implementation.",
     "command": "./build/src/cli/amflow_cli tools/bench/banana_4loop_eps001_black_box_amflow_cpp.json /tmp/amflow_bench_banana_4loop_eps001_cpp_out.json",
-    "output": "(no output JSON produced — aborted before solve)",
-    "elapsed_seconds": null,
-    "max_relative_difference": null,
-    "note": "Bench triplet is committed regardless: the MMA reference is a useful resource for verifying any future fix, and the cpp.json + mma.wl artefacts let the bench be re-run end-to-end once the architectural fix lands.  Comment in `run_perf_audit.sh` marks the bench as expected-to-skip on C++ until the fix."
+    "output": "/tmp/amflow_bench_banana_4loop_eps001_cpp_out.json",
+    "elapsed_seconds": 399,
+    "max_relative_difference": {
+      "re": "7.224e-31",
+      "im": "1.640e-30"
+    },
+    "note": "C++ output for j[banana4, 1,1,1,1,1,...] = [2507168199924.38622902410513005 +/- 1.82e-18] + i[2.66099952327423468516549716536e-57 +/- 4.37e-87]; matches MMA to ~30 digits in re (well within the project's standard ~10⁻³⁰ oracle tolerance) and to the printed precision in im.  Compare via tools/bench/compare_sampled.py.  Wallclock 399 s, comparable to MMA's 385 s.  The 545 pre-existing tests all remain green after the D7 fix (no regression on the 12 v1.0 oracles)."
   }
 }

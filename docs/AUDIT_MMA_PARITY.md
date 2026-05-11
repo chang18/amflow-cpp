@@ -12,7 +12,7 @@ cover.
 |---|---|---|
 | 🟢 verified                  | 86 | — |
 | 🟡 unverified (oracle gap)    |  0 | All 21 originally-🟡 audit rows are now closed.  Progression: **Phase 2A** closed 4 (LIBPDeriv multi-invariant 2026-05-09; Jordan block ordering, analyze_block non-nested overlapping, Calcx00 boundary linear-system selection 2026-05-10).  **Phase 2B** closed 4 (`r = nonzero(top) + IBPDot`, MasterRank/MasterDot non-exposure, SingleMassQ Numeric enhancement, factorize_family mass=−1 Numeric enhancement 2026-05-10/11).  **Audit cleanup** 2026-05-11 promoted 3 rows whose implementations actually landed in Phase 1A (`SolveIntegrals` single-eps fast path, per-system `AMFSystemDirection`, Cutkosky physical-mass safety check) to 🟢 with explicit Phase 1A attribution.  **Phase 2C** closed 5 (evaluate_taylor strips arb radii, zero_sector_q generic primes, region_power skips /.Numeric, factorize_family no-redef fallback, coefficient parser grammar lock 2026-05-11).  **Phase 3.A–E** 2026-05-11 closed the final 5 (Diffeq nested reduce conservative rank/dot floor, kira_target.m parser strictness, Auto-applied `Vacuum[L,n]` table, Ending-master Kira reduction loop, Calcx00 acb-inverse fallback) via a mix of new tests, equivalence paragraphs, and conservative-fallback documentation.  Future audit growth comes from Phase 3 oracle-diversity benches (L=4 / ≥3 invariants / mixed mass / multi-cut / extreme ε), each landing as 🟢 by construction. |
-| 🔴 actual divergence          |  7 | **5 fully fixed; 1 deferred indefinitely (D5 ComplexMode); 1 oracle-exposed during Phase 3 (D7, dual-Kira-call master-count mismatch).**  D3 was upgraded from detect-and-throw (Phase 1A) to the proper projection (Phase 1B) with an oracle.  D7 was surfaced by the L=4 banana oracle in Phase 3.F (2026-05-11) and tracked with the MMA reference + bench triplet committed for verifying any future fix; C++ side flagged BLOCKED. |
+| 🔴 actual divergence          |  7 | **6 fully fixed; 1 deferred indefinitely** (D5 ComplexMode — investigated post-v1.0 and found to require an algebra-layer extension; entry-point now rejects loudly).  D3 was upgraded from detect-and-throw (Phase 1A) to the proper projection (Phase 1B) with an oracle.  D7 was surfaced by the L=4 banana oracle in Phase 3.F (2026-05-11) and fixed the next day (2026-05-12) by restructuring `ibp::reduce` and `ibp::diffeq` to mirror upstream's `BlackBoxReduce`/`BlackBoxDiffeq` two-Kira-call pattern (Masters preheat + Reduce target reduction at the same `(rank, dot)`, separate subdirs to work around our Kira 2.x's auxiliary-file consistency check). |
 | ⚪ intentionally not ported   | 17 | — |
 
 Net assessment: **no oracle-validated path is wrong**, and **no
@@ -174,7 +174,7 @@ Full per-pass reports: `/tmp/audit_desolver.md`, `/tmp/audit_amflow.md`,
   look up `target_key(rhs_j)` in `master_index`; on miss, raise
   `std::runtime_error` naming the offending target and rhs.
 
-### D7. `ibp::diffeq` master-count divergence between preheat and inner Kira — **OPEN (oracle-exposed, fix pending)**
+### D7. `ibp::diffeq` master-count divergence between preheat and inner Kira — **FIXED (Masters+Reduce restructured to mirror upstream BlackBoxReduce/BlackBoxDiffeq)**
 
 - **Upstream MMA** (`Kira/interface.m` `BlackBoxDiffeq` + `DifferentialEquation`):
   a *single* Kira invocation (`IBPSystem`) sets up the IBP system at
@@ -261,12 +261,6 @@ Full per-pass reports: `/tmp/audit_desolver.md`, `/tmp/audit_amflow.md`,
     `src/ibp/reduce.cpp:177` for the inner call invoked from
     `ibp::diffeq` (the inner call should use the preheat's
     `(rank, dot)`, not re-floor over `{all_ints, preferred}`).
-- **Status**: oracle artefact committed (MMA reference + cpp.json +
-  mma.wl); C++ side flagged BLOCKED in the bench's `cpp_sampled_status`
-  with the architectural explanation.  Tracked as Phase 3.F follow-up.
-- **Status**: oracle artefact committed (MMA reference + cpp.json +
-  mma.wl); C++ side flagged BLOCKED in the bench's `cpp_sampled_status`
-  with the architectural explanation.  Tracked as Phase 3.F follow-up.
 
 ---
 
