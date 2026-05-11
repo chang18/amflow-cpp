@@ -12,7 +12,7 @@ cover.
 |---|---|---|
 | 🟢 verified                  | 86 | — |
 | 🟡 unverified (oracle gap)    |  0 | All 21 originally-🟡 audit rows are now closed.  Progression: **Phase 2A** closed 4 (LIBPDeriv multi-invariant 2026-05-09; Jordan block ordering, analyze_block non-nested overlapping, Calcx00 boundary linear-system selection 2026-05-10).  **Phase 2B** closed 4 (`r = nonzero(top) + IBPDot`, MasterRank/MasterDot non-exposure, SingleMassQ Numeric enhancement, factorize_family mass=−1 Numeric enhancement 2026-05-10/11).  **Audit cleanup** 2026-05-11 promoted 3 rows whose implementations actually landed in Phase 1A (`SolveIntegrals` single-eps fast path, per-system `AMFSystemDirection`, Cutkosky physical-mass safety check) to 🟢 with explicit Phase 1A attribution.  **Phase 2C** closed 5 (evaluate_taylor strips arb radii, zero_sector_q generic primes, region_power skips /.Numeric, factorize_family no-redef fallback, coefficient parser grammar lock 2026-05-11).  **Phase 3.A–E** 2026-05-11 closed the final 5 (Diffeq nested reduce conservative rank/dot floor, kira_target.m parser strictness, Auto-applied `Vacuum[L,n]` table, Ending-master Kira reduction loop, Calcx00 acb-inverse fallback) via a mix of new tests, equivalence paragraphs, and conservative-fallback documentation.  Future audit growth comes from Phase 3 oracle-diversity benches (L=4 / ≥3 invariants / mixed mass / multi-cut / extreme ε), each landing as 🟢 by construction. |
-| 🔴 actual divergence          |  6 | **5 fully fixed; 1 deferred indefinitely** (D5, ComplexMode — investigated post-v1.0 and found to require an algebra-layer extension; entry-point now rejects loudly).  D3 was upgraded from detect-and-throw (Phase 1A) to the proper projection (Phase 1B) with an oracle. |
+| 🔴 actual divergence          |  7 | **5 fully fixed; 1 deferred indefinitely (D5 ComplexMode); 1 oracle-exposed during Phase 3 (D7, dual-Kira-call master-count mismatch).**  D3 was upgraded from detect-and-throw (Phase 1A) to the proper projection (Phase 1B) with an oracle.  D7 was surfaced by the L=4 banana oracle in Phase 3.F (2026-05-11) and tracked with the MMA reference + bench triplet committed for verifying any future fix; C++ side flagged BLOCKED. |
 | ⚪ intentionally not ported   | 17 | — |
 
 Net assessment: **no oracle-validated path is wrong**, and **no
@@ -173,6 +173,58 @@ Full per-pass reports: `/tmp/audit_desolver.md`, `/tmp/audit_amflow.md`,
 - **Fix**: in `ibp::black_box_reduce`, before pushing an rhs entry,
   look up `target_key(rhs_j)` in `master_index`; on miss, raise
   `std::runtime_error` naming the offending target and rhs.
+
+### D7. `ibp::diffeq` master-count divergence between preheat and inner Kira — **OPEN (oracle-exposed, fix pending)**
+
+- **Upstream MMA** (`Kira/interface.m` `BlackBoxDiffeq` + `DifferentialEquation`):
+  a *single* Kira invocation (`IBPSystem`) sets up the IBP system at
+  the preheat `(rank, dot)`.  Both the preheat-master-detection step
+  (`GetFile["masters_mma"]`) and the subsequent `AnalyticReduction[integrals]`
+  calls read from this single Kira run's output, so the master list
+  they see is by-construction identical.  The defensive check
+  `If[masnew=!=masters, Abort]` (`DifferentialEquation` line in
+  `interface.m`) is therefore vacuously true.
+- **C++** (`src/ibp/reduce.cpp` `diffeq`, lines 275-341) makes *two*
+  independent Kira invocations: first a Masters-mode preheat at
+  `opts_eff = apply_jdot_jrank_floor(opts, {&jpreferred}, dot+1)`;
+  then an inner `reduce()` call which itself invokes Kira at a
+  potentially higher `(rank, dot)` (the inner floor adds the
+  derivative-shifted `all_ints` to the dot-bumping list).  The strict
+  equality check at `src/ibp/reduce.cpp:338` throws on any mismatch
+  between preheat-master-count and inner-master-count.
+- **Oracle exposure**: 4-loop equal-mass banana
+  ([`tools/bench/banana_4loop_eps001_*`](../tools/bench)) with
+  `BlackBoxDot=5`, target `J[banana4, 1,1,1,1,1, 0,...]`.  Preheat
+  finds 10 masters at dot=5 (max master JDot=5, e.g.
+  `J[1,1,1,1,6]`); `libp_deriv` shifts the dot to 6 in the derivative
+  integrals; the inner Reduce runs Kira at dot=6 and reports an
+  11-master set (the 10 preheat masters plus an additional
+  `J[1,1,1,1,7]`).  MMA on the same family completes in 385 s
+  (single-Kira-call structure makes its check vacuously true); C++
+  aborts immediately at the root AMFSystem's diffeq construction.
+  3-loop banana doesn't trip the check because its max master JDot
+  (=4 at `J[1,1,1,5]`) is strictly less than `BlackBoxDot=5`, so
+  derivative-shifted dot=5 stays within the preheat bound.
+- **Impact**: real correctness gap — C++ rejects a family that MMA
+  accepts.  Not silent-wrong (loud throw), but C++ refuses to compute
+  where upstream would succeed.  The MMA reference value is committed
+  in the bench triplet for verifying any future fix.
+- **Fix candidates** (any of these would close the row):
+  1. *Iterative master discovery* — after inner Reduce, detect extra
+     masters not in preheat; rerun `libp_deriv` on them; add results
+     to `all_ints`; invoke inner Reduce again; repeat until master
+     set is stable.  Converges in 1-2 iterations on typical families.
+  2. *Single-Kira-call refactor* — restructure `ibp::diffeq` to make
+     one Kira invocation that handles both master detection and
+     target reduction (mirrors upstream's structure).  Larger change
+     but cleanly eliminates the divergence source.
+  3. *Use inner masters as basis* — drop the strict check; use
+     `reduce_res.masters` directly as `out.sortedmasters`.  Requires
+     recomputing `libp_deriv` for the extra masters (else the diffeq
+     misses contributions).  Halfway point between (1) and (2).
+- **Status**: oracle artefact committed (MMA reference + cpp.json +
+  mma.wl); C++ side flagged BLOCKED in the bench's `cpp_sampled_status`
+  with the architectural explanation.  Tracked as Phase 3.F follow-up.
 
 ---
 

@@ -17,6 +17,13 @@ CLI="./build/src/cli/amflow_cli"
 
 BENCHES=(
   tools/bench/banana_3loop_eps001_black_box_amflow_cpp.json
+  # banana_4loop_eps001 (L=4 banana) is committed but expected to FAIL
+  # on C++ side until audit divergence D7 (dual-Kira-call master-count
+  # mismatch) is resolved.  Keep it in the rotation so the perf-audit
+  # report exposes the failure once-per-run; remove the comment once D7
+  # is fixed.  See docs/AUDIT_MMA_PARITY.md §D7 for the architectural
+  # explanation.
+  tools/bench/banana_4loop_eps001_black_box_amflow_cpp.json
   tools/bench/box1_d0_7_3_solve_integrals_cpp.json
   tools/bench/box1_single_solve_integrals_cpp.json
   tools/bench/cutbanana_3L_eps001_black_box_amflow_cpp.json

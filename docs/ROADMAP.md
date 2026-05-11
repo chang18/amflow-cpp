@@ -159,6 +159,36 @@ The 5 🟡 audit rows that survived through Phase 2 are now all 🟢:
 
 After 3.A–E, the audit table contains **86 🟢 / 0 🟡 / 6 🔴 (5 fixed + 1 deferred D5) / 17 ⚪**.
 
+### 3.F — L=4 banana oracle (2026-05-11) — **MMA reference committed; C++ BLOCKED on D7**
+
+First L=4 diversity-axis bench: 4-loop equal-mass banana sunrise
+(family `banana4`, 4 loops + 1 external leg, 5 massive propagators
++ 9 ISPs, target `J[1,1,1,1,1,0,…,0]` at psq=-3, msq=1, eps=1/1000).
+
+- **MMA reference** completed cleanly in 385 s.  10 sampled
+  integral values committed in `tools/bench/banana_4loop_eps001_mma_reference.json`.
+- **C++ failed** with `error: ibp::diffeq: master count differs
+  between Masters and Reduce calls`.  Root cause: dual-Kira-call
+  structural divergence from upstream's single-call pattern.
+  Surfaced as **new audit divergence D7** in `docs/AUDIT_MMA_PARITY.md`.
+- **Status**: bench triplet committed regardless (MMA reference is
+  a useful invariant for verifying any future D7 fix; the cpp.json
+  + mma.wl artefacts let the bench be re-run end-to-end once D7 is
+  resolved).  Bench is in `run_perf_audit.sh` rotation with a
+  marker comment.
+
+D7 fix paths (any one closes the row):
+1. Iterative master discovery — detect extra inner masters, rerun
+   `libp_deriv` on them, re-invoke inner Reduce, repeat until
+   stable.  Typical convergence 1-2 iterations.
+2. Single-Kira-call refactor — restructure `ibp::diffeq` to mirror
+   upstream's single-invocation pattern (one IBPSystem call, both
+   master detection and target reduction read from the same Kira
+   work_dir).  Cleaner but larger change.
+3. Use inner masters as basis — drop the strict equality check;
+   use `reduce_res.masters` directly.  Requires recomputing
+   `libp_deriv` for the extras.
+
 ### Oracle diversity expansion (ongoing, no fixed end)
 
 Beyond the (now-empty) 🟡 list, **diversify** the oracle set so that
