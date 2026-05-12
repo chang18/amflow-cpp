@@ -209,6 +209,29 @@ D7 fix landed 2026-05-12 (`src/ibp/reduce.cpp` `reduce` and
 Locked by L=4 banana oracle (rel 7.2 × 10⁻³¹ / 1.6 × 10⁻³⁰, 399 s).
 All 545 pre-existing tests remain green.
 
+### 3.G — Multi-invariant oracle (1-loop electroweak box, 2026-05-12) — **completed, matches MMA at rel ≤ 3.8 × 10⁻³⁰**
+
+First oracle for the **Invariants ≥3** diversity axis: 1-loop
+electroweak box `ewbox`, 4 propagators with alternating W/Z masses,
+4 massless external legs, 4 distinct kinematic invariants
+{`s, t, mWsq, mZsq`} at `s = 7, t = -3, mWsq = 1, mZsq = 4/3`,
+`eps = 1/1000`.
+
+- Targets: corner `j[ewbox, 1, 1, 1, 1]` + 6 sub-masters (W/Z
+  tadpoles, WW/ZZ bubbles, WZW/WZZ triangles).  All 7 sampled
+  values pass at rel ≤ 4 × 10⁻³⁰ (well within project tolerance).
+- MMA reference: 62 s.  C++ wallclock: 39 s (faster at 1-loop scale).
+- **No bug surfaced.**  The multi-invariant code paths
+  (`kira_yaml.cpp::mass_scale_names` → `kira_run.cpp` `-s` emission
+  → `libp_deriv` multi-invariant chain rule) all behaved correctly
+  end-to-end.  The WW bubble being above threshold (`s = 7 > 4mW² = 4`)
+  gives physical imaginary parts that lock the cross-mass-scale
+  branch-cut handling too.
+
+Triplet committed: `tools/bench/ewbox_1loop_eps001_black_box_amflow_{cpp.json,mma.wl}`
++ `tools/bench/ewbox_1loop_eps001_mma_reference.json`.  Added to
+`run_perf_audit.sh` rotation.
+
 ### Oracle diversity expansion (ongoing, no fixed end)
 
 Beyond the (now-empty) 🟡 list, **diversify** the oracle set so that
@@ -216,8 +239,8 @@ Beyond the (now-empty) 🟡 list, **diversify** the oracle set so that
 
 | Diversity axis | Current coverage | Target additions |
 |---|---|---|
-| Loop number  | L=1, 2, 3                          | L=4 (e.g. 4-loop banana, 4-loop sunrise) |
-| Invariants   | 1 (`s`) or 2 (`s, t`)              | ≥3 (electroweak: `s, t, m_W, m_Z`) |
+| Loop number  | L=1, 2, 3, **4 (banana, 2026-05-11)** | further L=4 (e.g. 4-loop sunrise) |
+| Invariants   | 1 (`s`) or 2 (`s, t`), **4 (ewbox `s, t, mWsq, mZsq`, 2026-05-12)** | further multi-invariant at higher L |
 | Mass config  | all-massless / all-equal-mass      | mixed (some massive, some massless) |
 | Cuts         | single phase-space (`cutbubble`/`cutsunrise`/`cutbanana`) | multi-cut Cutkosky |
 | Sector size  | ≤ 9 propagators                    | ≥ 10 |
