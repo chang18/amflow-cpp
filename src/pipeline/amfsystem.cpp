@@ -3005,6 +3005,51 @@ amf_system_setup_master(const qft::FamilyConfig& fc,
             "amf_system_setup_master: no eta-injection position found");
     }
     auto etac = qft::amf_eta_c(*fc_use, pos);
+    AMFLOW_TRACE("AMFLOW_DEBUG_SCHEME") {
+        std::cerr << "[scheme] Tradition fired: family=" << fc_use->family
+                  << " top={";
+        for (std::size_t i = 0; i < top.size(); ++i) {
+            if (i) std::cerr << ',';
+            std::cerr << top[i];
+        }
+        std::cerr << "} pos={";
+        for (std::size_t i = 0; i < pos.size(); ++i) {
+            if (i) std::cerr << ',';
+            std::cerr << pos[i];
+        }
+        std::cerr << "} etac=[";
+        for (std::size_t i = 0; i < etac.size(); ++i) {
+            if (i) std::cerr << ',';
+            std::cerr << etac[i];
+        }
+        std::cerr << "]" << std::endl;
+
+        // Detailed dump for D8 diagnosis: top-sector propagators + their
+        // U-polynomial component decomposition.
+        std::cerr << "    top-sector props (after conservation):" << std::endl;
+        for (std::size_t k = 0; k < top.size(); ++k) {
+            std::cerr << "      [" << top[k] << "] "
+                      << fc_use->propagators_after_conservation[top[k]].to_string()
+                      << std::endl;
+        }
+        auto comps = qft::analyze_top_sector(*fc_use, top);
+        std::cerr << "    components (" << comps.size() << "):" << std::endl;
+        for (std::size_t ci = 0; ci < comps.size(); ++ci) {
+            const auto& comp = comps[ci];
+            std::cerr << "      comp[" << ci << "] loopnum=" << comp.loopnum
+                      << " prop_index={";
+            for (std::size_t k = 0; k < comp.prop_index.size(); ++k) {
+                if (k) std::cerr << ',';
+                std::cerr << comp.prop_index[k];
+            }
+            std::cerr << "} mass=[";
+            for (std::size_t k = 0; k < comp.mass.size(); ++k) {
+                if (k) std::cerr << ',';
+                std::cerr << comp.mass[k].to_string();
+            }
+            std::cerr << "]" << std::endl;
+        }
+    }
     qft::FamilyConfig fc_copy = qft::FamilyConfig::build(
         fc_use->family, fc_use->loops, fc_use->legs,
         extract_conservation_strings(*fc_use),

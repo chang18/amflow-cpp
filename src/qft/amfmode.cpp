@@ -511,23 +511,41 @@ std::vector<std::size_t>
 amf_candidate(const FamilyConfig& fc,
               const std::vector<TopSectorComponentInfo>& info_list,
               AMFMode mode) {
-    std::vector<std::vector<std::size_t>> per_comp;
-    per_comp.reserve(info_list.size());
-    for (const auto& ci : info_list) {
-        per_comp.push_back(amf_candidate_component(fc, ci, mode));
-    }
+    // Mirrors upstream `AMFCandidate` (AMFlow.m:614-617).  The Prescription
+    // and All modes UNION candidates across components but explicitly
+    // restrict the iteration to non-vacuum components:
+    //
+    //   If[mode==="Prescription" || mode==="All",
+    //     candidates = AMFCandidateComponent[#, mode]&/@Select[info, !VacuumQ[#]&];
+    //     candidates = PutFirst[Join@@candidates],
+    //     candidates = AMFCandidateComponent[#, mode]&/@info]
+    //
+    // Without the vacuum filter, a vacuum-but-not-single-mass component
+    // (e.g. a 1-loop tadpole with a symbolic mass) falls through to the
+    // Branch fallback inside `amf_candidate_component` and contributes a
+    // non-empty candidate, polluting the Prescription/All result.  For
+    // banana_4L_mixed's first boundary sub-family (4 disconnected
+    // 1-loop tadpoles with masses {mAsq, 1, mAsq, 1}), this produced
+    // pos={0, 2} where MMA's filtered iteration produced pos={} and the
+    // Mass mode (which iterates all components) was then tried and
+    // returned the correct pos={0} per first non-empty component.
+    // (Audit divergence D8.)
     if (mode == AMFMode::Prescription || mode == AMFMode::All) {
         std::vector<std::size_t> flat;
         std::set<std::size_t> seen;
-        for (auto& v : per_comp) {
-            for (std::size_t x : v) {
+        for (const auto& ci : info_list) {
+            if (vacuum_q(ci)) continue;
+            auto cand = amf_candidate_component(fc, ci, mode);
+            for (std::size_t x : cand) {
                 if (seen.insert(x).second) flat.push_back(x);
             }
         }
         return flat;
     }
-    for (auto& v : per_comp) {
-        if (!v.empty()) return std::move(v);
+
+    for (const auto& ci : info_list) {
+        auto cand = amf_candidate_component(fc, ci, mode);
+        if (!cand.empty()) return cand;
     }
     return {};
 }

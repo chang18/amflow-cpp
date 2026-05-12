@@ -332,19 +332,54 @@ Net oracle count: **20 → 30**.  9 of 10 match MMA at rel ≲ 5 × 10⁻³⁰.
 
 **Audit divergence D8 (banana_4L_mixed):** 4-loop mixed-mass banana
 C++ vs MMA disagrees catastrophically (rel up to 10³ on real part)
-on **every integral with all 5 mass-bearing propagators present**;
+on every integral with all 5 mass-bearing propagators present;
 the 2 sub-masters where one propagator is absent still match at
-rel ~6 × 10⁻³¹.  Likely root cause: AMFlow η-injection mode
-selection under mixed-mass families — upstream MMA injects η on
-the mBsq propagators only (`-eta + l2² - mBsq`, `-eta + l4² - mBsq`)
-while keeping mAsq unchanged; C++ likely picks a different
-`AMFMode` strategy or injects on a different propagator subset.
-The 4-loop topology (3.F axis) and mixed-mass (3.I axis) work
-independently in earlier oracles; their combination breaks here.
-Tracked as D8 in `banana_4L_mixed_mma_reference.json::cpp_sampled_status`
-and pending follow-up — same investigation pattern as D7 (deep
-read of upstream `AMFSystemSetup` η-injection picker, then mirror
-in `src/pipeline/amfsystem.cpp`).
+rel ~6 × 10⁻³¹.
+
+**Partial fix landed 2026-05-12** (`src/qft/amfmode.cpp::amf_candidate`):
+The first identified divergence is now mirrored faithfully from
+upstream's `AMFCandidate` (AMFlow.m:614-617):
+
+  Prescription and All modes UNION candidates across **non-vacuum**
+  components only — `Select[info, !VacuumQ[#] &]`.  C++'s prior
+  implementation iterated all components, letting vacuum-but-not-
+  single-mass components fall through to the Branch fallback and
+  contribute spurious candidates.  Net effect on banana_4L_mixed's
+  first boundary sub-family (4 disconnected 1-loop tadpoles with
+  masses {mAsq, 1, mAsq, 1}): C++ now picks `pos = {0}` matching
+  MMA system 2's `-eta + l1² - mAsq`, instead of the buggy
+  `pos = {0, 2}`.  Verified via `AMFLOW_DEBUG_SCHEME=1` trace; the
+  full 545-test suite still passes (no regression).
+
+**D8 is NOT fully closed.** The picker is now MMA-correct, but the
+numerical output of banana_4L_mixed is **unchanged** by the fix —
+the 18-of-20 failure pattern and the specific wrong corner value
+3.98 × 10¹⁵ persist bit-for-bit.  Two interpretations both hold:
+
+  1. The picker fix is *necessary but not sufficient*: another
+     downstream divergence (likely in the boundary-value
+     construction in `AMFSystem::build_boundary` or in how
+     boundary results are combined into the parent's η-flow
+     ODE) produces the same wrong numbers regardless of which
+     η-injection point the picker chose.
+
+  2. The bug-vs-fix code paths happen to produce *numerically
+     equivalent intermediate boundary values* through some
+     symmetry of the disconnected 4-tadpole structure
+     (T(mAsq+η)·T(mAsq+η)·T(1)·T(1) and T(mAsq+η)·T(mAsq)·T(1)·T(1)
+     agree at η=0, where the answer is read off), masking the
+     downstream bug.
+
+Next investigation step: dump the per-region boundary integrals
+(post-`AMFSystem::build_boundary`) for both MMA and C++,
+compare numerically.  The trace points are
+`AMFSystem::compute_boundary_integrals` and the
+`amf_systems_solution` aggregation.  Reuse the existing
+`AMFLOW_DEBUG_BC` env var.
+
+The new `AMFLOW_DEBUG_SCHEME` trace in `amf_system_setup_master`'s
+Tradition branch (added 2026-05-12) prints the per-system `pos`
+and `etac` and remains useful for any further D8 diagnosis.
 
 Three of the 10 needed an iteration on the family setup itself
 (authoring quirks, not algorithm bugs):
