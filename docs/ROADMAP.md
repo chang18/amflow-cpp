@@ -256,6 +256,29 @@ Triplet committed: `tools/bench/cutbanana_4L_eps001_black_box_amflow_{cpp.json,m
 + `tools/bench/cutbanana_4L_eps001_mma_reference.json`.  Added to
 `run_perf_audit.sh` rotation.
 
+### 3.I — Mixed-mass oracle (3-loop banana 1m+3 massless, 2026-05-12) — **completed, matches MMA at rel ≤ 2.88 × 10⁻³⁰**
+
+First 3-loop oracle for the **mixed-mass** diversity axis (some
+massive, some massless propagators): family `bn3mix`, same 3-loop
+banana topology as `banana_3loop` but with only the first internal
+line carrying the W-like `msq`; the other 3 internal lines are
+massless.  Exercises AMFlow's mass-injection AMFMode (η on the
+single massive propagator) and scaleless-sub-sector detection
+under mixed-mass conditions — neither covered before (banana_3loop
+is all-equal-mass; tt_2loop_box is 2-loop mixed).
+
+- Targets: corner `j[bn3mix, 1,1,1,1, 0,...]` + 4 dotted masters.
+  All 5 sampled values pass at rel ≤ 2.88 × 10⁻³⁰.
+- MMA reference: 96 s.  C++ wallclock: 56 s (~1.7× faster).
+- **No bug surfaced.**  4-level subsystem recursion (3-loop top
+  → 2/1-loop intermediates → vacuum ending) mirrored by the C++
+  `AMFSystemSolution` chain.  Imag parts at numerical noise
+  floor (~10⁻⁸⁴), confirming Euclidean-kinematics realness.
+
+Triplet committed: `tools/bench/bn3mix_eps001_black_box_amflow_{cpp.json,mma.wl}`
++ `tools/bench/bn3mix_eps001_mma_reference.json`.  Added to
+`run_perf_audit.sh` rotation.
+
 ### Oracle diversity expansion (ongoing, no fixed end)
 
 Beyond the (now-empty) 🟡 list, **diversify** the oracle set so that
@@ -265,7 +288,7 @@ Beyond the (now-empty) 🟡 list, **diversify** the oracle set so that
 |---|---|---|
 | Loop number  | L=1, 2, 3, **4 (banana, 2026-05-11)** | further L=4 (e.g. 4-loop sunrise) |
 | Invariants   | 1 (`s`) or 2 (`s, t`), **4 (ewbox `s, t, mWsq, mZsq`, 2026-05-12)** | further multi-invariant at higher L |
-| Mass config  | all-massless / all-equal-mass      | mixed (some massive, some massless) |
+| Mass config  | all-massless / all-equal-mass, mixed at 2 loops (tt_2loop_box), **mixed at 3 loops (bn3mix, 2026-05-12)** | further mixed-mass at higher L |
 | Cuts         | single phase-space (cutbubble 2-cut, cutsunrise 3-cut, cutbanana_3L 4-cut), **5-cut (cutbanana_4L, 2026-05-12)** | further multi-cut topologies |
 | Sector size  | ≤ 9 propagators                    | ≥ 10 |
 | `eps` extremes | `1/1000`, `1/100`                | `1/1`, `1/10000` (boundary cases) |
