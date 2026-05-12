@@ -176,15 +176,15 @@
     }
   ],
   "cpp_sampled_status": {
-    "date": "2026-05-12",
-    "result": "DIVERGENCE: 18 of 20 sampled values FAIL against the MMA reference.  C++ agrees with MMA on the two sub-master integrals where one propagator is absent ([1,1,1,1,0,...] and [1,1,1,0,1,...] at rel ~6e-31 and 2.9e-31), but every integral with all 5 mass-bearing propagators present is off by enormous factors (rel from O(1) to O(1400) on real part).  Likely root cause: AMFlow eta-injection mode selection under mixed-mass families.  Upstream MMA injects eta on the mBsq propagators only (l2 and l4: -eta + l2^2 - mBsq, -eta + l4^2 - mBsq, while l1/l3/l5 keep mAsq unchanged); C++ likely picks a different AMFMode strategy, or injects on a different propagator subset.  This is a real Phase 3 finding \u2014 the mixed-mass 4-loop banana case combines two diversity axes (3.F + 3.I) that work independently but break together.  Tracked as audit divergence D8; pending follow-up.",
+    "date": "2026-05-13",
+    "result": "PASS: all 20 of 20 sampled values match MMA at full numerical precision.  D8 closed by removing the descending-by-offset sort in src/ode/inf.cpp::canonical_boundary_permutation and the dual sort in canonical_taylor_permutation.  MMA's DESolver runs BuildTaylor/ConstructMatrix/SparseGaussian with NO row permutation (DESolver.m:705-728 + 752-790); the C++ port had ported the surrounding structure with two stable_sort calls that re-routed Gaussian-elimination's free-variable assignment, so the per-region order=0 master assignment and the CalcTaylor BC routing both ended up on different masters than MMA.  Both functions now concatenate analyze_block's output in its natural topological order.",
     "command": "./build/src/cli/amflow_cli tools/bench/banana_4L_mixed_black_box_amflow_cpp.json /tmp/amflow_banana_4L_mixed_cpp_out.json",
     "output": "/tmp/amflow_banana_4L_mixed_cpp_out.json",
-    "elapsed_seconds": null,
+    "elapsed_seconds": 2042,
     "max_relative_difference": {
-      "re": "1.396e+3",
-      "im": "1.3e+78"
+      "re": "<1e-30",
+      "im": "<1e-30"
     },
-    "note": "PRE-EXISTING bug surfaced by this Phase 3 batch-2 oracle.  All other 9 oracles in batch-2 pass cleanly; this one is committed with this divergence note to make the bug actionable.  Compare via tools/bench/compare_sampled.py."
+    "note": "D8 closed 2026-05-13.  See docs/ROADMAP.md D8 section + src/ode/inf.cpp:289-340 for the root-cause analysis and fix.  Compare via tools/bench/compare_sampled.py."
   }
 }

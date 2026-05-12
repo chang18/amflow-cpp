@@ -289,18 +289,21 @@ RationalMatrix build_taylor_symbolic(const RationalMatrix& mat,
 std::vector<std::size_t>
 canonical_boundary_permutation(const std::vector<std::vector<std::size_t>>& blocks,
                                const std::vector<long>& int_offsets) {
+    // MMA's DESolver `DetermineBlockBoundaryOrder` (DESolver.m:705-728) does
+    // NOT permute the matrix before BuildTaylor/ConstructMatrix/SparseGaussian:
+    // the column-processing order in SparseGaussian is the ORIGINAL master
+    // order.  Sorting by offset (the previous behaviour) was a port-time
+    // mistake: it changes which column SparseGaussian picks as the free
+    // variable, so the boundary-order assignment can land on the wrong
+    // master when a block contains masters with varied integer offsets.
+    // Concretely, audit divergence D8 (banana_4L_mixed, region 3) attributed
+    // the only order=0 in a 19-master block to master[8]=[1,1,1,1,3] under
+    // the old descending sort, while MMA assigns it to master[20]=[1,1,1,1,7]
+    // — propagating into a 637× error on the corner.
     std::vector<std::size_t> perm;
     perm.reserve(int_offsets.size());
     for (const auto& blk : blocks) {
-        std::vector<std::size_t> ordered = blk;
-        std::stable_sort(ordered.begin(), ordered.end(),
-                         [&](std::size_t a, std::size_t b) {
-                             if (int_offsets[a] != int_offsets[b]) {
-                                 return int_offsets[a] > int_offsets[b];
-                             }
-                             return a < b;
-                         });
-        perm.insert(perm.end(), ordered.begin(), ordered.end());
+        perm.insert(perm.end(), blk.begin(), blk.end());
     }
     return perm;
 }
@@ -317,23 +320,22 @@ std::vector<std::size_t>
 canonical_taylor_permutation(const std::vector<std::vector<std::size_t>>& blocks,
                              const std::vector<long>& int_offsets,
                              const TaylorRegionInput& bc) {
+    // MMA's `DESolver.CalcTaylor` does NOT permute the matrix before
+    // BuildTaylor/ConstructMatrix/SparseGaussian — see DESolver.m:752-790.
+    // It iterates blocks straight from `AnalyzeBlock[mat]` and the `block`
+    // variable retains the ORIGINAL master indices throughout SparseGaussian
+    // and fid lookup.
+    //
+    // The previous version sorted within each block by
+    // (boundary_row_has_nonzero asc, int_offsets asc, index asc) — a
+    // port-time heuristic that re-routes Gauss-elimination's free column
+    // to a different master.  See D8 root-cause analysis in ROADMAP.md.
+    (void)int_offsets;
+    (void)bc;
     std::vector<std::size_t> perm;
     perm.reserve(int_offsets.size());
     for (const auto& blk : blocks) {
-        std::vector<std::size_t> ordered = blk;
-        std::stable_sort(ordered.begin(), ordered.end(),
-                         [&](std::size_t a, std::size_t b) {
-                             bool a_nonzero = boundary_row_has_nonzero(bc[a]);
-                             bool b_nonzero = boundary_row_has_nonzero(bc[b]);
-                             if (a_nonzero != b_nonzero) {
-                                 return (!a_nonzero && b_nonzero);
-                             }
-                             if (int_offsets[a] != int_offsets[b]) {
-                                 return int_offsets[a] < int_offsets[b];
-                             }
-                             return a < b;
-                         });
-        perm.insert(perm.end(), ordered.begin(), ordered.end());
+        perm.insert(perm.end(), blk.begin(), blk.end());
     }
     return perm;
 }
@@ -443,6 +445,14 @@ determine_block_boundary_order_impl(const RationalMatrix& block_mat,
 
     auto canonical_perm =
         canonical_boundary_permutation(analyze_block(block_mat), int_offsets);
+    AMFLOW_TRACE("AMFLOW_DEBUG_BC") {
+        std::cerr << "[dbo] Nblock=" << Nblock << " perm=[";
+        for (std::size_t i = 0; i < canonical_perm.size(); ++i) {
+            if (i) std::cerr << ",";
+            std::cerr << canonical_perm[i];
+        }
+        std::cerr << "]\n";
+    }
     RationalMatrix block_mat_c = permute_matrix(block_mat, canonical_perm);
     auto int_offsets_c = permute_long_vec(int_offsets, canonical_perm);
     auto ini_rat_c     = permute_rational_vec(ini_rat, canonical_perm);

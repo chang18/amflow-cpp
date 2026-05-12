@@ -351,31 +351,52 @@ upstream's `AMFCandidate` (AMFlow.m:614-617):
   `pos = {0, 2}`.  Verified via `AMFLOW_DEBUG_SCHEME=1` trace; the
   full 545-test suite still passes (no regression).
 
-**D8 is NOT fully closed.** The picker is now MMA-correct, but the
-numerical output of banana_4L_mixed is **unchanged** by the fix —
-the 18-of-20 failure pattern and the specific wrong corner value
-3.98 × 10¹⁵ persist bit-for-bit.  Two interpretations both hold:
+**D8 root cause located + fixed 2026-05-13** (`src/ode/inf.cpp`):
 
-  1. The picker fix is *necessary but not sufficient*: another
-     downstream divergence (likely in the boundary-value
-     construction in `AMFSystem::build_boundary` or in how
-     boundary results are combined into the parent's η-flow
-     ODE) produces the same wrong numbers regardless of which
-     η-injection point the picker chose.
+MMA's `DESolver` runs `BuildTaylor → ConstructMatrix → SparseGaussian`
+with NO row permutation — both `DetermineBlockBoundaryOrder`
+(DESolver.m:705-728) and `CalcTaylor` (DESolver.m:752-790) iterate
+blocks straight from `AnalyzeBlock[mat]` and the `block` variable
+retains the ORIGINAL master indices throughout SparseGaussian and
+fid lookup.
 
-  2. The bug-vs-fix code paths happen to produce *numerically
-     equivalent intermediate boundary values* through some
-     symmetry of the disconnected 4-tadpole structure
-     (T(mAsq+η)·T(mAsq+η)·T(1)·T(1) and T(mAsq+η)·T(mAsq)·T(1)·T(1)
-     agree at η=0, where the answer is read off), masking the
-     downstream bug.
+The C++ port had ported the structure with TWO separate `stable_sort`
+calls that re-routed Gauss-elimination's free column:
 
-Next investigation step: dump the per-region boundary integrals
-(post-`AMFSystem::build_boundary`) for both MMA and C++,
-compare numerically.  The trace points are
-`AMFSystem::compute_boundary_integrals` and the
-`amf_systems_solution` aggregation.  Reuse the existing
-`AMFLOW_DEBUG_BC` env var.
+  * `canonical_boundary_permutation` — sorted rows DESCENDING by
+    `int_offsets[i] = power_q[i] - power_q[0]` before BuildTaylor,
+    used in `determine_block_boundary_order_impl`.  This redirected
+    the per-region order=0 master assignment.
+  * `canonical_taylor_permutation` — sorted rows by
+    (boundary_row_has_nonzero asc, int_offsets asc, index asc),
+    used in `calc_taylor_with_ini`.  This redirected the BC
+    insertion target during ODE evolution.
+
+The two sorts COMPENSATED for each other in simple cases (the 545
+existing tests all happened to land on small blocks or symmetric
+configurations where the net effect was zero), so the bug only
+surfaced on the deepest test: banana_4L_mixed's 21-master block in
+region 3 (scale [1,1,1,1]) with monotone offsets
+[0,0,1,2,2,3,3,3,3,4,4,4,4,4,5,5,5,5,6,6,7].  Fixing either sort
+alone left the FINAL corner value unchanged because the other still
+neutralized the effect; fixing BOTH made the corner match MMA at
+rel < 1e-30.
+
+  * MMA: order=0 lands at master[20] = [1,1,1,1,7].
+  * C++ (old, both sorts): order=0 landed at master[8] = [1,1,1,1,3]
+    in `border`, but `canonical_taylor_permutation` re-routed the
+    BC during `calc_taylor_with_ini` such that the final corner
+    was wrong by a uniform 637×.
+
+The picker fix (`amf_candidate` non-vacuum filter, landed earlier
+in 2026-05-12) remained correct and necessary as an upstream
+prerequisite — it just wasn't the proximate cause of D8.
+
+**Fix:** Both `canonical_boundary_permutation` and
+`canonical_taylor_permutation` now return the identity permutation
+(concatenate `analyze_block` output without re-sorting), exactly
+mirroring MMA's no-permutation convention.  All 545 previously-
+passing tests still pass.
 
 The new `AMFLOW_DEBUG_SCHEME` trace in `amf_system_setup_master`'s
 Tradition branch (added 2026-05-12) prints the per-system `pos`
