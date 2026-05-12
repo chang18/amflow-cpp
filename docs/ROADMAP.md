@@ -232,6 +232,30 @@ Triplet committed: `tools/bench/ewbox_1loop_eps001_black_box_amflow_{cpp.json,mm
 + `tools/bench/ewbox_1loop_eps001_mma_reference.json`.  Added to
 `run_perf_audit.sh` rotation.
 
+### 3.H — Multi-cut Cutkosky oracle (4-loop massless cutbanana, 2026-05-12) — **completed, matches MMA at rel ≤ 2.2 × 10⁻³⁰**
+
+First oracle for the **multi-cut Cutkosky** diversity axis: 4-loop
+massless equal-mass cutbanana `cutbanana4` with all 5 internal
+lines simultaneously on-shell, corresponding to a 5-particle
+Cutkosky cut at `s = 4, eps = 1/100`.  Extends the cut series
+(cutbubble 2-cut → cutsunrise 3-cut → cutbanana_3L 4-cut) to 5
+simultaneous cuts in a 4-loop family.
+
+- Targets: corner `j[cutbanana4, 1,1,1,1,1, 0,...]` + 3 dotted
+  masters (5th index 2, 3, 4).  All 4 sampled values pass at rel
+  ≤ 2.2 × 10⁻³⁰.  All imag parts zero as expected for pure-real
+  Cutkosky phase-space integrals.
+- MMA reference: 149 s.  C++ wallclock: 141 s (within 6%).
+- **No bug surfaced.**  MMA log shows 5-level subsystem recursion
+  (4-loop top down through 3/2/1-loop intermediate subsystems to
+  the vacuum ending) and the C++ `AMFSystemSolution` chain mirrors
+  it exactly — Cutkosky ending scheme + `cut_propagators` wiring +
+  multi-system recursion all behaved correctly end-to-end.
+
+Triplet committed: `tools/bench/cutbanana_4L_eps001_black_box_amflow_{cpp.json,mma.wl}`
++ `tools/bench/cutbanana_4L_eps001_mma_reference.json`.  Added to
+`run_perf_audit.sh` rotation.
+
 ### Oracle diversity expansion (ongoing, no fixed end)
 
 Beyond the (now-empty) 🟡 list, **diversify** the oracle set so that
@@ -242,7 +266,7 @@ Beyond the (now-empty) 🟡 list, **diversify** the oracle set so that
 | Loop number  | L=1, 2, 3, **4 (banana, 2026-05-11)** | further L=4 (e.g. 4-loop sunrise) |
 | Invariants   | 1 (`s`) or 2 (`s, t`), **4 (ewbox `s, t, mWsq, mZsq`, 2026-05-12)** | further multi-invariant at higher L |
 | Mass config  | all-massless / all-equal-mass      | mixed (some massive, some massless) |
-| Cuts         | single phase-space (`cutbubble`/`cutsunrise`/`cutbanana`) | multi-cut Cutkosky |
+| Cuts         | single phase-space (cutbubble 2-cut, cutsunrise 3-cut, cutbanana_3L 4-cut), **5-cut (cutbanana_4L, 2026-05-12)** | further multi-cut topologies |
 | Sector size  | ≤ 9 propagators                    | ≥ 10 |
 | `eps` extremes | `1/1000`, `1/100`                | `1/1`, `1/10000` (boundary cases) |
 

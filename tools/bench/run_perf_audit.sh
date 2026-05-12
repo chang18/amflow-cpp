@@ -21,6 +21,7 @@ BENCHES=(
   tools/bench/box1_d0_7_3_solve_integrals_cpp.json
   tools/bench/box1_single_solve_integrals_cpp.json
   tools/bench/cutbanana_3L_eps001_black_box_amflow_cpp.json
+  tools/bench/cutbanana_4L_eps001_black_box_amflow_cpp.json
   tools/bench/cutbubble_1L_eps001_black_box_amflow_cpp.json
   tools/bench/cutsunrise_2L_eps001_black_box_amflow_cpp.json
   tools/bench/doublebox_sv_eps001_black_box_amflow_cpp.json
