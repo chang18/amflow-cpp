@@ -5,12 +5,51 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## Unreleased — post-v1.0 audit-driven patches
+## [1.1.0] — 2026-05-12
 
-Patch-level commits on top of v1.0.0 (no version bump yet).
-Together they close all silent-wrong-result paths surfaced by the
-post-release line-level MMA parity audit
-([`docs/AUDIT_MMA_PARITY.md`](docs/AUDIT_MMA_PARITY.md)).
+Post-v1.0 audit-driven correctness pass + Phase 3 oracle diversity
+expansion.  Together they close all silent-wrong-result paths
+surfaced by the post-release line-level MMA parity audit
+([`docs/AUDIT_MMA_PARITY.md`](docs/AUDIT_MMA_PARITY.md)) and open
+the project's five "we-didn't-think-of-this" oracle diversity axes.
+
+After v1.1.0 the audit table reads
+**86 🟢 / 0 🟡 / 7 🔴 (6 fixed + 1 D5 deferred indefinitely) /
+17 ⚪**, and the oracle suite covers all 5 diversity axes
+(loop number L ≤ 4, ≥ 3 kinematic invariants, multi-cut Cutkosky,
+mixed-mass, and ε-extremes) with rel ≤ ~10⁻³⁰ across the new
+oracles.
+
+### Added — Phase 3 oracle diversity expansion
+- 3.F **L=4 banana oracle** (`tools/bench/banana_4loop_eps001_*`):
+  4-loop equal-mass banana sunrise at `psq=-3, msq=1, eps=1/1000`.
+  Surfaced and locked audit divergence **D7** (see Fixed below).
+  Matches MMA at rel 7.2 × 10⁻³¹ / 1.6 × 10⁻³⁰ (C++ 399 s vs MMA
+  385 s).
+- 3.G **multi-invariant electroweak box oracle**
+  (`tools/bench/ewbox_1loop_eps001_*`): 1-loop electroweak box with
+  alternating W/Z masses and 4 distinct kinematic invariants
+  {`s, t, mWsq, mZsq`}.  Matches at rel ≤ 3.8 × 10⁻³⁰ (C++ 39 s
+  vs MMA 62 s).  WW bubble above threshold gives physical imag
+  part, locking cross-mass branch-cut handling.
+- 3.H **multi-cut Cutkosky oracle** (`tools/bench/cutbanana_4L_eps001_*`):
+  4-loop massless cutbanana with all 5 internal lines on-shell
+  (5-particle Cutkosky cut).  Matches at rel ≤ 2.2 × 10⁻³⁰
+  (C++ 141 s vs MMA 149 s).  5-level subsystem recursion verified
+  end-to-end.
+- 3.I **mixed-mass oracle** (`tools/bench/bn3mix_eps001_*`):
+  3-loop banana with 1 W-massive + 3 massless internal propagators
+  — first 3-loop mixed-mass case.  Matches at rel ≤ 2.9 × 10⁻³⁰
+  (C++ 56 s vs MMA 96 s).  Exercises scaleless-sub-sector
+  detection under mixed mass.
+- 3.J **ε-extremes oracles** (`tools/bench/cutbubble_1L_eps{2,10000}_*`):
+  cutbubble at eps = 1/2 (D = 3) matches at rel 1.9 × 10⁻⁶⁴ on
+  the exact value 1/8; at eps = 10⁻⁴ matches at rel 1.0 × 10⁻³².
+  An initial run at eps = 1 (D = 2) revealed an upstream MMA
+  AMFlow limitation (DESolver returns partially-symbolic
+  `(1/2π) Im[DESolver\`Private\`variables[1, 1]]`); eps = 1/2 was
+  used as the next-most-extreme rational that yields a clean
+  numeric — documented in the bench source comment.
 
 ### Fixed (alignment with upstream)
 - `RunningOptions::run_length` default raised from 200 to **1000** to
@@ -44,11 +83,37 @@ post-release line-level MMA parity audit
   unit-leading-loop-coefficient precondition before the missing
   `|Det|^(4-2eps)` Jacobian factor (upstream `AMFlow.m:731-732`)
   silently produces wrong boundary integrands.  (Audit D4.)
+- **D7 — dual-Kira-call master-count divergence.**  `ibp::reduce`
+  and `ibp::diffeq` now mirror upstream's `BlackBoxReduce` /
+  `BlackBoxDiffeq` two-call pattern: a Masters-mode preheat call
+  (sector-wide enumeration via `select_mandatory_recursively`)
+  followed by a Reduce-mode call (`select_mandatory_list` for the
+  specific targets), both at the same `(rank, dot)`.  Each call
+  runs in its own subdirectory (`<work_dir>/masters_preheat/` and
+  `<work_dir>/target_reduce/`) because the Kira 2.x release
+  refuses to share a `$ReductionDirectory` between the two calls
+  (Masters-mode `run_initiate: masters` doesn't register the `-s`
+  numeric substitutions, and the subsequent Reduce-mode call
+  aborts with `Kira::update_auxiliary_file: Last Kira run set 0
+  variables to numeric values, this time you request N`).
+  `ibp::diffeq` also no longer calls nested `reduce()` (which
+  would re-floor `(rank, dot)` over the derivative integrals — the
+  L=4 banana failure mode); it inlines the Reduce-mode Kira
+  invocation at `opts_eff`'s `(rank, dot)`, mirroring upstream's
+  `AnalyticReduction` which inherits `IBPRank`/`IBPDot` globals
+  from `IBPSystem`.  Both functions add a SubsetQ guard on the
+  Reduce-mode master file against the Masters-mode sector
+  enumeration, mirroring upstream's
+  `If[!SubsetQ[masters, str], Abort["inconsistent masters from
+  Kira"]]`.  Locked by the L=4 banana oracle.  (Audit D7.)
 
 ### Added
 - [`docs/AUDIT_MMA_PARITY.md`](docs/AUDIT_MMA_PARITY.md): line-level
-  upstream-parity audit report.  65 🟢 verified / 21 🟡 unverified /
-  6 🔴 (5 fully fixed, 1 deferred to v1.1) / 17 ⚪ not ported.
+  upstream-parity audit report.  86 🟢 verified / 0 🟡 unverified /
+  7 🔴 (6 fully fixed, 1 D5 deferred indefinitely) / 17 ⚪ not
+  ported.  (Started at 65 🟢 / 21 🟡 / 6 🔴 in v1.0.0; the post-v1.0
+  pass closed every 🟡, fixed 6 of the 7 🔴, and surfaced D7 as
+  the seventh 🔴 — now fixed too.)
 - [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md): wall-clock baseline
   vs MMA on the 12 oracle benchmarks.  Median speedup ~2× on
   Kira-light benches; converges to ~1× on Kira-heavy benches.
@@ -57,9 +122,14 @@ post-release line-level MMA parity audit
   Phase 3 ongoing diversification).
 - [`tools/bench/run_perf_audit.sh`](tools/bench/run_perf_audit.sh):
   shell driver to reproduce the perf run.
-- New oracle benchmark
-  [`tools/bench/tradcut_phase_2L_eps001_*`](tools/bench): the first
-  Tradition-with-cut parity test (D3 acceptance gate).
+- New oracle benchmarks under `tools/bench/`:
+  - `tradcut_phase_2L_eps001_*` — first Tradition-with-cut parity
+    test (D3 acceptance gate).
+  - `banana_4loop_eps001_*` — Phase 3.F first L=4 oracle (D7 gate).
+  - `ewbox_1loop_eps001_*` — Phase 3.G multi-invariant oracle.
+  - `cutbanana_4L_eps001_*` — Phase 3.H 5-particle Cutkosky oracle.
+  - `bn3mix_eps001_*` — Phase 3.I 3-loop mixed-mass oracle.
+  - `cutbubble_1L_eps{2,10000}_*` — Phase 3.J ε-extremes oracles.
 - New ending scheme: `EndingScheme::Trivial`, auto-appended to the
   user's `ending_schemes` list as a final fallback (mirror of
   upstream `AMFlow.m:1034`).
@@ -94,12 +164,6 @@ post-release line-level MMA parity audit
   D5 and [`docs/ROADMAP.md`](docs/ROADMAP.md) §"Phase 1C" for the
   architectural trade-off (Q[i] algebra extension vs. parallel
   acb-rational pipeline).
-- ~~**`Trivial` ending scheme is not ported.**~~  Now ported (Phase 1A).
-  Upstream auto-appends `"Trivial"` to the user's `EndingScheme` list
-  as a fallback when none of `Tradition` / `Cutkosky` / `SingleMass` apply
-  (`AMFlow.m:1016-1095`).  No oracle currently configures this
-  fallback path.  Planned for v1.1.
-
 ## [1.0.0] — 2026-05-08
 
 First public release.  C++17 reimplementation of the
@@ -140,4 +204,5 @@ numerical-parity test/benchmark harness.
 - `SolveIntegralsGaugeLink`, HQET / SCET / Wilson-line workflows — see
   `AUDIT.md`.
 
+[1.1.0]: https://github.com/chang18/amflow-cpp/releases/tag/v1.1.0
 [1.0.0]: https://github.com/chang18/amflow-cpp/releases/tag/v1.0.0

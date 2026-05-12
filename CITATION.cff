@@ -13,8 +13,8 @@ abstract: >-
   package AMFlow (https://gitlab.com/multiloop-pku/amflow).
 type: software
 license: MIT
-version: 1.0.0
-date-released: 2026-05-08
+version: 1.1.0
+date-released: 2026-05-12
 doi: "10.5281/zenodo.20087172"
 url: "https://github.com/chang18/amflow-cpp"
 repository-code: "https://github.com/chang18/amflow-cpp"
