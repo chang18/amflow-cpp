@@ -5,6 +5,28 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+- **Audit divergence D8** (`canonical_boundary_permutation` +
+  `canonical_taylor_permutation` re-route SparseGaussian's free
+  column): both functions in `src/ode/inf.cpp` previously sorted
+  block rows by `int_offsets` before calling `BuildTaylor` /
+  `ConstructMatrix` / `SparseGaussian`.  Upstream MMA's `DESolver`
+  uses NO row permutation in either `DetermineBlockBoundaryOrder`
+  (DESolver.m:705-728) or `CalcTaylor` (DESolver.m:752-790), so the
+  C++ sorts re-routed which master ended up holding the free
+  (unsolved) column after Gaussian elimination.  The two sorts
+  compensated for each other on small / symmetric blocks (all 545
+  pre-D8 gtests passed), so D8 only surfaced on
+  `banana_4L_mixed`'s 21-master block in region 3 with monotone
+  offsets `[0,0,1,2,2,3,3,3,3,4,4,4,4,4,5,5,5,5,6,6,7]`.  Both
+  functions now return identity (concatenate `analyze_block`
+  output without re-sorting).  `banana_4L_mixed` now matches MMA
+  at rel < 1e-30 on all 20 sampled values (was 2/20); all 545
+  gtests still pass.  Commit `c668f79`.  Audit table is now
+  **86 🟢 / 0 🟡 / 8 🔴 (7 fixed + 1 D5 deferred indefinitely) / 17 ⚪**.
+
 ## [1.1.0] — 2026-05-12
 
 Post-v1.0 audit-driven correctness pass + Phase 3 oracle diversity
