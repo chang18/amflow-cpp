@@ -308,6 +308,63 @@ Triplets committed: `tools/bench/cutbubble_1L_eps{2,10000}_black_box_amflow_{cpp
 + `cutbubble_1L_eps{2,10000}_mma_reference.json`.  Both added to
 `run_perf_audit.sh` rotation.
 
+### Phase 3 batch-2 oracle expansion (2026-05-12) — **10 oracles: 9 pass, 1 surfaces audit divergence D8**
+
+A targeted batch of 10 additional ≤4-loop oracles, each carrying a
+**distinctive characteristic** complementary to the existing suite.
+All committed as cpp.json + mma.wl + mma_reference.json triplets in
+`tools/bench/` and added to `run_perf_audit.sh` rotation.
+
+| # | Oracle | L | Distinctive characteristic | C++ vs MMA |
+|---|---|---|---|---|
+| 1 | `bubble_1L_diffmass` | 1 | Two distinct propagator masses (3 invariants) | rel 9.8 × 10⁻³¹ |
+| 2 | `triangle_1L_3mass` | 1 | Three distinct internal masses (4 invariants) | rel 4.2 × 10⁻³⁰ |
+| 3 | `vacuum_2L_sunrise` | 2 | **Zero external legs** (Vacuum lookup-table path) | rel 1.9 × 10⁻³⁰ |
+| 4 | `sunrise_2L_threshold` | 2 | Evaluated **exactly at s = 9 m²** (3-particle threshold) | rel 2.4 × 10⁻³⁰ |
+| 5 | `xbox_2L_eps10` | 2 | **Intermediate ε = 1/10** (D ≈ 3.8, fills 1/100 ↔ 1/2 gap) | rel 2.7 × 10⁻³⁰ |
+| 6 | `box1_multitarget` | 1 | **Multi-target** (3 distinct targets in one BlackBoxAMFlow call) | rel 3.7 × 10⁻³⁰ |
+| 7 | `dotted_3L_banana` | 3 | **Asymmetric dotted** indices `[3, 2, 2, 1]` | rel 4.9 × 10⁻³⁰ |
+| 8 | `banana_4L_mixed` | 4 | **4-loop mixed mass** (combines 3.F + 3.I axes) | **DIVERGENCE D8** |
+| 9 | `tadbubble_2L` | 2 | **Factorizable** family (bubble × tadpole) | rel 3.2 × 10⁻³⁰ |
+| 10 | `sunset_2L_onshell` | 2 | External **on-shell** at s = m² | rel 2.6 × 10⁻³⁰ |
+
+Net oracle count: **20 → 30**.  9 of 10 match MMA at rel ≲ 5 × 10⁻³⁰.
+
+**Audit divergence D8 (banana_4L_mixed):** 4-loop mixed-mass banana
+C++ vs MMA disagrees catastrophically (rel up to 10³ on real part)
+on **every integral with all 5 mass-bearing propagators present**;
+the 2 sub-masters where one propagator is absent still match at
+rel ~6 × 10⁻³¹.  Likely root cause: AMFlow η-injection mode
+selection under mixed-mass families — upstream MMA injects η on
+the mBsq propagators only (`-eta + l2² - mBsq`, `-eta + l4² - mBsq`)
+while keeping mAsq unchanged; C++ likely picks a different
+`AMFMode` strategy or injects on a different propagator subset.
+The 4-loop topology (3.F axis) and mixed-mass (3.I axis) work
+independently in earlier oracles; their combination breaks here.
+Tracked as D8 in `banana_4L_mixed_mma_reference.json::cpp_sampled_status`
+and pending follow-up — same investigation pattern as D7 (deep
+read of upstream `AMFSystemSetup` η-injection picker, then mirror
+in `src/pipeline/amfsystem.cpp`).
+
+Three of the 10 needed an iteration on the family setup itself
+(authoring quirks, not algorithm bugs):
+
+- `triangle_1L_3mass` initially used 3 explicit legs with
+  `Conservation: p3 -> -p1-p2` AND all three legs on-shell (p² = 0);
+  this forces `s = (p1+p2)² = p3² = 0`, contradicting the
+  `(p1+p2)² -> s` replacement.  Fixed by dropping `p3` from the legs
+  list and not setting `p3² -> 0` (two-leg formulation).
+- `tadbubble_2L` initially had only the 3 physical propagators; the
+  2-loop SP basis has 5 dimensions ({l1², l2², l1·l2, l1·p, l2·p}),
+  so AMFlow's `CheckCompleteness` aborted.  Fixed by adding two ISP
+  propagators (`(l1 + l2)²`, `(l2 + p)²`).
+- The original `doublebox_multitarget` attempt hit a Kira YAML
+  parser exception in MMA's `RunProcess` for the 9-propagator
+  family + 3 targets combination; replaced with the simpler
+  `box1_multitarget` (1-loop box, also 3 targets) which exercises
+  the same "multi-target output" characteristic without the Kira
+  edge case.
+
 ### Oracle diversity expansion (ongoing, no fixed end)
 
 Beyond the (now-empty) 🟡 list, **diversify** the oracle set so that

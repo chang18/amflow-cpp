@@ -17,24 +17,34 @@ CLI="./build/src/cli/amflow_cli"
 
 BENCHES=(
   tools/bench/banana_3loop_eps001_black_box_amflow_cpp.json
+  tools/bench/banana_4L_mixed_black_box_amflow_cpp.json
   tools/bench/banana_4loop_eps001_black_box_amflow_cpp.json
   tools/bench/bn3mix_eps001_black_box_amflow_cpp.json
   tools/bench/box1_d0_7_3_solve_integrals_cpp.json
+  tools/bench/box1_multitarget_black_box_amflow_cpp.json
   tools/bench/box1_single_solve_integrals_cpp.json
+  tools/bench/bubble_1L_diffmass_black_box_amflow_cpp.json
   tools/bench/cutbanana_3L_eps001_black_box_amflow_cpp.json
   tools/bench/cutbanana_4L_eps001_black_box_amflow_cpp.json
   tools/bench/cutbubble_1L_eps001_black_box_amflow_cpp.json
   tools/bench/cutbubble_1L_eps2_black_box_amflow_cpp.json
   tools/bench/cutbubble_1L_eps10000_black_box_amflow_cpp.json
   tools/bench/cutsunrise_2L_eps001_black_box_amflow_cpp.json
+  tools/bench/dotted_3L_banana_black_box_amflow_cpp.json
   tools/bench/doublebox_sv_eps001_black_box_amflow_cpp.json
   tools/bench/ewbox_1loop_eps001_black_box_amflow_cpp.json
+  tools/bench/sunrise_2L_threshold_black_box_amflow_cpp.json
+  tools/bench/sunset_2L_onshell_black_box_amflow_cpp.json
+  tools/bench/tadbubble_2L_black_box_amflow_cpp.json
+  tools/bench/triangle_1L_3mass_black_box_amflow_cpp.json
   tools/bench/tt_2loop_box_black_box_amflow_cpp.json
   tools/bench/tt_cutkosky_probe_eps001_black_box_amflow_cpp.json
   tools/bench/tradcut_phase_2L_eps001_black_box_amflow_cpp.json
   tools/bench/tt_higher_rank_eps001_black_box_amflow_cpp.json
+  tools/bench/vacuum_2L_sunrise_black_box_amflow_cpp.json
   tools/bench/vtx2_2loop_vertex_black_box_amflow_cpp.json
   tools/bench/vtx2_2loop_vertex_masters_only_cpp.json
+  tools/bench/xbox_2L_eps10_black_box_amflow_cpp.json
   tools/bench/xbox_2loop_eps001_black_box_amflow_cpp.json
 )
 
