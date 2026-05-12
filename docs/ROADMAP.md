@@ -279,6 +279,35 @@ Triplet committed: `tools/bench/bn3mix_eps001_black_box_amflow_{cpp.json,mma.wl}
 + `tools/bench/bn3mix_eps001_mma_reference.json`.  Added to
 `run_perf_audit.sh` rotation.
 
+### 3.J — ε-extremes oracles (2026-05-12) — **both pass**
+
+Two boundary-case oracles for the **ε-extremes** axis, both
+re-using the 1-loop massless `cutbubble` family at `s = 4`:
+
+- **`cutbubble_1L_eps2` at eps = 1/2 (D = 3)** — large-eps end.
+  C++ matches MMA at rel = 1.9 × 10⁻⁶⁴ (the integral is exactly
+  1/8 = massless 2-particle phase space in D = 3, and both sides
+  agree to ~64 digits).
+- **`cutbubble_1L_eps10000` at eps = 10⁻⁴** — small-eps end (two
+  orders of magnitude closer to the physical D = 4 limit than the
+  standard 10⁻²).  C++ matches at rel = 1.02 × 10⁻³².
+
+**Note on the original ROADMAP target eps = 1:** an initial run at
+eps = 1 (D = 2) hit an upstream MMA AMFlow limitation where the
+DESolver returned a partially-symbolic expression
+`(1/2π) Im[DESolver\`Private\`variables[1, 1]]` rather than a
+numeric — i.e., AMFlow's eta-flow termination at D = 2 hits a
+degenerate boundary that the upstream package doesn't resolve.
+This is an upstream package limit, not a C++ divergence; eps = 1/2
+was chosen as the next-most-extreme rational eps that produces a
+clean numeric reference for parity testing.  Documented in the
+`cutbubble_1L_eps2_*` triplet's source comment for any future
+re-attempt with a future AMFlow release.
+
+Triplets committed: `tools/bench/cutbubble_1L_eps{2,10000}_black_box_amflow_{cpp.json,mma.wl}`
++ `cutbubble_1L_eps{2,10000}_mma_reference.json`.  Both added to
+`run_perf_audit.sh` rotation.
+
 ### Oracle diversity expansion (ongoing, no fixed end)
 
 Beyond the (now-empty) 🟡 list, **diversify** the oracle set so that
@@ -291,7 +320,7 @@ Beyond the (now-empty) 🟡 list, **diversify** the oracle set so that
 | Mass config  | all-massless / all-equal-mass, mixed at 2 loops (tt_2loop_box), **mixed at 3 loops (bn3mix, 2026-05-12)** | further mixed-mass at higher L |
 | Cuts         | single phase-space (cutbubble 2-cut, cutsunrise 3-cut, cutbanana_3L 4-cut), **5-cut (cutbanana_4L, 2026-05-12)** | further multi-cut topologies |
 | Sector size  | ≤ 9 propagators                    | ≥ 10 |
-| `eps` extremes | `1/1000`, `1/100`                | `1/1`, `1/10000` (boundary cases) |
+| `eps` extremes | `1/1000`, `1/100`, **`1/2` and `1/10000` (cutbubble_1L, 2026-05-12)** | further boundary cases (`1/1` blocked by upstream MMA AMFlow limitation at D = 2) |
 
 Each new oracle is ~1 day of work (construct family → MMA reference →
 C++ run → commit triplet).  5–10 new oracles = 1–2 weeks.  If any new

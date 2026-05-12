@@ -24,6 +24,8 @@ BENCHES=(
   tools/bench/cutbanana_3L_eps001_black_box_amflow_cpp.json
   tools/bench/cutbanana_4L_eps001_black_box_amflow_cpp.json
   tools/bench/cutbubble_1L_eps001_black_box_amflow_cpp.json
+  tools/bench/cutbubble_1L_eps2_black_box_amflow_cpp.json
+  tools/bench/cutbubble_1L_eps10000_black_box_amflow_cpp.json
   tools/bench/cutsunrise_2L_eps001_black_box_amflow_cpp.json
   tools/bench/doublebox_sv_eps001_black_box_amflow_cpp.json
   tools/bench/ewbox_1loop_eps001_black_box_amflow_cpp.json
