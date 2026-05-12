@@ -204,5 +204,5 @@ numerical-parity test/benchmark harness.
 - `SolveIntegralsGaugeLink`, HQET / SCET / Wilson-line workflows — see
   `AUDIT.md`.
 
-[1.1.0]: https://github.com/chang18/amflow-cpp/releases/tag/v1.1.0
-[1.0.0]: https://github.com/chang18/amflow-cpp/releases/tag/v1.0.0
+[1.1.0]: https://github.com/chang18/amflow-cpp/releases/tag/v1.1
+[1.0.0]: https://github.com/chang18/amflow-cpp/releases/tag/v1.0
