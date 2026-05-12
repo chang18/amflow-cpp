@@ -12,21 +12,26 @@ cover.
 |---|---|---|
 | 🟢 verified                  | 86 | — |
 | 🟡 unverified (oracle gap)    |  0 | All 21 originally-🟡 audit rows are now closed.  Progression: **Phase 2A** closed 4 (LIBPDeriv multi-invariant 2026-05-09; Jordan block ordering, analyze_block non-nested overlapping, Calcx00 boundary linear-system selection 2026-05-10).  **Phase 2B** closed 4 (`r = nonzero(top) + IBPDot`, MasterRank/MasterDot non-exposure, SingleMassQ Numeric enhancement, factorize_family mass=−1 Numeric enhancement 2026-05-10/11).  **Audit cleanup** 2026-05-11 promoted 3 rows whose implementations actually landed in Phase 1A (`SolveIntegrals` single-eps fast path, per-system `AMFSystemDirection`, Cutkosky physical-mass safety check) to 🟢 with explicit Phase 1A attribution.  **Phase 2C** closed 5 (evaluate_taylor strips arb radii, zero_sector_q generic primes, region_power skips /.Numeric, factorize_family no-redef fallback, coefficient parser grammar lock 2026-05-11).  **Phase 3.A–E** 2026-05-11 closed the final 5 (Diffeq nested reduce conservative rank/dot floor, kira_target.m parser strictness, Auto-applied `Vacuum[L,n]` table, Ending-master Kira reduction loop, Calcx00 acb-inverse fallback) via a mix of new tests, equivalence paragraphs, and conservative-fallback documentation.  Future audit growth comes from Phase 3 oracle-diversity benches (L=4 / ≥3 invariants / mixed mass / multi-cut / extreme ε), each landing as 🟢 by construction. |
-| 🔴 actual divergence          |  7 | **6 fully fixed; 1 deferred indefinitely** (D5 ComplexMode — investigated post-v1.0 and found to require an algebra-layer extension; entry-point now rejects loudly).  D3 was upgraded from detect-and-throw (Phase 1A) to the proper projection (Phase 1B) with an oracle.  D7 was surfaced by the L=4 banana oracle in Phase 3.F (2026-05-11) and fixed the next day (2026-05-12) by restructuring `ibp::reduce` and `ibp::diffeq` to mirror upstream's `BlackBoxReduce`/`BlackBoxDiffeq` two-Kira-call pattern (Masters preheat + Reduce target reduction at the same `(rank, dot)`, separate subdirs to work around our Kira 2.x's auxiliary-file consistency check). |
+| 🔴 actual divergence          |  8 | **7 fully fixed; 1 deferred indefinitely** (D5 ComplexMode — investigated post-v1.0 and found to require an algebra-layer extension; entry-point now rejects loudly).  D3 was upgraded from detect-and-throw (Phase 1A) to the proper projection (Phase 1B) with an oracle.  D7 was surfaced by the L=4 banana oracle in Phase 3.F (2026-05-11) and fixed the next day (2026-05-12) by restructuring `ibp::reduce` and `ibp::diffeq` to mirror upstream's `BlackBoxReduce`/`BlackBoxDiffeq` two-Kira-call pattern (Masters preheat + Reduce target reduction at the same `(rank, dot)`, separate subdirs to work around our Kira 2.x's auxiliary-file consistency check).  D8 was surfaced by the 4-loop mixed-mass banana oracle in Phase 3 batch-2 (2026-05-12) and fixed the next day (2026-05-13) by removing the `canonical_boundary_permutation` + `canonical_taylor_permutation` `stable_sort` calls in `src/ode/inf.cpp`, which were re-routing SparseGaussian's free column away from the master MMA's no-permutation convention selects. |
 | ⚪ intentionally not ported   | 17 | — |
 
 Net assessment: **no oracle-validated path is wrong**, and **no
-silent-wrong-result path remains**.  Five of the six 🔴 items have
+silent-wrong-result path remains**.  Seven of the eight 🔴 items have
 been fully corrected — two by aligning defaults to upstream, one by
 adding a defensive Jacobian assert, one by raising on inconsistent
-Kira output, and one (D3) by implementing the full Tradition-with-cut
-boundary projection (Phase 1B), backed by a new oracle benchmark
-matching upstream at rel ~ 1e-30.  Only D5 (Kira `ComplexMode` /
-imaginary-numeric pipeline) remains deferred — investigated
-post-v1.0 (2026-05-09) and deferred indefinitely after the
-implementation cost analysis (see §D5 below and `docs/ROADMAP.md`
-§"Phase 1C").  The JSON entry-point now actively rejects the
-complex-numeric form rather than silently mishandling it.
+Kira output, one (D3) by implementing the full Tradition-with-cut
+boundary projection (Phase 1B) backed by a new oracle benchmark
+matching upstream at rel ~ 1e-30, one (D7) by restructuring
+`ibp::reduce` + `ibp::diffeq` to mirror upstream's two-Kira-call
+`BlackBoxReduce` / `BlackBoxDiffeq` pattern, and one (D8) by
+removing two `stable_sort` calls in `src/ode/inf.cpp` that
+re-routed SparseGaussian's free-column assignment.  Only D5 (Kira
+`ComplexMode` / imaginary-numeric pipeline) remains deferred —
+investigated post-v1.0 (2026-05-09) and deferred indefinitely after
+the implementation cost analysis (see §D5 below and
+`docs/ROADMAP.md` §"Phase 1C").  The JSON entry-point now actively
+rejects the complex-numeric form rather than silently mishandling
+it.
 
 ---
 
@@ -261,6 +266,64 @@ Full per-pass reports: `/tmp/audit_desolver.md`, `/tmp/audit_amflow.md`,
     `src/ibp/reduce.cpp:177` for the inner call invoked from
     `ibp::diffeq` (the inner call should use the preheat's
     `(rank, dot)`, not re-floor over `{all_ints, preferred}`).
+
+### D8. `canonical_boundary_permutation` + `canonical_taylor_permutation` re-route SparseGaussian's free column — **FIXED (both functions now return identity)**
+
+- **Upstream MMA** `DESolver.DetermineBlockBoundaryOrder`
+  (`DESolver.m:705-728`) and `DESolver.CalcTaylor`
+  (`DESolver.m:752-790`): `BuildTaylor → ConstructMatrix →
+  SparseGaussian` all see the matrix in its **original row order**.
+  The `block` variable that `fid[n]` indexes is the raw output of
+  `AnalyzeBlock[mat]` — no `SortBy`, no `Permutation`.  Whichever
+  column SparseGaussian's leading-pivot search reaches first becomes
+  leading; the remaining "free" columns are the ones the algorithm
+  cannot pivot, and they index back to specific masters via
+  `block[[Mod[n-1, Length[new]]+1]]`.
+- **C++ (was, v1.0 through 2026-05-12)**: `src/ode/inf.cpp:290-308`
+  (`canonical_boundary_permutation`) sorted block rows DESCENDING
+  by `int_offsets[i] = power_q[i] - power_q[0]`; `src/ode/inf.cpp:319-340`
+  (`canonical_taylor_permutation`) sorted by
+  (`boundary_row_has_nonzero` asc, `int_offsets` asc, index asc).
+  Both then called `build_taylor_symbolic` on the permuted matrix and
+  unpermuted the final result.  Because SparseGaussian's column-
+  processing order is structurally sensitive to row order, a row
+  permutation re-routes which master ends up holding the free
+  (unsolved) column — i.e. which master receives the `order=0`
+  boundary BC assignment.
+- **Oracle exposure**: 4-loop mixed-mass banana, mass pattern
+  `{mAsq, mBsq, mAsq, mBsq, mAsq}`
+  ([`tools/bench/banana_4L_mixed_*`](../tools/bench)) with
+  `psq=-3, mAsq=1, mBsq=2, eps=1/1000, BlackBoxDot=5`.  The 21-master
+  block at the corner-system level (region 3, scale `[1,1,1,1]`,
+  pattern group `b=-4` with monotone offsets
+  `[0,0,1,2,2,3,3,3,3,4,4,4,4,4,5,5,5,5,6,6,7]`) is the smallest
+  configuration where both sorts have a nontrivial effect *and*
+  fail to compensate each other.  MMA assigns `order=0` to
+  `master[20] = j[banana4mix, 1, 1, 1, 1, 7]`; C++ assigned it to
+  `master[8] = j[banana4mix, 1, 1, 1, 1, 3]`.
+- **Impact**: silent-wrong-result — `banana_4L_mixed` corner
+  `[1, 1, 1, 1, 1, 0, ...]` returned `3.984 × 10¹⁵` versus the
+  MMA value `6.258 × 10¹²` (637× off); 18 of 20 sampled values were
+  off by ratios ranging from `-1395.4` to `1396`.  The two
+  sub-masters where one of the 5 mass-bearing propagators is absent
+  ([1,1,1,1,0] and [1,1,1,0,1]) matched MMA exactly because those
+  paths factorize into 4 disconnected 1-loop tadpoles handled by
+  `SingleMass`, never hitting the buggy 21-master block.
+- **Why the existing 545 gtests didn't catch it**: the two sorts
+  **compensated** each other on small blocks and on symmetric
+  configurations (the dual-permute net was zero whenever the
+  per-master "BC vs non-BC" or "offset" distribution was already
+  monotone-aligned with descending-by-offset).  Removing only one of
+  the two sorts left the final corner value unchanged because the
+  other still neutralized it; removing both made the corner agree
+  with MMA at rel < 1e-30.
+- **Fix**: both `canonical_boundary_permutation` and
+  `canonical_taylor_permutation` now `concatenate analyze_block(mat)`
+  output without any `stable_sort`, exactly mirroring upstream's
+  no-permutation convention (`src/ode/inf.cpp:289-340`).
+- **Validation**: `banana_4L_mixed` now matches MMA at rel < 1e-30
+  on all 20 sampled values (was 2/20 matching); all 545 previously
+  passing gtests still pass.  Commit `c668f79` (2026-05-13).
 
 ---
 
