@@ -25,7 +25,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   output without re-sorting).  `banana_4L_mixed` now matches MMA
   at rel < 1e-30 on all 20 sampled values (was 2/20); all 545
   gtests still pass.  Commit `c668f79`.  Audit table is now
-  **86 🟢 / 0 🟡 / 8 🔴 (7 fixed + 1 D5 deferred indefinitely) / 17 ⚪**.
+  **86 🟢 / 0 🟡 / 8 🔴 (7 fixed + 1 D5 out of scope) / 17 ⚪**.
+
+### Changed
+- **D5 ComplexMode reclassified from "deferred indefinitely" to "out
+  of scope"** (maintainer decision 2026-05-13).  Complex-valued numeric
+  kinematics will not be implemented; the entry-point rejection
+  remains, but ROADMAP no longer carries a "Phase 1C" placeholder for
+  future work on this.  See [`docs/AUDIT_MMA_PARITY.md`](docs/AUDIT_MMA_PARITY.md) §D5.
+
+### Removed
+- ROADMAP "Phase 1C" section (D5 future-work placeholder).
+- Stale "deferred" / D3-aborts / Trivial-not-ported limitation notes
+  in `docs/FAQ.md` and `docs/USER_GUIDE.md` — D3 was fixed in v1.1.0
+  and Trivial was ported in Phase 1A; only the D5 out-of-scope note
+  remains.
+- Root-level `AUDIT.md` v1.0 snapshot (now a thin pointer to the live
+  `docs/AUDIT_MMA_PARITY.md`).
 
 ## [1.1.0] — 2026-05-12
 

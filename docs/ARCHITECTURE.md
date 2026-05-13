@@ -24,8 +24,9 @@ target master integrals; the library produces per-ε Laurent expansions
 of every master. The `pipeline` domain wraps `ode` + `qft` + `ibp` to
 make this happen automatically: Kira IBP, differential equation
 construction, region decomposition, asymptotic boundary integrand
-construction, recursive sub-system building. See [`../AUDIT.md`](../AUDIT.md)
-for the validated parity surface.
+construction, recursive sub-system building.  See
+[`AUDIT_MMA_PARITY.md`](AUDIT_MMA_PARITY.md) for the validated parity
+surface.
 
 ---
 

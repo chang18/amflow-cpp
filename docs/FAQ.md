@@ -42,7 +42,7 @@ exposes the same FLINT that pkg-config selected at configure time.
 
 Yes.  Kira and Fermat are **runtime** dependencies of `solve_integrals`
 and `black_box_amflow` only.  `cmake --build build -j` works fine
-without them.  The 508-case test suite runs without Kira too — Kira-
+without them.  The 545-case test suite runs without Kira too — Kira-
 dependent tests auto-skip when the `kira` binary isn't on `$PATH`.
 
 The raw `amflow` mode (the ODE engine) doesn't need Kira at all — see
@@ -158,7 +158,7 @@ Validated at the oracle bench
 [`tools/bench/box1_d0_7_3_solve_integrals_cpp.json`](../tools/bench/box1_d0_7_3_solve_integrals_cpp.json)
 (D₀ = 7/3, matches Mathematica AMFlow to ~30 sig digits).
 See [`docs/USER_GUIDE.md`](USER_GUIDE.md) §4.4 for a worked example
-and [`AUDIT.md`](../AUDIT.md) for the parity numbers.
+and [`AUDIT_MMA_PARITY.md`](AUDIT_MMA_PARITY.md) for the parity numbers.
 
 ---
 
@@ -175,8 +175,9 @@ choices.  This project's parity contract is:
   `~10^-30` after subtracting working-precision noise.
 
 If you see mismatches *bigger* than ~10⁻²⁵ at `working_pre = 100`,
-that's worth investigating.  See [`AUDIT.md`](../AUDIT.md) for the
-list of validated families and the relative errors observed there.
+that's worth investigating.  See [`AUDIT_MMA_PARITY.md`](AUDIT_MMA_PARITY.md)
+and [`tools/bench/`](../tools/bench/) for the list of validated
+families and observed relative errors.
 
 ### Q. How do I regenerate the committed Mathematica reference data?
 
@@ -214,39 +215,20 @@ Full details: [`tools/bench/README.md`](../tools/bench/README.md).
 - `SolveIntegralsGaugeLink`
 - HQET / SCET / Wilson-line workflows
 - IBP backends other than Kira (no FIRE / LiteRed / FiniteFlow / Blade)
-
-**Known limitations (deferred indefinitely):**
-- **Complex-valued numeric kinematics.**  Upstream filters
-  imaginary-part numerics through `IBPRule` / `CompensateRule`
-  (apply real parts to Kira, substitute imaginary parts after).
-  This C++ port treats `amf_options.blackbox.numeric_values` as a
-  flat real-valued map.  As of 2026-05-09, the JSON dispatcher
-  actively rejects the object form `{"re":..,"im":..}` with a
-  loud error rather than silently mishandling it.  The feature was
-  investigated post-v1.0 and deferred indefinitely — see
-  [`docs/AUDIT_MMA_PARITY.md`](AUDIT_MMA_PARITY.md) D5 and
-  [`docs/ROADMAP.md`](ROADMAP.md) §"Phase 1C" for the architectural
-  trade-off (Q[i] algebra extension vs. acb-rational pipeline).
-  Workaround: provide only purely-real numeric values.
-- **Tradition scheme on a family with non-empty `cut`.**  The C++
-  port currently aborts with a clear error in this case rather than
-  computing a possibly-wrong answer.  Workaround: use
-  `EndingScheme=Cutkosky` for cut families, which clears the parent
-  cut at setup time.  (Audit divergence D3 — was silent-wrong in
-  v1.0.0; converted to loud abort in the post-v1.0 patch.)
-- **`Trivial` ending scheme.**  Upstream auto-appends a `Trivial`
-  fallback so the scheme dispatcher never exhausts; this port has
-  three schemes (`Tradition` / `Cutkosky` / `SingleMass`).  In
-  practice the supplied schemes always succeed for the oracle
-  benchmark families; users with families that need the upstream
-  fallback will see a "no scheme matched" error.
+- **Complex-valued numeric kinematics** (audit divergence D5).
+  Upstream MMA filters imaginary-part numerics through
+  `IBPRule` / `CompensateRule` (apply real parts to Kira, substitute
+  imaginary parts after).  This C++ port treats
+  `amf_options.blackbox.numeric_values` as a flat real-valued map;
+  the C++ algebra layer is over Q (FLINT `fmpz_mpoly_q_t`) and
+  cannot carry complex coefficients.  The JSON dispatcher rejects
+  the object form `{"re":..,"im":..}` with a clear error.
+  Workaround: provide only purely-real numeric values.  See
+  [`docs/AUDIT_MMA_PARITY.md`](AUDIT_MMA_PARITY.md) §D5.
 
 **See also:**
-- [`AUDIT.md`](../AUDIT.md) — validated parity surface and the 12
-  oracle benchmarks.
 - [`docs/AUDIT_MMA_PARITY.md`](AUDIT_MMA_PARITY.md) — line-level
-  upstream-parity audit (full divergence inventory: 6 🔴 / 21 🟡
-  / 17 ⚪).
+  upstream-parity audit (full divergence inventory).
 - [`docs/REFERENCE_MAP.md`](REFERENCE_MAP.md) — Mathematica → C++
   symbol mapping (with explicit "not ported" entries).
 
@@ -256,9 +238,9 @@ This project's C++17 source was developed primarily by AI coding
 agents under the maintainer's direction.  The trustworthiness contract
 is **numerical parity**:
 
-- 12 oracle benchmarks under `tools/bench/` match upstream Mathematica
+- 30 oracle benchmarks under `tools/bench/` match upstream Mathematica
   AMFlow at `rel ~ 10⁻³⁰`.
-- 508 GoogleTest cases gate the public surface.
+- 545 GoogleTest cases gate the public surface.
 - Every commit is gated by both, in CI on every push.
 
 The tests (not the code) are the contract.  If the tests are right,

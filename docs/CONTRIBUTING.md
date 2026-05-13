@@ -20,7 +20,7 @@ When you change code:
 3. If a test fails, read the assertion message first. Most numeric tests
    already print the compared values.
 4. Update the live docs when project status changes:
-   `README.md`, `AUDIT.md`.
+   `README.md`, `docs/AUDIT_MMA_PARITY.md`, `CHANGELOG.md`.
 
 When you add or fix functionality:
 

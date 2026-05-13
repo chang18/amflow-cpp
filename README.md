@@ -46,11 +46,9 @@ for full attribution.
 This C++17 implementation was developed primarily by **AI coding
 agents** under the direction of the maintainer, with every behavioural
 change gated by numerical-parity verification against the upstream
-Mathematica reference.  The 20 oracle benchmarks under `tools/bench/`
-(12 baseline v1.0.0 cases + 7 post-v1.0 audit/diversity additions +
-1 single-mass solve-integrals variant) and the 545-case GoogleTest
-suite are the contract that the AI-led implementation has to honour
-for any change to land.
+Mathematica reference.  The 30 oracle benchmarks under `tools/bench/`
+and the 545-case GoogleTest suite are the contract that the AI-led
+implementation has to honour for any change to land.
 
 Maintainer / contact: **3250800970@qq.com** (please open a GitHub
 issue first when possible; use email for inquiries that don't fit a
@@ -84,17 +82,17 @@ Public headers under `include/amflow/<domain>/`; implementation under
 
 | Area | State |
 |---|---|
-| Core ODE solver (port of upstream `DESolver.m`) | Implemented; 20/20 oracle cases match MMA reference at `rel ~1e-30` |
+| Core ODE solver (port of upstream `DESolver.m`) | Implemented; 30/30 oracle cases match MMA reference at `rel ~1e-30` |
 | AMFlow + Kira pipeline (upstream `AMFlow.m` core algorithms) | Implemented for the covered workflows |
 | Top-level entries (`amflow`, `black_box_amflow`, `solve_integrals`) | Implemented; exposed via `amflow_cli` JSON modes |
-| Line-level MMA parity audit (closed at v1.1.0) | 86 🟢 verified, 0 🟡 unverified, 7 🔴 (6 fixed, 1 D5 deferred indefinitely); no silent-wrong-result paths remain. See [`docs/AUDIT_MMA_PARITY.md`](docs/AUDIT_MMA_PARITY.md) |
-| Wall-clock vs MMA on 20 oracles | ~1.5–2.5× speedup on Kira-light benches; comparable on Kira-heavy benches (both runtimes spend their wall in Kira); see [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md) |
+| Line-level MMA parity audit | 86 🟢 verified, 0 🟡 unverified, 8 🔴 (7 fixed, 1 D5 out of scope); no silent-wrong-result paths remain. See [`docs/AUDIT_MMA_PARITY.md`](docs/AUDIT_MMA_PARITY.md) |
+| Wall-clock vs MMA on 30 oracles | ~1.5–2.5× speedup on Kira-light benches; comparable on Kira-heavy benches (both runtimes spend their wall in Kira); see [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md) |
 | `SolveIntegralsGaugeLink`, HQET / SCET / Wilson lines | Out of scope (intentional) |
-| Complex-valued numeric kinematics (audit D5) | Deferred indefinitely (architectural trade-off documented in [`docs/AUDIT_MMA_PARITY.md`](docs/AUDIT_MMA_PARITY.md) §D5); see [`docs/FAQ.md`](docs/FAQ.md) "What's *not* implemented?" |
+| Complex-valued numeric kinematics (audit D5) | Out of scope (not supported); JSON dispatcher rejects `{"re":..,"im":..}` form. See [`docs/FAQ.md`](docs/FAQ.md) "What's *not* implemented?" |
 
-See [`AUDIT.md`](AUDIT.md) for the validated families and benchmark
-inventory; [`docs/AUDIT_MMA_PARITY.md`](docs/AUDIT_MMA_PARITY.md) for
-the line-level upstream-parity audit (full divergence inventory).
+See [`docs/AUDIT_MMA_PARITY.md`](docs/AUDIT_MMA_PARITY.md) for the
+line-level upstream-parity audit (full divergence inventory) and
+[`tools/bench/`](tools/bench/) for the oracle bench triplets.
 
 ## Quick start
 
@@ -148,7 +146,8 @@ AMF_REF_CFG=$PWD/cfg_bubble_1L.wl math -script run_amflow_kira.wl
 ```
 
 For current parity benchmarks at `eps = 1/1000` see
-[`tools/bench/`](tools/bench/) and [`AUDIT.md`](AUDIT.md).
+[`tools/bench/`](tools/bench/) and
+[`docs/AUDIT_MMA_PARITY.md`](docs/AUDIT_MMA_PARITY.md).
 
 ## Documentation map
 
@@ -168,10 +167,9 @@ For current parity benchmarks at `eps = 1/1000` see
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Domain DAG and end-to-end data flow |
 | [`docs/INVARIANTS.md`](docs/INVARIANTS.md) | Project-wide rules that must stay true (precision, RAII, ODE-boundary traps) |
 | [`docs/REFERENCE_MAP.md`](docs/REFERENCE_MAP.md) | Upstream Mathematica symbol → C++ symbol mapping |
-| [`AUDIT.md`](AUDIT.md) | Current parity status, validated surface, benchmark inventory |
-| [`docs/AUDIT_MMA_PARITY.md`](docs/AUDIT_MMA_PARITY.md) | Line-level audit of the C++ port against upstream MMA AMFlow |
+| [`docs/AUDIT_MMA_PARITY.md`](docs/AUDIT_MMA_PARITY.md) | Live parity status against upstream MMA AMFlow (per-row divergence catalog + closure log) |
 | [`docs/ROADMAP.md`](docs/ROADMAP.md) | Active development plan (post-v1.0 implementation completeness + oracle expansion) |
-| [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md) | Measured C++ vs MMA wall clocks on the 12 oracle benchmarks |
+| [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md) | Measured C++ vs MMA wall clocks on the oracle benchmarks |
 | [`notes/mma_*_map.md`](notes/) | Per-file upstream Mathematica source → C++ port maps |
 | [`reference/README.md`](reference/README.md) | How to clone the upstream MMA AMFlow locally for reference data regeneration |
 | [`tools/bench/README.md`](tools/bench/README.md) | Sampled-parity benchmark conventions and regeneration |

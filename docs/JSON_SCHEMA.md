@@ -272,7 +272,7 @@ optional.
 
 | Key | Type | Default | Meaning |
 |---|---|---|---|
-| `numeric_values`   | object map<string,string\|number> | `{}` | Numeric values for kinematic invariants — *required for non-trivial families* (e.g. `{"s": "100", "t": "-1"}`).  **Real scalars only**; the complex object form `{"re":..,"im":..}` is rejected with a clear error (audit divergence D5, deferred indefinitely). |
+| `numeric_values`   | object map<string,string\|number> | `{}` | Numeric values for kinematic invariants — *required for non-trivial families* (e.g. `{"s": "100", "t": "-1"}`).  **Real scalars only**; the complex object form `{"re":..,"im":..}` is rejected with a clear error (audit divergence D5, out of scope). |
 | `ibp_rank`         | int | upstream default | `BlackBoxRank` floor |
 | `ibp_dot`          | int | upstream default | `BlackBoxDot` floor |
 | `n_thread`         | int | upstream default | `NThread` for Kira |

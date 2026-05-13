@@ -61,26 +61,14 @@ matrix already in hand.
 For complete field-level reference see
 [`docs/JSON_SCHEMA.md`](JSON_SCHEMA.md).
 
-> **Known limitations** — the C++ port currently does not match
-> upstream MMA in three input regimes:
->
-> 1. **Complex-valued numeric kinematics** — supply only real values
->    in `amf_options.blackbox.numeric_values`.  The dispatcher
->    actively rejects the object form `{"re":..,"im":..}` with a
->    clear error.  (Audit divergence D5; deferred indefinitely.)
-> 2. **Tradition scheme on a family with non-empty `cut`** — use
->    `EndingScheme=Cutkosky` for cut families, which clears the cut at
->    setup time.  C++ aborts with a clear error in this case rather
->    than producing a possibly-wrong answer.  (D3.)
-> 3. **`Trivial` ending scheme** — not ported; upstream auto-appends
->    it as a final fallback.  In practice the three available schemes
->    (`Tradition` / `Cutkosky` / `SingleMass`) cover all oracle
->    families; report a case if you hit "no scheme matched".
->
-> Full inventory of upstream divergences (including 21 unverified
-> branches and 17 intentionally-not-ported items) lives in
-> [`docs/AUDIT_MMA_PARITY.md`](AUDIT_MMA_PARITY.md).  See also
-> [`docs/FAQ.md`](FAQ.md) "What's *not* implemented?".
+> **Out of scope** — **complex-valued numeric kinematics** are not
+> supported.  Supply only real values in
+> `amf_options.blackbox.numeric_values`; the dispatcher rejects the
+> object form `{"re":..,"im":..}` with a clear error.  (Audit
+> divergence D5.)  Full inventory of upstream divergences and
+> intentionally-not-ported items in
+> [`docs/AUDIT_MMA_PARITY.md`](AUDIT_MMA_PARITY.md); user-facing
+> non-goals in [`docs/FAQ.md`](FAQ.md) "What's *not* implemented?".
 
 ---
 
@@ -377,7 +365,7 @@ For details on every output field, see
 |---|---|
 | Look up a specific input/output field | [`docs/JSON_SCHEMA.md`](JSON_SCHEMA.md) |
 | Understand the algorithm and library design | [`docs/ARCHITECTURE.md`](ARCHITECTURE.md) |
-| Check parity status and validated families | [`AUDIT.md`](../AUDIT.md) |
+| Check parity status and validated families | [`docs/AUDIT_MMA_PARITY.md`](AUDIT_MMA_PARITY.md) |
 | Find which Mathematica function backs a C++ entry | [`docs/REFERENCE_MAP.md`](REFERENCE_MAP.md) |
 | Solve a build / runtime problem | [`docs/FAQ.md`](FAQ.md) |
 | Regenerate Mathematica reference data | [`reference/README.md`](../reference/README.md) and [`tools/bench/README.md`](../tools/bench/README.md) |

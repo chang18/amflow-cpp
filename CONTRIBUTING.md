@@ -13,7 +13,7 @@ The short version:
 - Keep Mathematica reference outputs and raw caches when they establish
   or protect parity.
 - Add focused tests for changed domains (`tests/test_<domain>_*.cpp`).
-- Update `README.md` and `AUDIT.md` when project status changes.
+- Update `README.md` and `docs/AUDIT_MMA_PARITY.md` when project status changes.
 - Do not relax numerical tolerances or remove parity checks to make a
   C++ mismatch pass.
 

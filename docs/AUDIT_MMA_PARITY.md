@@ -2,36 +2,25 @@
 
 A line-level audit of the C++17 port against upstream Mathematica
 AMFlow (commit `efda1db` of <https://gitlab.com/multiloop-pku/amflow>).
-The audit was performed after v1.0 release to surface divergences that
-the 12 oracle benchmarks listed in [`AUDIT.md`](../AUDIT.md) do not
-cover.
+The audit was performed after v1.0 release to surface divergences not
+covered by the oracle benchmarks under
+[`tools/bench/`](../tools/bench/).
 
 ## TL;DR
 
 | Severity | Count | Action taken |
 |---|---|---|
 | 🟢 verified                  | 86 | — |
-| 🟡 unverified (oracle gap)    |  0 | All 21 originally-🟡 audit rows are now closed.  Progression: **Phase 2A** closed 4 (LIBPDeriv multi-invariant 2026-05-09; Jordan block ordering, analyze_block non-nested overlapping, Calcx00 boundary linear-system selection 2026-05-10).  **Phase 2B** closed 4 (`r = nonzero(top) + IBPDot`, MasterRank/MasterDot non-exposure, SingleMassQ Numeric enhancement, factorize_family mass=−1 Numeric enhancement 2026-05-10/11).  **Audit cleanup** 2026-05-11 promoted 3 rows whose implementations actually landed in Phase 1A (`SolveIntegrals` single-eps fast path, per-system `AMFSystemDirection`, Cutkosky physical-mass safety check) to 🟢 with explicit Phase 1A attribution.  **Phase 2C** closed 5 (evaluate_taylor strips arb radii, zero_sector_q generic primes, region_power skips /.Numeric, factorize_family no-redef fallback, coefficient parser grammar lock 2026-05-11).  **Phase 3.A–E** 2026-05-11 closed the final 5 (Diffeq nested reduce conservative rank/dot floor, kira_target.m parser strictness, Auto-applied `Vacuum[L,n]` table, Ending-master Kira reduction loop, Calcx00 acb-inverse fallback) via a mix of new tests, equivalence paragraphs, and conservative-fallback documentation.  Future audit growth comes from Phase 3 oracle-diversity benches (L=4 / ≥3 invariants / mixed mass / multi-cut / extreme ε), each landing as 🟢 by construction. |
-| 🔴 actual divergence          |  8 | **7 fully fixed; 1 deferred indefinitely** (D5 ComplexMode — investigated post-v1.0 and found to require an algebra-layer extension; entry-point now rejects loudly).  D3 was upgraded from detect-and-throw (Phase 1A) to the proper projection (Phase 1B) with an oracle.  D7 was surfaced by the L=4 banana oracle in Phase 3.F (2026-05-11) and fixed the next day (2026-05-12) by restructuring `ibp::reduce` and `ibp::diffeq` to mirror upstream's `BlackBoxReduce`/`BlackBoxDiffeq` two-Kira-call pattern (Masters preheat + Reduce target reduction at the same `(rank, dot)`, separate subdirs to work around our Kira 2.x's auxiliary-file consistency check).  D8 was surfaced by the 4-loop mixed-mass banana oracle in Phase 3 batch-2 (2026-05-12) and fixed the next day (2026-05-13) by removing the `canonical_boundary_permutation` + `canonical_taylor_permutation` `stable_sort` calls in `src/ode/inf.cpp`, which were re-routing SparseGaussian's free column away from the master MMA's no-permutation convention selects. |
+| 🟡 unverified (oracle gap)    |  0 | All 21 originally-🟡 audit rows are now closed (see §3 below for per-row closure paths).  Future audit growth comes from oracle-diversity benches under [`tools/bench/`](../tools/bench/), each landing as 🟢 by construction. |
+| 🔴 actual divergence          |  8 | **7 fully fixed; 1 out of scope** (D5 ComplexMode — complex-valued numeric kinematics will not be implemented; entry-point rejects loudly). |
 | ⚪ intentionally not ported   | 17 | — |
 
 Net assessment: **no oracle-validated path is wrong**, and **no
-silent-wrong-result path remains**.  Seven of the eight 🔴 items have
-been fully corrected — two by aligning defaults to upstream, one by
-adding a defensive Jacobian assert, one by raising on inconsistent
-Kira output, one (D3) by implementing the full Tradition-with-cut
-boundary projection (Phase 1B) backed by a new oracle benchmark
-matching upstream at rel ~ 1e-30, one (D7) by restructuring
-`ibp::reduce` + `ibp::diffeq` to mirror upstream's two-Kira-call
-`BlackBoxReduce` / `BlackBoxDiffeq` pattern, and one (D8) by
-removing two `stable_sort` calls in `src/ode/inf.cpp` that
-re-routed SparseGaussian's free-column assignment.  Only D5 (Kira
-`ComplexMode` / imaginary-numeric pipeline) remains deferred —
-investigated post-v1.0 (2026-05-09) and deferred indefinitely after
-the implementation cost analysis (see §D5 below and
-`docs/ROADMAP.md` §"Phase 1C").  The JSON entry-point now actively
-rejects the complex-numeric form rather than silently mishandling
-it.
+silent-wrong-result path remains**.  Seven of the eight 🔴 items
+have been fully corrected (see §2 below for per-row details).  Only
+D5 (complex-valued numeric kinematics) is out of scope — see §D5;
+the JSON entry-point rejects the complex-numeric form with a clear
+error rather than silently mishandling it.
 
 ---
 
@@ -41,7 +30,7 @@ For each upstream file, an audit pass classified every public symbol
 into one of four severities:
 
 - **🟢 verified** — semantics match upstream, and an oracle benchmark
-  in [`AUDIT.md`](../AUDIT.md) §4 covers the path.
+  under [`tools/bench/`](../tools/bench/) covers the path.
 - **🟡 unverified** — semantics look correct but no oracle exercises
   the path.  Latent risk — kept in this list until an oracle is added.
 - **🔴 divergent** — actual semantic difference between MMA and C++.
@@ -142,7 +131,7 @@ Full per-pass reports: `/tmp/audit_desolver.md`, `/tmp/audit_amflow.md`,
   any future relaxation of the `branch_momenta` precondition before
   the missing Jacobian factor produces wrong boundary integrands.
 
-### D5. Kira `ComplexMode` / `CompensateRule` real-only filter unimplemented — **deferred indefinitely; entry-point rejects loudly**
+### D5. Kira `ComplexMode` / `CompensateRule` real-only filter — **out of scope (won't be implemented)**
 
 - **Upstream** filters `IBPRule` to drop imaginary-part numerics from
   the Kira CLI input, then post-substitutes them via `CompensateRule`
@@ -151,20 +140,15 @@ Full per-pass reports: `/tmp/audit_desolver.md`, `/tmp/audit_amflow.md`,
 - **C++** `KiraConfig::numeric_values` is a flat `map<string,string>`
   of pre-computed rational strings — no imaginary handling.  The 5th
   `IBPSystem` parameter `complexmode` has no C++ counterpart.
-- **Latent**: all 12 oracles use purely-real `numeric_values`.
-- **Status (post-investigation, 2026-05-09)**: deferred indefinitely.
-  The JSON dispatcher (`apply_blackbox_options` in `src/api/run_json.cpp`)
-  now rejects the complex form `{"re":..,"im":..}` with an error that
-  points to this audit entry, rather than silently truncating to the
-  real part or producing a wrong answer.
-- **Why not a small patch**: the C++ algebra layer is over Q
-  (FLINT `fmpz_mpoly_q_t`); a complex kinematic invariant cannot be
-  substituted into an Mfrac as a value.  See
-  [`docs/ROADMAP.md`](ROADMAP.md) §"Phase 1C" for the two
-  implementation paths considered (Q[i] algebra extension vs.
-  parallel acb-rational pipeline) and their trade-offs.
-- **If revisited**: prefer the acb-rational-pipeline approach unless
-  complex symbolic Replacement rules become a project goal.
+- **Status (2026-05-13 maintainer decision)**: complex-valued
+  numeric kinematics are **permanently out of scope** for this port.
+  The C++ algebra layer is over Q (FLINT `fmpz_mpoly_q_t`) and the
+  cost of either path (Q[i] coefficient ring or a parallel
+  acb-rational pipeline) is incommensurate with the use case.  The
+  JSON dispatcher (`apply_blackbox_options` in `src/api/run_json.cpp`)
+  rejects the complex form `{"re":..,"im":..}` with an error that
+  points to this audit entry.  Workaround: supply only real
+  numeric values.
 
 ### D6. RHS-not-in-master is silently dropped — **FIXED (now throws)**
 
@@ -331,13 +315,10 @@ Full per-pass reports: `/tmp/audit_desolver.md`, `/tmp/audit_amflow.md`,
 
 These branches were flagged 🟡 in the v1.0 audit ("looks correct to
 inspection but no committed benchmark exercises").  As of 2026-05-11
-**all 21 have been promoted to 🟢** via a mix of new oracles, new
-unit tests, theoretical-equivalence paragraphs, Phase-1A-implementation
-cross-references, and conservative-fallback documentation.  Each
-row below records the closure path (entries with `~~strikethrough~~`
-prefix were originally 🟡; the trailing `→ 🟢` annotation shows the
-upgrade date).  The table is preserved as an audit trail so future
-contributors can trace how each implementation was verified.
+**all 21 were promoted to 🟢** via a mix of new oracles, new unit
+tests, theoretical-equivalence paragraphs, and conservative-fallback
+documentation.  The table is preserved as an audit trail so future
+contributors can trace how each branch was verified.
 
 | Branch | Site | Why it's unverified |
 |---|---|---|
@@ -408,26 +389,5 @@ behaviour we already ported has changed.
 
 ## 6. Follow-up items
 
-The active development plan that addresses the items in this audit
-lives in [`docs/ROADMAP.md`](ROADMAP.md).  In summary:
-
-- **Phase 1A** — five small implementations of currently-missing
-  paths (`Trivial` ending scheme, `SolveIntegrals` single-eps fast
-  path, Cutkosky physical-mass safety check, per-system
-  `AMFSystemDirection`, plus stale-comment cleanup).
-- **Phase 1B** — replace the D3 Tradition-with-cut detect-and-throw
-  with the proper projection (mirror of upstream
-  `AMFlow.m:790-803`); requires a new oracle benchmark.
-- **Phase 1C** — D5 (Kira `ComplexMode` / imaginary-numeric pipeline)
-  was investigated post-v1.0 and **deferred indefinitely**.  See §D5
-  for the architectural reason and `docs/ROADMAP.md` §"Phase 1C" for
-  the two paths that would unblock it (Q[i] algebra extension or
-  acb-rational parallel pipeline).  The dispatcher now rejects the
-  complex-form input loudly.
-- **Phase 2** — convert each 🟡 in §3 above into either an oracle-
-  validated 🟢 or a documented "theoretical equivalence" entry.
-- **Phase 3** — ongoing diversification of the oracle suite (loop
-  number, invariant count, mass config, cut topology, ε regimes).
-
-See `ROADMAP.md` for the concrete breakdown, sizing, and acceptance
-gates.
+Forward-looking work — diversity-driven oracle expansion — lives in
+[`docs/ROADMAP.md`](ROADMAP.md).

@@ -4,7 +4,7 @@ This file is the canonical onboarding document for any AI coding
 agent picking up work on this repo. It captures the project-level
 rules and conventions a new collaborator must internalise before
 touching code or docs. Deeper documentation lives in [`docs/`](docs/)
-and [`AUDIT.md`](AUDIT.md); this file points at it and lists the
+and [`docs/AUDIT_MMA_PARITY.md`](docs/AUDIT_MMA_PARITY.md); this file points at it and lists the
 load-bearing rules.
 
 ---
@@ -31,7 +31,7 @@ load-bearing rules.
 | Goal | Start here |
 |---|---|
 | Project intro, build instructions | [`README.md`](README.md) |
-| Current parity status, validated families, benchmark inventory | [`AUDIT.md`](AUDIT.md) |
+| Current parity status, validated families, benchmark inventory | [`docs/AUDIT_MMA_PARITY.md`](docs/AUDIT_MMA_PARITY.md) |
 | Domain DAG and data-flow overview | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) |
 | Rules that must stay true across changes | [`docs/INVARIANTS.md`](docs/INVARIANTS.md) |
 | MMA symbol → C++ symbol mapping | [`docs/REFERENCE_MAP.md`](docs/REFERENCE_MAP.md) |
@@ -82,7 +82,7 @@ documentation fixes inside source comments).
   byte-for-byte.
 - **Contract every commit must respect:**
   - `ctest --test-dir build --output-on-failure -j 4` stays green;
-  - every committed sampled-bench triplet listed in [`AUDIT.md`](AUDIT.md)
+  - every committed sampled-bench triplet listed in [`docs/AUDIT_MMA_PARITY.md`](docs/AUDIT_MMA_PARITY.md)
     stays numerically green when re-run;
   - public APIs in `include/amflow/<domain>/` keep their signatures
     unless the change is a deliberate, documented break.
@@ -187,6 +187,6 @@ Canonical fix pattern lives in
   needs. Three similar lines beats a premature abstraction.
 - **Don't add docstrings/comments to code you didn't change.**
   Only comment where the logic isn't self-evident.
-- **Don't guess at recent project state** — `git log`, `AUDIT.md`,
+- **Don't guess at recent project state** — `git log`, `docs/AUDIT_MMA_PARITY.md`,
   and the per-domain notes are authoritative; check them before
   asserting.

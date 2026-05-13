@@ -1,7 +1,12 @@
 # Performance — C++ vs Mathematica AMFlow
 
-Wall-clock timings on the 12 oracle benchmarks, comparing this C++17
-port to the upstream Mathematica AMFlow.
+Wall-clock timings on the 12 oracle benchmarks comparing this C++17
+port to the upstream Mathematica AMFlow.  This data is from the v1.0
+sampling; the bench set has since grown to 30 oracles (post-v1.0
+diversity additions and Phase 3 batch-2).  Re-runs for the expanded
+set are tracked in [`tools/bench/`](../tools/bench/) bench triplets
+themselves (per-oracle `cpp_sampled_status.elapsed_seconds` +
+`mma_wallclock_time_seconds`).
 
 > **Important caveat — host contention.**  The C++ run was made on a
 > shared multi-user host where another process was saturating ~120 of
@@ -16,10 +21,10 @@ port to the upstream Mathematica AMFlow.
 
 ## Benchmark inventory
 
-The 12 oracle benchmarks under [`tools/bench/`](../tools/bench/) are
+The oracle benchmarks under [`tools/bench/`](../tools/bench/) are
 driven by `amflow_cli` against committed JSON inputs (`*_cpp.json`).
-They cover the full validated parity surface — see
-[`AUDIT.md`](../AUDIT.md) §3-§4.
+They cover the validated parity surface — see
+[`docs/AUDIT_MMA_PARITY.md`](AUDIT_MMA_PARITY.md).
 
 ## Method
 
@@ -33,10 +38,11 @@ Each bench was run **once** sequentially, with `kira -p4` (the default
 in every committed `*_cpp.json`).  No warm-up.  Wall clock measured
 from `amflow_cli` start to exit.
 
-The MMA wall-clock numbers come from the per-row entries in
-[`AUDIT.md`](../AUDIT.md) §4 — those were measured at v1.0 release time
-on this same host (when load was lower) and have not been re-measured
-for this audit.
+The MMA wall-clock numbers come from the per-bench
+`mma_wallclock_time_seconds` field in
+[`tools/bench/*_mma_reference.json`](../tools/bench/) — measured at
+v1.0 release time on this same host (when load was lower) and not
+re-measured for this audit.
 
 ## Results
 
@@ -110,7 +116,5 @@ To compare more rigorously:
 
 ## Related docs
 
-- [`AUDIT.md`](../AUDIT.md) — parity status and per-bench MMA wall
-  clocks (the MMA side of the comparison).
 - [`AUDIT_MMA_PARITY.md`](AUDIT_MMA_PARITY.md) — line-level MMA / C++
   parity audit (correctness, not performance).
