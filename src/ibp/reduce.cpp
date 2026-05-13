@@ -210,8 +210,15 @@ reduce(const qft::FamilyConfig& fc,
 
     out.masters = kira_read_masters(fc, masters_dir);
     if (out.masters.empty()) {
-        throw std::runtime_error(
-            "ibp::reduce: no masters from Kira's Masters-mode preheat");
+        // Empty masters_mma means Kira identified the sector as scaleless
+        // (or otherwise had no integrals to enumerate at the chosen
+        // (rank, dot)).  Mirror upstream `AnalyticReduction`
+        // (`Kira/interface.m:461`): `If[Length[masters]===0, Return[{{},{}}]]`.
+        // Caller (AMFSystem::build_boundary) treats empty `red.masters` as
+        // "boundary integrand reduces to zero, skip family".
+        out.rules.reserve(targets.size());
+        for (std::size_t i = 0; i < targets.size(); ++i) out.rules.emplace_back();
+        return out;
     }
     sort_integrals_like_amflow(out.masters);
 
