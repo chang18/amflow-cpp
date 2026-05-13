@@ -262,6 +262,16 @@ std::vector<RationalComplex> get_poles(const RationalMatrix& matrix) {
     int rdigits = rationalize_pre();
     if (rdigits <= 0) rdigits = 20;
 
+    // PRECISION-MISMATCH FIX (see src/ode/inf.cpp:acb_real_to_fmpq_local):
+    // cap rdigits at what working_prec can resolve so the rationalization of
+    // pole locations doesn't capture binary representation noise.
+    {
+        long working_digits = static_cast<long>(prec * 0.301029995663981195L);
+        if (working_digits >= 5) working_digits -= 5;
+        if (working_digits < 1) working_digits = 1;
+        if (rdigits > working_digits) rdigits = static_cast<int>(working_digits);
+    }
+
     for (long fi = 0; fi < factors->num; ++fi) {
         fmpz_poly_struct* fac = factors->p + fi;
         long fac_deg = fmpz_poly_degree(fac);

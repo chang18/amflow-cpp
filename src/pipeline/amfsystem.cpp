@@ -361,9 +361,23 @@ numeric::RationalFunction mfrac_to_eta_rational(const algebra::Mfrac& src, long 
 }
 
 // Approximate an acb value as an fmpq (RationalizePre digits).
+//
+// PRECISION-MISMATCH FIX (see src/ode/inf.cpp:acb_real_to_fmpq_local): when
+// `rationalize_pre` > working_prec * log10(2), the rationalization captures
+// the binary-representation noise in the input as a "real" rational, which
+// propagates as a 1e-25 residual through the AMFSystem build and amplifies
+// into 1e7-1e21 errors on masters with all-zero BC.  Cap rationalize_digits
+// at what working_prec can resolve.
 void acb_to_fmpq_rational(fmpq_t out, const acb_t v, long prec) {
     int digits = numeric::rationalize_pre();
     if (digits <= 0) digits = 20;
+
+    long working_digits = static_cast<long>(prec * 0.301029995663981195L);
+    if (working_digits >= 5) working_digits -= 5;
+    if (working_digits < 1) working_digits = 1;
+    if (digits > working_digits) {
+        digits = static_cast<int>(working_digits);
+    }
 
     const long bits = std::max<long>(prec, numeric::decimal_digits_to_bits(digits) + 32);
     arb_t scale, scaled, xb;

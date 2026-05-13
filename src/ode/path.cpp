@@ -103,6 +103,17 @@ void rc_abs2(fmpq_t out, const RationalComplex& z) {
 }
 
 bool acb_real_to_fmpq(fmpq_t out, acb_srcptr x, int rationalize_digits, long prec) {
+    // PRECISION-MISMATCH FIX (see src/ode/inf.cpp:acb_real_to_fmpq_local for
+    // the rationale): cap rationalize_digits at what working_prec can actually
+    // resolve.  Without this cap, rationalize_pre=100 with working_pre=120
+    // bits captures binary representation noise as a "real" rational.
+    long working_digits = static_cast<long>(prec * 0.301029995663981195L);
+    if (working_digits >= 5) working_digits -= 5;
+    if (working_digits < 1) working_digits = 1;
+    if (rationalize_digits > working_digits) {
+        rationalize_digits = static_cast<int>(working_digits);
+    }
+
     arf_t mid_im;
     arf_init(mid_im);
     arf_abs(mid_im, arb_midref(acb_imagref(x)));

@@ -219,8 +219,39 @@ namespace {
 
 // Rationalize a *real* AcbValue to a fmpq_t.  Returns false if Im part is
 // nonzero within rationalize_pre digits.
+//
+// PRECISION-MISMATCH FIX (pentabox-2L bug, 2026-05-13):
+//   When rationalize_digits > floor(working_prec_bits * log10(2)) (i.e. the
+//   user asks for more decimal digits than the working precision actually
+//   carries), the rationalization captures the binary-representation noise
+//   in the input AcbValue as a "real" rational like
+//       18 * 10^29 + 41359
+//       ────────────────── = 9/5 + 4.1e-26
+//             10^30
+//   for an input that is mathematically exact 9/5.  Downstream this
+//   spurious 4.1e-26 residual flows into BuildTaylor's diagonal subtraction
+//   `mat(i,i) - ini/eta`, leaks a 1e-25 entry into ConstructMatrix at the
+//   "should be unsolved free coefficient" column, and SparseGaussian pivots
+//   on it (scaling all other entries by 1/ε ≈ 1e25).  The amplified pivots
+//   then propagate into back-substitution for masters with all-zero BC and
+//   give the 1e7-1e21 ratios observed on pentabox 2L 5-leg.
+//
+//   Cap `rationalize_digits` at the largest value that working_prec can
+//   resolve unambiguously.  This makes the rationalization round to the
+//   nearest exact rational at the precision the user's working_prec
+//   actually supports, instead of capturing the binary noise.
 bool acb_real_to_fmpq_local(fmpq_t out, acb_srcptr x,
-                             int rationalize_digits, long /*prec*/) {
+                             int rationalize_digits, long prec) {
+    // Effective working precision in decimal digits, minus a small safety
+    // margin so the *last* digit isn't sensitive to floor/ceiling of the
+    // exact rational representation.
+    long working_digits = static_cast<long>(prec * 0.301029995663981195L);
+    if (working_digits >= 5) working_digits -= 5;
+    if (working_digits < 1) working_digits = 1;
+    if (rationalize_digits > working_digits) {
+        rationalize_digits = static_cast<int>(working_digits);
+    }
+
     arf_t mid_im;
     arf_init(mid_im);
     arf_abs(mid_im, arb_midref(acb_imagref(x)));

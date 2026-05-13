@@ -476,3 +476,168 @@ TEST_F(InfTest, DetermineBoundaryOrder_SunriseTopPatternMatchesMathBoundary) {
     EXPECT_EQ(out[1], -1L);
     EXPECT_EQ(out[2], 0L);
 }
+
+// ============================================================================
+//  Pentabox failure-pattern reproducer
+//
+//  Goal: replicate the pentabox-2L bug where a master with all-zero BC
+//  is coupled (via DE) to other masters that have non-zero BC in
+//  different fractional Frobenius regions.
+//
+//  Setup: 3-master Cauchy-Euler DE in eta frame
+//      I_a' = (mu_a/eta) I_a                              (mu_a = -9/5)
+//      I_b' = (mu_b/eta) I_b + (1/eta) I_a                (mu_b = -9/10)
+//      I_c' = (mu_c/eta) I_c + (1/eta) I_b                (mu_c = 0)
+//
+//      A=B=1 BC for a, b; c has NO BC.
+//
+//  Analytical solution (homogeneous + particular):
+//      I_a(eta) = eta^mu_a
+//      I_b(eta) = 1/(mu_a - mu_b) * eta^mu_a + eta^mu_b
+//      I_c(eta) = K_cb*K_ba/[(mu_a-mu_b)(mu_a-mu_c)] * eta^mu_a
+//                 + K_cb/(mu_b-mu_c) * eta^mu_b
+//                 + C * eta^mu_c   (C = 0 since c has no BC)
+//
+//  For mu_a = -9/5, mu_b = -9/10, mu_c = 0:
+//      c_a := 1/[(mu_a-mu_b)(mu_a-mu_c)]
+//           = 1/[(-9/10)(-9/5)]
+//           = 1/(81/50) = 50/81
+//      c_b := 1/(mu_b-mu_c) = 1/(-9/10) = -10/9
+//
+//  After reverse_bcs, in x = 1/eta frame:
+//      a's BC at mu = 9/5 (frac 4/5)
+//      b's BC at mu = 9/10 (frac 9/10)
+//      c: empty
+//
+//  Two distinct fractional regions: 4/5 and 9/10.
+//
+//  Expected calc_inf output for integral c:
+//      Region 4/5 (ini = 4/5):
+//        J_c(x) = x^(-4/5) * (4/5-class part of I_c)
+//               = x^(-4/5) * (c_a * x^(9/5))
+//               = c_a * x   (order-1 coefficient)
+//        => exp[0] = [0, 50/81, 0, 0, ...]
+//
+//      Region 9/10 (ini = 9/10):
+//        J_c(x) = x^(-9/10) * (9/10-class part of I_c)
+//               = x^(-9/10) * (c_b * x^(9/10))
+//               = c_b   (order-0 coefficient)
+//        => exp[0] = [-10/9, 0, 0, ...]
+//
+//  If C++ produces these correctly, calc_inf handles multi-fractional
+//  + all-zero-BC + DE-coupling correctly.  Then the pentabox bug is
+//  either in a higher-level pipeline (boundary computation, sub-system
+//  setup) or specific to the system size.  If C++ doesn't match, this
+//  is the fast reproducer for the pentabox failure.
+// ============================================================================
+
+TEST_F(InfTest, CalcInf_MultiFractional_CrossCoupling_AllZeroBC) {
+    // The original pentabox-2L config (working_pre=120, rationalize_pre=100)
+    // tripped a precision-mismatch bug: rationalize_pre exceeded what
+    // working_pre could resolve, so the rationalization captured binary
+    // representation noise as a "real" rational, leaking a 1e-25 residual
+    // into m_pure's diagonal and propagating into 1e7-1e21 errors on
+    // masters with all-zero BC.  Now defended in acb_real_to_fmpq_local
+    // (caps rationalize_digits at working_prec * log10(2) - safety).
+    nm::GlobalScope s;
+    s.expansion.x_order        = 8;
+    s.expansion.extra_x_order  = 8;
+    s.global.silent_mode       = true;
+    s.global.working_pre       = 120;   // pentabox default; defensive cap kicks in
+    s.global.chop_pre          = 20;
+    s.global.rationalize_pre   = 100;   // pentabox default; intentionally too high
+    s.commit();
+
+    auto rf_si = [](long n) { return nm::RationalFunction::from_si(n); };
+    auto rf_frac = [](long n, long d) { return nm::RationalFunction::from_si_si(n, d); };
+
+    const nm::RationalFunction eta = nm::RationalFunction::monomial(1);
+
+    nm::RationalMatrix de(3, 3);
+    // de[0,0] = mu_a / eta = -9/5 / eta
+    de(0, 0) = rf_frac(-9, 5) / eta;
+    de(0, 1) = nm::RationalFunction();
+    de(0, 2) = nm::RationalFunction();
+    // de[1,0] = 1/eta
+    de(1, 0) = rf_si(1) / eta;
+    // de[1,1] = mu_b/eta = -9/10 / eta
+    de(1, 1) = rf_frac(-9, 10) / eta;
+    de(1, 2) = nm::RationalFunction();
+    de(2, 0) = nm::RationalFunction();
+    // de[2,1] = 1/eta
+    de(2, 1) = rf_si(1) / eta;
+    // de[2,2] = mu_c/eta = 0
+    de(2, 2) = nm::RationalFunction();
+
+    std::vector<ode::BoundarySpec> bcs(3);
+    {
+        // a: BC mu = -9/5, value = 1 (in eta frame before reverse)
+        ode::BoundaryEntry e;
+        e.mu.set_si(0);
+        // build -9/5 via acb_set_fmpq
+        fmpq_t q; fmpq_init(q); fmpq_set_si(q, -9, 5);
+        acb_set_fmpq(e.mu.raw(), q, 80);
+        fmpq_clear(q);
+        e.value = acb_si(1);
+        bcs[0].push_back(std::move(e));
+    }
+    {
+        // b: BC mu = -9/10, value = 1
+        ode::BoundaryEntry e;
+        fmpq_t q; fmpq_init(q); fmpq_set_si(q, -9, 10);
+        acb_set_fmpq(e.mu.raw(), q, 80);
+        fmpq_clear(q);
+        e.value = acb_si(1);
+        bcs[1].push_back(std::move(e));
+    }
+    // c: empty
+
+    auto asy = ode::calc_inf(de, bcs);
+    ASSERT_EQ(asy.size(), 3u);
+
+    // We expect each integral has 2 terms (2 fractional regions: 4/5 and 9/10).
+    EXPECT_EQ(asy[0].size(), 2u) << "integral a should have 2 region terms";
+    EXPECT_EQ(asy[1].size(), 2u) << "integral b should have 2 region terms";
+    EXPECT_EQ(asy[2].size(), 2u) << "integral c should have 2 region terms";
+
+    // For integral c (the all-zero-BC master), verify cross-coupling values.
+    // c_a = 50/81 in Region 4/5 (order 1)
+    // c_b = -10/9 in Region 9/10 (order 0)
+    auto find_region_term = [&](const ode::AsyExpansion& asy_i, double frac_target) -> const ode::AsyTerm* {
+        for (const auto& t : asy_i) {
+            arb_t fpart;
+            arb_init(fpart);
+            // mu - floor(Re mu); for 0 < mu < 1, this is mu itself.
+            arb_set(fpart, acb_realref(t.mu.raw()));
+            fmpz_t z; fmpz_init(z);
+            arf_get_fmpz(z, arb_midref(fpart), ARF_RND_FLOOR);
+            arb_t zb; arb_init(zb); arb_set_fmpz(zb, z);
+            arb_sub(fpart, fpart, zb, 200);
+            double mid = arf_get_d(arb_midref(fpart), ARF_RND_NEAR);
+            arb_clear(zb); fmpz_clear(z); arb_clear(fpart);
+            if (std::abs(mid - frac_target) < 1e-10) return &t;
+        }
+        return nullptr;
+    };
+
+    const ode::AsyTerm* c_45 = find_region_term(asy[2], 0.8);
+    const ode::AsyTerm* c_910 = find_region_term(asy[2], 0.9);
+    ASSERT_NE(c_45, nullptr) << "no term in Region 4/5 for integral c";
+    ASSERT_NE(c_910, nullptr) << "no term in Region 9/10 for integral c";
+
+    // In Region 4/5: order-1 coeff of c = 50/81
+    ASSERT_GE(c_45->exp.size(), 1u);
+    ASSERT_GE(c_45->exp[0].size(), 2u);
+    EXPECT_TRUE(acb_close_to_double(c_45->exp[0][0], 0.0, 0.0, 1e-12))
+        << "c Region 4/5 order 0 should be 0; got " << c_45->exp[0][0].to_string(20);
+    EXPECT_TRUE(acb_close_to_double(c_45->exp[0][1], 50.0 / 81.0, 0.0, 1e-12))
+        << "c Region 4/5 order 1 should be 50/81 ≈ 0.617283...; got "
+        << c_45->exp[0][1].to_string(20);
+
+    // In Region 9/10: order-0 coeff of c = -10/9
+    ASSERT_GE(c_910->exp.size(), 1u);
+    ASSERT_GE(c_910->exp[0].size(), 1u);
+    EXPECT_TRUE(acb_close_to_double(c_910->exp[0][0], -10.0 / 9.0, 0.0, 1e-12))
+        << "c Region 9/10 order 0 should be -10/9 ≈ -1.1111...; got "
+        << c_910->exp[0][0].to_string(20);
+}
