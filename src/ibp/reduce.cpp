@@ -232,10 +232,17 @@ reduce(const qft::FamilyConfig& fc,
     }
 
     // === Step 2: Reduce-mode (target reduction in a sibling subdir) ===
+    //
+    // **Preferred file**: mirror MMA `AnalyticReduction`, which reuses
+    // the preferred file IBPSystem wrote (the *input* `preferred`).
+    // Do NOT write the sorted preheat output as preferred here; that
+    // changes Kira's elimination order and reduction rule structure.
+    // See `ibp::diffeq` for the failure mode observed on pentabox 2L
+    // when the sorted preheat is used instead of the input.
     fs::remove_all(reduce_dir);
     fs::create_directories(reduce_dir);
     kira_write_config(cfg, reduce_dir);
-    kira_write_preferred(out.masters, fc, reduce_dir);  // pin the basis
+    kira_write_preferred(preferred, fc, reduce_dir);  // mirror MMA: reuse input preferred
     kira_write_targets(targets, fc, reduce_dir);
     kira_write_jobs(cfg, reduce_dir, KiraReductionMode::Reduce);
     kira_run(cfg, reduce_dir, opts.log_file);
@@ -423,10 +430,23 @@ diffeq(const qft::FamilyConfig& fc,
     // `reduce()` call's own `apply_jdot_jrank_floor(opts, {targets,
     // preferred}, false)`; bypassing the nested call and writing the
     // Reduce yaml directly here preserves `opts_eff`'s `(rank, dot)`.
+    //
+    // **Preferred file**: mirrors MMA `AnalyticReduction`
+    // (Kira/interface.m:458-489), which **does not call `Preferred[]`**
+    // -- it reuses the file IBPSystem wrote (the *input* `preferred`).
+    // Writing the sorted-preheat output (228 masters) here instead of
+    // the original input (172 masters) changes Kira's elimination
+    // order and produces a different reduction rule (the dotted
+    // self-referencing form with 49+ RHS masters seen on pentabox).
+    // That mismatched rule structure cascades through the DE matrix
+    // construction and breaks pentabox top-sector master values by
+    // ~10^12.  Pentagon/wzbox/hexagon/mercedes/sunset aren't sensitive
+    // because their preheat masters happen to coincide with the input
+    // preferred ordering closely enough.
     fs::remove_all(reduce_dir);
     fs::create_directories(reduce_dir);
     kira_write_config(cfg, reduce_dir);
-    kira_write_preferred(masters, fc, reduce_dir);  // pin the basis
+    kira_write_preferred(jpreferred, fc, reduce_dir);  // mirror MMA: reuse input preferred
     kira_write_targets(all_ints, fc, reduce_dir);
     kira_write_jobs(cfg, reduce_dir, KiraReductionMode::Reduce);
     kira_run(cfg, reduce_dir, opts.log_file);

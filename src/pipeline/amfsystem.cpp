@@ -1032,6 +1032,22 @@ void AMFSystem::build_diffeq() {
                                         {"eta"}, top_pattern, bb);
 
     // Map preferred[i] -> sortedmasters index.
+    //
+    // The throw below enforces `preferred ⊆ sortedmasters` -- the same
+    // invariant MMA checks at `AMFSystemCombineSolution`
+    // (AMFlow.m:1220 `SubsetQ[Keys[sol], local]`).  MMA stores the
+    // Kira preheat output as the system's masters and only catches
+    // the violation later, after the system has been solved; we catch
+    // it eagerly here so that any divergence between the parent's
+    // BlackBoxReduce master list (`preferred_`) and Kira's
+    // eta-injected preheat (`sortedmasters`) surfaces with a
+    // diagnostic that names the offending integral.  Semantically
+    // equivalent to MMA -- just early-failing.  Correct upstream
+    // input never trips this; if it fires, the root cause lives in
+    // the *top-level* reduce (e.g. symbolic kinematics letting Kira
+    // mis-enumerate scaleless sub-sectors -- see
+    // `ibp::kira_write_config` for the MMA-faithful numeric
+    // substitution that prevents that class of failure).
     std::map<std::string, long> sorted_index;
     for (std::size_t i = 0; i < diffeq_result_.sortedmasters.size(); ++i) {
         sorted_index[jintegral_key(diffeq_result_.sortedmasters[i])] = (long)i;
@@ -1043,7 +1059,10 @@ void AMFSystem::build_diffeq() {
         if (it == sorted_index.end()) {
             throw std::runtime_error(
                 "AMFSystem::build_diffeq: preferred master '"
-                + jintegral_key(j) + "' not in Kira's master list");
+                + jintegral_key(j) + "' not in Kira's master list "
+                "(mirrors MMA's AMFSystemCombineSolution SubsetQ check, "
+                "early-fired; usually means the parent's top-level Kira "
+                "over-enumerated masters)");
         }
         pref_to_sorted_.push_back(it->second);
     }

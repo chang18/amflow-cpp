@@ -51,11 +51,17 @@ double kira_run(const KiraConfig& cfg,
     args.push_back(cfg.kira_executable);
     args.push_back("-p" + std::to_string(cfg.n_thread));
     args.push_back("jobs.yaml");
+    // Mirrors upstream `FilterRules[IBPRule, Prepend[MassScale, ep]]`
+    // (Kira/interface.m:274).  After `ibp::kira_write_config` baked the
+    // numeric_values into kinematics.yaml directly, the SP variables no
+    // longer appear in `kinematic_invariants` -- passing `-s<var>=<val>`
+    // for them confuses Kira (it locked up `set: s12 = -2` waiting on a
+    // symbol that no longer exists in the YAML).  We only forward `-sd`
+    // for the dimensional regulator `eps`, which is never substituted
+    // into the YAML.
     for (const auto& [name, value] : cfg.numeric_values) {
         if (name == "eps") {
             args.push_back("-sd=4-2*" + value);
-        } else {
-            args.push_back("-s" + name + "=" + value);
         }
     }
 

@@ -54,11 +54,6 @@ std::string mfrac_to_kira(const Mfrac& f) {
     return oss.str();
 }
 
-std::string mfrac_to_kira_neg(const Mfrac& f) {
-    Mfrac neg = -f;
-    return mfrac_to_kira(neg);
-}
-
 std::string top_pattern_to_int_str(const std::vector<int>& pat) {
     unsigned long long total = 0;
     for (std::size_t i = 0; i < pat.size(); ++i) {
@@ -75,6 +70,10 @@ std::string positions_where_one(const std::vector<int>& pat) {
     return list_to_string(out);
 }
 
+// Names of all symbolic scales appearing in fc (post-conservation
+// variable context).  Used to compute kinematic_invariants BEFORE
+// numeric substitution is applied; the actual yaml entry is then
+// filtered to only those that REMAIN after substitution.
 std::vector<std::string>
 mass_scale_names(const KiraConfig& cfg) {
     std::set<std::string> names;
@@ -92,6 +91,66 @@ mass_scale_names(const KiraConfig& cfg) {
     }
     std::vector<std::string> sorted(names.begin(), names.end());
     return sorted;
+}
+
+// RAII fmpq with non-throwing move; used to hold pre-parsed numeric
+// substitution values for the SubsExpr helper below.
+struct FmpqOwned {
+    fmpq_t q;
+    FmpqOwned()  { fmpq_init(q); }
+    ~FmpqOwned() { fmpq_clear(q); }
+    FmpqOwned(const FmpqOwned&) = delete;
+    FmpqOwned& operator=(const FmpqOwned&) = delete;
+};
+
+// Mirrors `SPToSTU /. IBPRule` (Kira/interface.m:53): apply the user's
+// numeric replacements (e.g. {s12 -> -2, mWsq -> 1}) directly into the
+// scalarproduct_rules and propagator masses we hand to Kira.  Without
+// this, Kira's Masters-mode call enumerates symbolic SPs and cannot
+// detect scaleless sub-sectors, over-including masters that MMA
+// (which substitutes upstream) correctly drops.  This caused the
+// pentabox_2L "preferred master not in Kira's master list" failure.
+struct NumericSubs {
+    std::vector<long> var_idx;
+    std::vector<std::unique_ptr<FmpqOwned>> values;
+
+    static NumericSubs build(const KiraConfig& cfg) {
+        NumericSubs out;
+        auto fc = cfg.fc;
+        for (const auto& [name, val_str] : cfg.numeric_values) {
+            if (name == "eps") continue;
+            long idx = fc->ctx->var_index(name);
+            if (idx < 0) continue;  // var unused by this fc
+            auto holder = std::make_unique<FmpqOwned>();
+            if (fmpq_set_str(holder->q, val_str.c_str(), 10) != 0) {
+                throw std::runtime_error(
+                    "kira_write_config: cannot parse numeric value '"
+                    + val_str + "' for '" + name + "'");
+            }
+            out.var_idx.push_back(idx);
+            out.values.push_back(std::move(holder));
+        }
+        return out;
+    }
+
+    algebra::Mfrac apply(const algebra::Mfrac& in) const {
+        algebra::Mfrac r = in.clone();
+        for (std::size_t i = 0; i < var_idx.size(); ++i) {
+            r = r.substitute(var_idx[i], values[i]->q);
+        }
+        return r;
+    }
+
+    algebra::Mfrac apply_poly(const algebra::Mpoly& in) const {
+        return apply(algebra::Mfrac::from_mpoly(in.clone()));
+    }
+};
+
+// True iff `var_idx` appears with non-zero exponent in either the
+// numerator or denominator of `f`.
+bool mfrac_uses_var(const algebra::Mfrac& f, long var_idx) {
+    return f.numerator().degree(var_idx) > 0 ||
+           f.denominator().degree(var_idx) > 0;
 }
 
 std::string jintegral_to_kira(const qft::JIntegral& j,
@@ -149,31 +208,71 @@ void kira_write_config(const KiraConfig& cfg, const std::string& dir) {
 
     std::string top = top_pattern_to_int_str(cfg.top_pattern);
 
+    NumericSubs subs = NumericSubs::build(cfg);
+
+    // Collect substituted SP rule RHSs and propagator masses; the
+    // kinematic_invariants list is the set of mass_scale_names that
+    // still appear after substitution (mirrors MMA's MassScale which
+    // is computed from SPToSTU AFTER /. IBPRule).
+    auto inv_names = mass_scale_names(cfg);
+    std::vector<Mfrac> sub_sp_rhs;
+    sub_sp_rhs.reserve(fc->reduced_replacement.size());
+    for (const auto& [key, rhs] : fc->reduced_replacement) {
+        sub_sp_rhs.push_back(subs.apply(rhs));
+    }
+    std::vector<Mfrac> sub_masses;
+    sub_masses.reserve(sq.masses.size());
+    for (const auto& m : sq.masses) {
+        sub_masses.push_back(subs.apply(m));
+    }
+    std::vector<Mfrac> sub_momenta;
+    sub_momenta.reserve(sq.momenta.size());
+    for (const auto& m : sq.momenta) {
+        sub_momenta.push_back(subs.apply(m));
+    }
+
     std::ostringstream props;
-    for (std::size_t i = 0; i < sq.momenta.size(); ++i) {
-        props << "\n      - [ \"" << mfrac_to_kira(sq.momenta[i])
-              << "\", " << mfrac_to_kira_neg(sq.masses[i]) << " ]";
+    for (std::size_t i = 0; i < sub_momenta.size(); ++i) {
+        Mfrac neg_mass = -sub_masses[i].clone();
+        props << "\n      - [ \"" << mfrac_to_kira(sub_momenta[i])
+              << "\", " << mfrac_to_kira(neg_mass) << " ]";
     }
 
     std::string cut = positions_where_one(fc->cut);
 
-    auto inv_names = mass_scale_names(cfg);
     std::ostringstream kin;
     for (const auto& v : inv_names) {
-        kin << "\n    - [" << v << ", 2]";
+        long vidx = fc->ctx->var_index(v);
+        if (vidx < 0) continue;
+        bool used = false;
+        for (const auto& f : sub_sp_rhs) {
+            if (mfrac_uses_var(f, vidx)) { used = true; break; }
+        }
+        if (!used) {
+            for (const auto& f : sub_masses) {
+                if (mfrac_uses_var(f, vidx)) { used = true; break; }
+            }
+        }
+        if (used) {
+            kin << "\n    - [" << v << ", 2]";
+        }
     }
 
     std::ostringstream rep;
-    for (const auto& [key, rhs] : fc->reduced_replacement) {
-        std::size_t sep = key.find('*');
-        if (sep == std::string::npos) {
-            throw std::runtime_error(
-                "kira_write_config: malformed leg-pair key '" + key + "'");
+    {
+        std::size_t idx = 0;
+        for (const auto& [key, rhs] : fc->reduced_replacement) {
+            std::size_t sep = key.find('*');
+            if (sep == std::string::npos) {
+                throw std::runtime_error(
+                    "kira_write_config: malformed leg-pair key '" + key + "'");
+            }
+            std::string p1 = key.substr(0, sep);
+            std::string p2 = key.substr(sep + 1);
+            rep << "\n    - [[" << p1 << "," << p2 << "], "
+                << mfrac_to_kira(sub_sp_rhs[idx]) << "]";
+            ++idx;
         }
-        std::string p1 = key.substr(0, sep);
-        std::string p2 = key.substr(sep + 1);
-        rep << "\n    - [[" << p1 << "," << p2 << "], "
-            << mfrac_to_kira(rhs) << "]";
     }
 
     std::ofstream f1(config_dir + "/integralfamilies.yaml");
