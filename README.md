@@ -46,8 +46,8 @@ for full attribution.
 This C++17 implementation was developed primarily by **AI coding
 agents** under the direction of the maintainer, with every behavioural
 change gated by numerical-parity verification against the upstream
-Mathematica reference.  The 30 oracle benchmarks under `tools/bench/`
-and the 545-case GoogleTest suite are the contract that the AI-led
+Mathematica reference.  The 31 oracle benchmarks under `tools/bench/`
+and the 547-case GoogleTest suite are the contract that the AI-led
 implementation has to honour for any change to land.
 
 Maintainer / contact: **3250800970@qq.com** (please open a GitHub
@@ -82,10 +82,10 @@ Public headers under `include/amflow/<domain>/`; implementation under
 
 | Area | State |
 |---|---|
-| Core ODE solver (port of upstream `DESolver.m`) | Implemented; 30/30 oracle cases match MMA reference at `rel ~1e-30` |
+| Core ODE solver (port of upstream `DESolver.m`) | Implemented; 31/31 oracle cases match MMA reference at `rel ~1e-30` (rel ~1e-10 on the pentabox 2L corner where the integral's intrinsic cancellation horizon dominates) |
 | AMFlow + Kira pipeline (upstream `AMFlow.m` core algorithms) | Implemented for the covered workflows |
 | Top-level entries (`amflow`, `black_box_amflow`, `solve_integrals`) | Implemented; exposed via `amflow_cli` JSON modes |
-| Line-level MMA parity audit | 86 🟢 verified, 0 🟡 unverified, 8 🔴 (7 fixed, 1 D5 out of scope); no silent-wrong-result paths remain. See [`docs/AUDIT_MMA_PARITY.md`](docs/AUDIT_MMA_PARITY.md) |
+| Line-level MMA parity audit | 86 🟢 verified, 0 🟡 unverified, 11 🔴 (10 fixed, 1 D5 out of scope); no silent-wrong-result paths remain. See [`docs/AUDIT_MMA_PARITY.md`](docs/AUDIT_MMA_PARITY.md) |
 | Wall-clock vs MMA | Benchmarking deferred until performed on a dedicated machine; see [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md) |
 | `SolveIntegralsGaugeLink`, HQET / SCET / Wilson lines | Out of scope (intentional) |
 | Complex-valued numeric kinematics (audit D5) | Out of scope (not supported); JSON dispatcher rejects `{"re":..,"im":..}` form. See [`docs/FAQ.md`](docs/FAQ.md) "What's *not* implemented?" |

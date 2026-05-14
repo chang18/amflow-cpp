@@ -11,22 +11,23 @@ parity audit.
 
 ## Active practice — diversity-driven oracle expansion
 
-The audit is closed: **86 🟢 / 0 🟡 / 7 🔴 fixed / 1 🔴 out of scope
+The audit is closed: **86 🟢 / 0 🟡 / 10 🔴 fixed / 1 🔴 out of scope
 (D5, see below) / 17 ⚪ intentional**.  Going forward the project's
 quality loop is **oracle diversification**: build new benchmarks
 along axes the existing suite under-covers, and fix anything that
 diverges from MMA inline.
 
-The 30 committed oracle triplets currently cover:
+The 31 committed oracle triplets currently cover:
 
 | Diversity axis | Current coverage |
 |---|---|
 | Loop number          | L = 1, 2, 3, 4 |
 | Kinematic invariants | 1 (`s`), 2 (`s, t`), 4 (`s, t, mWsq, mZsq`) |
+| External legs        | 2, 3, 4, **5** (pentabox 2L) |
 | Mass configurations  | all-massless, all-equal, mixed at L = 2 / 3 / 4 |
 | Cutkosky cuts        | 2-, 3-, 4-, 5-particle cuts |
 | ε extremes           | `1/2`, `1/100`, `1/1000`, `1/10000` |
-| Sector size          | ≤ 9 propagators |
+| Sector size          | ≤ 8 propagators (pentabox 2L corner) |
 
 Target additions: higher-loop multi-invariant cases, larger sectors
 (≥ 10 propagators), and any topology a downstream user reports.

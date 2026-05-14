@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **Pentabox 2L 5-leg oracle**
+  (`tools/bench/pentabox_2L_eps001_*`): two-loop pentabox with five
+  external legs, all-massless internals, eps = 1/1000.  Target is
+  the corner `j[pentabox2L, 1,1,1,1,1,1,1,1,0,0,0]`.  Matches MMA at
+  rel 9.35 × 10⁻¹² (Re) / 4.67 × 10⁻¹⁰ (Im); precision is
+  bounded by the ~120-digit working precision minus the cancellation
+  horizon inherent to the 76-master sub-system (intermediate values
+  reach 10²⁰⁰⁺).  First 2L 5-leg massless oracle.  MMA reference
+  JSON includes 172 sampled values (corner + 171 dotted masters).
+
 ### Fixed
 - **Audit divergence D8** (`canonical_boundary_permutation` +
   `canonical_taylor_permutation` re-route SparseGaussian's free
@@ -24,8 +35,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   functions now return identity (concatenate `analyze_block`
   output without re-sorting).  `banana_4L_mixed` now matches MMA
   at rel < 1e-30 on all 20 sampled values (was 2/20); all 545
-  gtests still pass.  Commit `c668f79`.  Audit table is now
-  **86 🟢 / 0 🟡 / 8 🔴 (7 fixed + 1 D5 out of scope) / 17 ⚪**.
+  gtests still pass.  Commit `c668f79`.
+- **Audit divergence D9** — three coupled Kira-pipeline alignment
+  fixes uncovered while debugging pentabox: (a) `src/ibp/kira_yaml.cpp`
+  now substitutes `cfg.numeric_values` into `scalarproduct_rules` and
+  propagator masses before writing `kinematics.yaml`, mirroring MMA's
+  `SPToSTU /. IBPRule` (Kira/interface.m:53); without it, Masters-mode
+  Kira sees symbolic SPs and over-enumerates masters (175 vs 172 for
+  pentabox top).  (b) `src/ibp/kira_run.cpp` stops forwarding
+  `-s<var>=<val>` for those numeric values now baked into the YAML,
+  matching `FilterRules[IBPRule, Prepend[MassScale, ep]]`
+  (Kira/interface.m:274); without it, Kira locks up waiting on a
+  symbol that no longer exists.  (c) `src/ibp/reduce.cpp` reuses the
+  *input* `preferred` / `jpreferred` file at Reduce-mode write time
+  instead of the sorted preheat output, mirroring upstream
+  `AnalyticReduction`.  Commit `c37f1a0`.
+- **Audit divergence D10** — precision-mismatch in
+  acb→fmpq rationalization: `acb_real_to_fmpq_local` (and three
+  parallel call-sites in `src/ode/path.cpp`,
+  `src/pipeline/amfsystem.cpp`, `src/numeric/matrix.cpp`) used
+  `rationalize_pre` directly without verifying it fits inside the
+  working precision.  When `rationalize_pre` (decimal digits)
+  exceeded `working_pre * log10(2) - 5`, the rationalization
+  captured binary-representation noise from the acb as a "real"
+  rational, leaking 10⁻²⁵ residuals into the diagonal of m_pure and
+  propagating into 10⁷-10²¹ errors on masters with all-zero BC.
+  Now caps `rationalize_digits` defensively.  Commit `650e369`.
+- **Audit divergence D11** — Jordan eigenvector normalization
+  mismatch: `fmpq_mat_nullspace_exact` (used internally by
+  `jordan_decomposition_exact`'s eigenvector search) returns FLINT's
+  integer-cleared null-space vectors — e.g. an eigenvector that
+  Mathematica would emit as `(6993/998, 1)` was returned as
+  `(6993, 998)`, a 998× scaling.  Without rescaling, downstream
+  shearing / leading-Jordan T blocks accumulated huge integer scale
+  factors that cascaded through the off-diagonal Sylvester step in
+  `to_fuchsian_global`, producing T entries up to 10³⁰⁰⁺ in the
+  pentabox 76-master sub-system and overwhelming PSMapRuleS at any
+  practical working precision (the corner value came out as
+  `7.84 × 10¹² - 3.04 × 10¹³ i` vs MMA reference
+  `2.24 - 150.51 i` on the 6-prop subsection that triggered
+  isolation).  `fmpq_mat_nullspace_exact` now rescales each
+  null-space basis vector so its last non-zero entry is 1, matching
+  Mathematica's Eigenvectors / JordanDecomposition convention.
+  Regression test
+  `JordanTest.JordanEigenvectorsNormalizedToLastEntryOne`.
+  Commit `f4f2aee`.  Audit table is now
+  **86 🟢 / 0 🟡 / 11 🔴 (10 fixed + 1 D5 out of scope) / 17 ⚪**.
 
 ### Changed
 - **D5 ComplexMode reclassified from "deferred indefinitely" to "out

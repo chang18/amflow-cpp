@@ -12,11 +12,11 @@ covered by the oracle benchmarks under
 |---|---|---|
 | 🟢 verified                  | 86 | — |
 | 🟡 unverified (oracle gap)    |  0 | All 21 originally-🟡 audit rows are now closed (see §3 below for per-row closure paths).  Future audit growth comes from oracle-diversity benches under [`tools/bench/`](../tools/bench/), each landing as 🟢 by construction. |
-| 🔴 actual divergence          |  8 | **7 fully fixed; 1 out of scope** (D5 ComplexMode — complex-valued numeric kinematics will not be implemented; entry-point rejects loudly). |
+| 🔴 actual divergence          | 11 | **10 fully fixed; 1 out of scope** (D5 ComplexMode — complex-valued numeric kinematics will not be implemented; entry-point rejects loudly). |
 | ⚪ intentionally not ported   | 17 | — |
 
 Net assessment: **no oracle-validated path is wrong**, and **no
-silent-wrong-result path remains**.  Seven of the eight 🔴 items
+silent-wrong-result path remains**.  Ten of the eleven 🔴 items
 have been fully corrected (see §2 below for per-row details).  Only
 D5 (complex-valued numeric kinematics) is out of scope — see §D5;
 the JSON entry-point rejects the complex-numeric form with a clear
@@ -308,6 +308,114 @@ Full per-pass reports: `/tmp/audit_desolver.md`, `/tmp/audit_amflow.md`,
 - **Validation**: `banana_4L_mixed` now matches MMA at rel < 1e-30
   on all 20 sampled values (was 2/20 matching); all 545 previously
   passing gtests still pass.  Commit `c668f79` (2026-05-13).
+
+### D9. Kira pipeline alignment (numeric substitution / run flags / Reduce-mode preferred) — **FIXED (mirror MMA's `SPToSTU /. IBPRule` + `FilterRules` + `AnalyticReduction` reuse)**
+
+Three coupled Kira-pipeline divergences surfaced while debugging the
+pentabox 2L 5-leg oracle.  All three trace back to the C++ port
+keeping symbolic SPs and a sorted-preheat preferred list where MMA
+substitutes numerics into the YAML up-front and reuses the input
+preferred file verbatim:
+
+- **D9a — numeric SPs leak into Masters-mode Kira.**  Upstream
+  `Kira/interface.m:53` runs `SPToSTU /. IBPRule` before writing
+  `kinematics.yaml`, baking numeric values for `s12`, `s23`, …
+  into `scalarproduct_rules` and propagator masses.  C++ (was)
+  wrote the symbolic YAML and forwarded numerics through
+  `-s<var>=<val>` instead.  Result: Kira's Masters-mode call sees
+  symbolic SPs, cannot identify scaleless sub-sectors, and
+  over-enumerates masters — `175 vs 172` for the pentabox top.  The
+  build_diffeq step then fails with `"preferred master not in
+  Kira's master list"`.
+- **D9b — `-s<var>=<val>` race against baked-in YAML.**  Once D9a
+  bakes numerics into the YAML, forwarding the same numerics via
+  `-s<var>=<val>` is at best wasted and at worst (when the symbol
+  no longer exists in the YAML at all) makes Kira lock up at
+  `set: s12 = -2`.  Mirrors `FilterRules[IBPRule, Prepend[MassScale, ep]]`
+  in `Kira/interface.m:274`.
+- **D9c — Reduce-mode preferred file gets sorted twice.**  At
+  Reduce-mode write time, `ibp::reduce` and `ibp::diffeq` (was)
+  re-emitted the *sorted preheat* preferred list instead of the
+  original `preferred` / `jpreferred` input.  MMA
+  `AnalyticReduction` reuses the IBPSystem preferred file verbatim;
+  the C++ resort produced 49+ RHS terms for masters whose LHS = the
+  master itself, breaking Kira's elimination order in the pentabox
+  2L case.
+
+- **Fix (all three)**: `src/ibp/kira_yaml.cpp` substitutes
+  `cfg.numeric_values` into `scalarproduct_rules` and propagator
+  masses and recomputes `kinematic_invariants` to drop variables
+  that no longer appear; `src/ibp/kira_run.cpp` filters those same
+  variables out of the `-s<var>=<val>` forwarding (only `-sd` and
+  `-seps` remain); `src/ibp/reduce.cpp` uses the input
+  `preferred` / `jpreferred` at Reduce-mode write time.  Commit
+  `c37f1a0` (2026-05-13).
+
+### D10. Precision-mismatch in `acb_real_to_fmpq` rationalization — **FIXED (cap `rationalize_digits` at `working_pre * log10(2) - 5`)**
+
+- **Symptom**: when `RationalizePre` (decimal digits) exceeded what
+  `WorkingPre` (binary precision) can resolve, `acb_real_to_fmpq`
+  (and three parallel call-sites at `src/ode/path.cpp`,
+  `src/pipeline/amfsystem.cpp`, `src/numeric/matrix.cpp`) treated
+  binary-representation noise from the `acb_t` midpoint as a "real"
+  rational and emitted a non-zero residue that should have been
+  zero.  The leaked 10⁻²⁵ residual landed in the diagonal of
+  `m_pure` and propagated into 10⁷-10²¹ errors on masters whose
+  exact BC was zero.  Symptom is dependent on the
+  WorkingPre/RationalizePre ratio rather than on the topology, so
+  it surfaced only when pentabox forced the user-facing default of
+  `RationalizePre=100` to actually be used at `WorkingPre=120`
+  (≈ 36 decimal digits).
+- **Fix**: cap `rationalize_digits` to `floor(working_prec_bits * log10(2)) - 5`
+  in all four call-sites before passing it to
+  `arb_to_rational` / `acb_real_to_fmpq`.  The 5-digit safety margin
+  shields the result from FLINT's interval-arithmetic rounding.
+  Regression covered by the new synthetic 3-master multi-fractional
+  test (`tests/test_ode_inf.cpp::InfTest.CalcInf_MultiFractional_CrossCoupling_AllZeroBC`).
+  Commit `650e369` (2026-05-13).
+
+### D11. Jordan eigenvector normalization mismatch (MMA "last entry = 1" vs FLINT integer-cleared) — **FIXED (`fmpq_mat_nullspace_exact` rescales to MMA convention)**
+
+- **Symptom**: FLINT's `fmpz_mat_nullspace` (used internally by
+  `jordan_decomposition_exact`'s eigenvector search) returns null-
+  space basis vectors with denominator-cleared INTEGER entries.
+  For an eigenvector that Mathematica would emit as `(6993/998, 1)`,
+  FLINT returns `(6993, 998)` — a 998× scaling.  Without rescaling,
+  downstream `shearing_transformation` / `leading_jordan` T blocks
+  accumulate the integer factors (T col scaled by `ele[k]` and then
+  by an integer-cleared `u`), cascading through the off-diagonal
+  Sylvester step in `to_fuchsian_global` (each iteration injects
+  the partner block's T scale via `T[l_rows][cols] += T[l_rows][rows] . G / eta^p`).
+  In the pentabox 2L 5-leg 76-master sub-system this snowballed T
+  entries to 10³⁰⁰⁺, overwhelming PSMapRuleS at any practical
+  working precision.  The 6-prop sub-target
+  `j[0,1,0,1,1,1,1,1,0,0,0]` came out as
+  `7.84 × 10¹² - 3.04 × 10¹³ i` against the MMA reference
+  `2.24 - 150.51 i`.  Smaller benches (hexagon 1L, mercedes 3L,
+  sunset 4L, all the existing 545 gtests) did NOT trip the cascade
+  because their normalize-mat chains stayed inside the
+  PSMapRuleS precision budget.
+- **Root cause**: MMA's `JordanDecomposition` / `Eigenvectors`
+  normalizes eigenvectors so the **last non-zero entry equals 1**
+  (e.g. `(6993/998, 1)`).  FLINT's integer-cleared convention
+  produces the same eigenline scaled by a denominator factor (e.g.
+  `998` here, but in deeper sub-systems can reach 6993, 1 / eps,
+  or multiples thereof).  The C++ shearing math is mathematically
+  valid in either basis, but the off-diagonal Sylvester corrections
+  inherit the scaling and stack multiplicatively.
+- **Fix**: `fmpq_mat_nullspace_exact` (`src/ode/jordan.cpp`)
+  rescales each null-space basis vector so its last non-zero entry
+  is 1, matching Mathematica's convention.  Regression test
+  `JordanTest.JordanEigenvectorsNormalizedToLastEntryOne` uses the
+  exact 2×2 post-shearing residue from the pentabox `{7, 8}` block
+  that surfaced the failure.
+- **Validation**: pentabox `j[0,1,0,1,1,1,1,1,0,0,0]` (6-prop
+  sub-target) now matches MMA at 30+ digits; the corner
+  `j[1,1,1,1,1,1,1,1,0,0,0]` matches at rel ≤ 4.7 × 10⁻¹⁰
+  (~10 significant digits; the cancellation horizon of the
+  76-master sub-system limits precision against eps = 1/1000).
+  All 547 gtests (was 546 pre-D11, +1 regression test) pass.
+  Commit `f4f2aee` (2026-05-14).
 
 ---
 

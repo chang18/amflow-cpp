@@ -42,7 +42,7 @@ exposes the same FLINT that pkg-config selected at configure time.
 
 Yes.  Kira and Fermat are **runtime** dependencies of `solve_integrals`
 and `black_box_amflow` only.  `cmake --build build -j` works fine
-without them.  The 545-case test suite runs without Kira too — Kira-
+without them.  The 547-case test suite runs without Kira too — Kira-
 dependent tests auto-skip when the `kira` binary isn't on `$PATH`.
 
 The raw `amflow` mode (the ODE engine) doesn't need Kira at all — see
@@ -238,9 +238,11 @@ This project's C++17 source was developed primarily by AI coding
 agents under the maintainer's direction.  The trustworthiness contract
 is **numerical parity**:
 
-- 30 oracle benchmarks under `tools/bench/` match upstream Mathematica
-  AMFlow at `rel ~ 10⁻³⁰`.
-- 545 GoogleTest cases gate the public surface.
+- 31 oracle benchmarks under `tools/bench/` match upstream Mathematica
+  AMFlow at `rel ~ 10⁻³⁰` (rel ~ 10⁻¹⁰ on the pentabox 2L 5-leg
+  corner, where the integral's intrinsic cancellation horizon
+  bounds the achievable precision at fixed `WorkingPre`).
+- 547 GoogleTest cases gate the public surface.
 - Every commit is gated by both, in CI on every push.
 
 The tests (not the code) are the contract.  If the tests are right,
