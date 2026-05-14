@@ -406,3 +406,82 @@ TEST(JordanTest, RationalMatrixFromFmpqMat_RoundTrip) {
     fmpq_mat_clear(A);
     fmpq_mat_clear(out);
 }
+
+// ============================================================================
+//  Eigenvector normalization regression test (pentabox 76-master sub-system)
+//
+//  Bug: FLINT's fmpz_mat_nullspace (used internally by
+//  jordan_decomposition_exact's eigenvector search) returns vectors with
+//  denominator-cleared INTEGER entries.  For an eigenvector that Mathematica
+//  would emit as (6993/998, 1) FLINT returns (6993, 998).  Without
+//  rescaling, downstream shearing / leading-Jordan T blocks accumulate huge
+//  integer scale factors, cascading through the off-diagonal Sylvester step
+//  in to_fuchsian_global to produce T entries up to 10^300+ in hard cases
+//  (the pentabox 2L 5-leg 76-master sub-system) -- overwhelming any
+//  practical working precision in PSMapRuleS.
+//
+//  Fix: normalize each null-space basis vector so its LAST non-zero entry
+//  is 1, matching Mathematica's Eigenvectors / JordanDecomposition
+//  convention.
+//
+//  Test matrix:  A = [[999/1000, 0], [499/3500, 0]]
+//                (the post-shearing leading residue of the 2-master block
+//                 {7,8} that surfaced the pentabox failure.)
+//  Eigenvalues:  0 and 999/1000.
+//  Expected (Mathematica-convention) eigenvectors:
+//                col_for_zero      = (0, 1)
+//                col_for_999/1000  = (6993/998, 1)
+//
+//  Without the fix, col_for_999/1000 = (6993, 998), 998x larger.
+// ============================================================================
+TEST(JordanTest, JordanEigenvectorsNormalizedToLastEntryOne) {
+    fmpq_mat_t A;
+    fmpq_mat_init(A, 2, 2);
+    fmpq_set_si(fmpq_mat_entry(A, 0, 0), 999, 1000);
+    fmpq_set_si(fmpq_mat_entry(A, 1, 0), 499, 3500);
+
+    fmpq_mat_t S, J, Sinv;
+    fmpq_mat_init(S, 2, 2);
+    fmpq_mat_init(J, 2, 2);
+    fmpq_mat_init(Sinv, 2, 2);
+    std::vector<long> blocks;
+    ode::jordan_decomposition_exact(S, J, Sinv, blocks, A);
+    expect_reconstructs(A, S, J, Sinv);
+
+    // Each column of S is a (generalized) eigenvector.  The last non-zero
+    // entry must equal 1 in every column.
+    for (slong c = 0; c < 2; ++c) {
+        slong last_nz = -1;
+        for (slong r = 1; r >= 0; --r) {
+            if (!fmpq_is_zero(fmpq_mat_entry(S, r, c))) {
+                last_nz = r;
+                break;
+            }
+        }
+        ASSERT_GE(last_nz, 0) << "S column " << c << " is all zero";
+        EXPECT_TRUE(fmpq_is_one(fmpq_mat_entry(S, last_nz, c)))
+            << "S col " << c << " last non-zero entry must equal 1";
+    }
+
+    // The column whose corresponding eigenvalue is 999/1000 must have its
+    // first entry equal to 6993/998.
+    fmpq_t expected_first;
+    fmpq_init(expected_first);
+    fmpq_set_si(expected_first, 6993, 998);
+
+    bool found_nonzero_eig = false;
+    for (slong c = 0; c < 2; ++c) {
+        if (!fmpq_is_zero(fmpq_mat_entry(J, c, c))) {
+            EXPECT_TRUE(fmpq_equal(fmpq_mat_entry(S, 0, c), expected_first))
+                << "S col " << c << " first entry must equal 6993/998";
+            found_nonzero_eig = true;
+        }
+    }
+    EXPECT_TRUE(found_nonzero_eig);
+
+    fmpq_clear(expected_first);
+    fmpq_mat_clear(Sinv);
+    fmpq_mat_clear(J);
+    fmpq_mat_clear(S);
+    fmpq_mat_clear(A);
+}

@@ -108,6 +108,34 @@ slong fmpq_mat_nullspace_exact(fmpq_mat_t basis, const fmpq_mat_t A) {
                      fmpz_mat_entry(N.data, i, j));
             fmpz_one(fmpq_denref(fmpq_mat_entry(basis, i, j)));
         }
+        // Normalize each null-space basis vector so its last non-zero entry
+        // is 1, matching Mathematica's Eigenvectors / JordanDecomposition
+        // convention.  FLINT's fmpz_mat_nullspace returns vectors with
+        // denominator-cleared integer entries -- e.g. an eigenvector that
+        // Mathematica would emit as (6993/998, 1) is returned as (6993, 998).
+        // Without this rescaling, downstream shearing / leading-Jordan T
+        // blocks accumulate huge integer scale factors (1/eps-sized) that
+        // cascade through the off-diagonal Sylvester step in
+        // to_fuchsian_global, producing T entries up to 10^300+ in hard
+        // cases (pentabox 2L 5-leg 76-master sub-system) that overwhelm
+        // any practical working precision in PSMapRuleS.
+        slong last_nz = -1;
+        for (slong i = nc - 1; i >= 0; --i) {
+            if (!fmpq_is_zero(fmpq_mat_entry(basis, i, j))) {
+                last_nz = i;
+                break;
+            }
+        }
+        if (last_nz >= 0 && !fmpq_is_one(fmpq_mat_entry(basis, last_nz, j))) {
+            fmpq_t pivot;
+            fmpq_init(pivot);
+            fmpq_set(pivot, fmpq_mat_entry(basis, last_nz, j));
+            for (slong i = 0; i < nc; ++i) {
+                fmpq_div(fmpq_mat_entry(basis, i, j),
+                         fmpq_mat_entry(basis, i, j), pivot);
+            }
+            fmpq_clear(pivot);
+        }
     }
     return nullity;
 }
