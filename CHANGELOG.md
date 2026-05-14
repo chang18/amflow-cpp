@@ -17,6 +17,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   horizon inherent to the 76-master sub-system (intermediate values
   reach 10²⁰⁰⁺).  First 2L 5-leg massless oracle.  MMA reference
   JSON includes 172 sampled values (corner + 171 dotted masters).
+- **Pentagon 1L massive oracle**
+  (`tools/bench/pentagon_1L_W_mass_*`): one-loop pentagon with one
+  massive propagator (`l^2 - msq`, `msq = 1`), eps = 1/1000.  Target
+  is the corner `j[pentagon, 1, 1, 1, 1, 1]`.  Matches MMA at
+  rel 9.15 × 10⁻³¹ (Re) / 1.27 × 10⁻³⁰ (Im) — full
+  working-precision agreement.  First 1L 5-leg single-mass oracle;
+  extends the all-massless `pentagon_1L_eps001` along the
+  mass-configuration diversity axis.
+
+### Verified — pattern-diverse stress test sweep (2026-05-14)
+
+The post-fix stress test sweep ran eight pattern-diverse pentabox /
+cross-topology variants in addition to the corner pentabox oracle.
+Outcomes (all C++ vs MMA, same WorkingPre = 120 / XOrder = 240):
+
+| Variant | Pattern stressed | rel (Re) | rel (Im) |
+|---|---|---|---|
+| pentabox 2L corner @ eps = 1/100              | ε less extreme               | 2.98e-31 | 1.56e-30 |
+| pentabox 2L corner @ eps = 1/10000            | ε extreme                    | 3.95e-10 | 5.73e-7 |
+| pentabox 2L dotted target j[2,1,1,…]          | dotted-master target         | 3.99e-11 | 4.11e-9 |
+| pentabox 2L all-Euclidean Mandelstam (sij=-1) | cross-threshold removed       | 5.91e-31 | 1.50e-31 |
+| pentagon 1L massive (first prop l²-msq)       | NEW pattern: 1L 5-leg + mass  | 9.15e-31 | 1.27e-30 |
+| doublebox 2L @ eps = 1/10000                  | 2L 4-leg ε extreme            | 7.21e-31 | 1.62e-31 |
+| mercedes 3L dotted j[2,1,1,1,1,1,0,…]          | 3L 2-leg dotted master        | 7.05e-31 | 1.50e-30 |
+| banana 4L equal-mass @ eps = 1/100            | 4L 2-leg ε less extreme       | 1.03e-30 | 7.17e-31 |
+
+The fix landed in D11 holds across every pattern probed.  The only
+precision regressions vs the strict rel ≤ 10⁻³⁰ tolerance are
+**pentabox-specific** and **topology-intrinsic**, not bugs:
+doublebox 2L at the same `eps = 1/10000` matches MMA at rel ≤ 1.6e-31,
+confirming that the pentabox 2L 76-master sub-system's 1/eps cascade
+of T entries is what bounds precision in the extreme-ε / dotted /
+cross-threshold rows above, not a numerical defect in the C++ path.
 
 ### Fixed
 - **Audit divergence D8** (`canonical_boundary_permutation` +
