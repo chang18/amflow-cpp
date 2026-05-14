@@ -12,15 +12,18 @@ covered by the oracle benchmarks under
 |---|---|---|
 | 🟢 verified                  | 86 | — |
 | 🟡 unverified (oracle gap)    |  0 | All 21 originally-🟡 audit rows are now closed (see §3 below for per-row closure paths).  Future audit growth comes from oracle-diversity benches under [`tools/bench/`](../tools/bench/), each landing as 🟢 by construction. |
-| 🔴 actual divergence          | 11 | **10 fully fixed; 1 out of scope** (D5 ComplexMode — complex-valued numeric kinematics will not be implemented; entry-point rejects loudly). |
+| 🔴 actual divergence          | 12 | **10 fully fixed; 1 out of scope** (D5 ComplexMode); **1 open** (D12 doublebox 2L interleaved 2-mass — see §D12; not on the committed-oracle path). |
 | ⚪ intentionally not ported   | 17 | — |
 
-Net assessment: **no oracle-validated path is wrong**, and **no
-silent-wrong-result path remains**.  Ten of the eleven 🔴 items
-have been fully corrected (see §2 below for per-row details).  Only
-D5 (complex-valued numeric kinematics) is out of scope — see §D5;
-the JSON entry-point rejects the complex-numeric form with a clear
-error rather than silently mishandling it.
+Net assessment: **no committed-oracle path is wrong** (all 33 oracle
+benches under `tools/bench/` match MMA at rel ~10⁻³⁰ except where the
+integral's intrinsic cancellation horizon limits precision).  Ten of
+the twelve 🔴 items have been fully corrected (see §2 below for
+per-row details); D5 (complex-valued numeric kinematics) is out of
+scope (the JSON entry-point rejects loudly); D12 (doublebox 2L
+4-leg with interleaved 2-mass scheme) is a recently discovered
+divergence not surfaced by any committed oracle, deferred to a
+focused fix session — see §D12.
 
 ---
 
@@ -416,6 +419,45 @@ preferred file verbatim:
   76-master sub-system limits precision against eps = 1/1000).
   All 547 gtests (was 546 pre-D11, +1 regression test) pass.
   Commit `f4f2aee` (2026-05-14).
+
+### D12. Doublebox 2L 4-leg with interleaved 2-mass scheme — **OPEN (deferred to focused fix session)**
+
+- **Symptom**: a 2-loop doublebox topology with two distinct internal
+  masses **interleaved across both loops** (`mA` on prop 0 of `l1` AND
+  prop 3 of `l2`; `mB` on prop 1 of `l1` AND prop 5 of `l2`) produces a
+  C++ result with the wrong real-part sign **and** a real-magnitude
+  imaginary part where MMA gives the numerical noise floor.
+  - C++: `+0.05267532... + 0.151599888... i`
+  - MMA: `−0.04900476... + 1.85e-68 i`
+- **Pattern is mass-distribution-specific**:
+  - All-massless doublebox (`doublebox_sv_eps001`) → C++ matches at
+    rel ≤ 10⁻³⁰.
+  - Single internal mass (`l1²−msq` only) → C++ matches at rel
+    5.04 × 10⁻³¹.
+  - 2-mass **block** scheme (`mA` on left box `l1` props 0+1, `mB`
+    on right box `l2` props 3+5) → C++ matches MMA at ~30 digits.
+  - 2-mass **interleaved** scheme (`mA` crosses both loops; same for
+    `mB`) → C++ wrong as above.
+- **What is NOT the cause**: the η-injection choice itself.  Both
+  C++ and MMA pick `pos = {0, 3}` for the top sector (verified via
+  `AMFLOW_DEBUG_SCHEME=1` trace and MMA's
+  `AMFSystemBoundaryCondition: 4 possible integration regions
+  around eta = Infinity` log; the 4-region structure is identical).
+- **Suspect location**: downstream of η-injection, in the
+  region-by-region Frobenius expansion or boundary-integrand /
+  Jacobian handling at `src/pipeline/amfsystem.cpp` (boundary
+  setup) or `src/qft/boundary.cpp`.  Differs from D4 (Jacobian
+  silently dropped) because the bare-`branch_momenta`
+  permutation-matrix invariant is preserved here.
+- **Reproduction**: bench files staged under
+  `tmp/batch5_tests/configs/doublebox_2L_2mass_*` (NOT committed to
+  `tools/bench/` until fix lands — committing a known-failing oracle
+  would break CI on parity-check).
+- **Status**: open; root-cause requires region-by-region intermediate-
+  value comparison between C++ and MMA at the AMFSystem solve layer
+  (4 regions × multiple integrals).  Estimated 1-day focused fix
+  session.  Discovered 2026-05-15 during the pattern-diverse
+  multi-mass stress sweep (batch5).
 
 ---
 
