@@ -98,8 +98,7 @@ C++ wallclock notes:
   occupying fer64/kira; "(parallel)" entries were measured under load
   with the other two `eps = 1/1000` benchmarks running concurrently
   (CPU% ~30-200% per process), so they are upper bounds — the serial
-  wallclocks would be lower. C++ is consistently ~2-3x faster than
-  Mathematica AMFlow on the same family at this precision.
+  wallclocks would be lower.
 
 ## Notes
 

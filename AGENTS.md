@@ -24,8 +24,8 @@ load-bearing rules.
   document is the onboarding contract).  The maintainer
   (<3250800970@qq.com>) directs the work but does not line-review;
   the parity contract — the oracle benchmarks under `tools/bench/`
-  (currently 32) and the 547-case GoogleTest suite — is the gate
-  every change must pass.
+  and the 547-case GoogleTest suite — is the gate every change must
+  pass.
 
 ## Where to start reading
 

@@ -26,8 +26,13 @@ Mathematica expression or trace why a result differs.
 
 Conventions:
 
-- "Layer N" indicates the C++ layer that owns the implementation.  See
-  [`docs/ARCHITECTURE.md`](ARCHITECTURE.md) for per-layer details.
+- "Layer N" labels below are **legacy module names** from the v1.0
+  port.  The current source tree is organized by **domain** under
+  `src/<domain>/` (`numeric`, `algebra`, `ode`, `qft`, `ibp`,
+  `pipeline`, `api`, `cli`); see
+  [`docs/ARCHITECTURE.md`](ARCHITECTURE.md) for the current
+  organization.  Layer 6/7 ↔ `src/ode/`, Layer 11-16 ↔
+  `src/qft/` + `src/ibp/` + `src/pipeline/`, Layer 17 ↔ `src/cli/`.
 - "—" means the function has no C++ counterpart, either because it is
   a Mathematica idiom (e.g. `MatrixDensity` for diagnostics) or because
   it is an internal helper that has been refactored.
@@ -101,18 +106,18 @@ Block scope `Block[{XOrder=..., SilentMode=True}, ...]` →
 | .m symbol | C++ |
 |---|---|
 | `PBar[P]` | (inlined; `I - P`) |
-| `Balance[P]` | local `balance(P)` in `layer7_normalize.cpp` for the ToFuchsian projector path |
+| `Balance[P]` | local `balance(P)` in `src/ode/normalize.cpp` for the ToFuchsian projector path |
 | `InvBalance[P]` | local `inv_balance(P)` for the ToFuchsian projector path |
 | `ReduceL0[L0, r, lblock]` | local `reduce_l0_exact(...)` over `fmpq_mat_t` |
 | `DynamicPartition[l, p]` | — (inlined where needed) |
 | `FindProjector[cp, cp1]` | local `find_projector_exact(...)` over `fmpq_mat_t` |
-| `ToFuchsian[mat]` | local `to_fuchsian_local(...)` in `layer7_normalize.cpp`; irreducible leading rank throws |
-| `JordanDecomposition[(mat eta) /. eta -> 0]` | `jordan_decomposition_exact(...)` in `layer7_jordan_exact.cpp` for `NormalizeMat` rational residues |
-| `NormalEigen[feps]` | local `normal_eigen(...)` in `layer6_inf.cpp`; Layer 7 integer floors use exact `fmpq_floor_si(...)` after exact Jordan |
-| `NormalizeEigenQ[mat]` | local `normalize_eigen_q(...)` in `layer7_normalize.cpp` |
-| `ShearingTransformation[mat]` | local `shearing_transformation(...)` in `layer7_normalize.cpp` |
-| `NormalizeEigen[mat]` | local `normalize_eigen(...)` in `layer7_normalize.cpp` |
-| `NormalizeDiagonal[mat]` | local `normalize_diagonal(...)` in `layer7_normalize.cpp` |
+| `ToFuchsian[mat]` | local `to_fuchsian_local(...)` in `src/ode/normalize.cpp`; irreducible leading rank throws |
+| `JordanDecomposition[(mat eta) /. eta -> 0]` | `jordan_decomposition_exact(...)` in `src/ode/jordan.cpp` for `NormalizeMat` rational residues |
+| `NormalEigen[feps]` | local `normal_eigen(...)` in `src/ode/inf.cpp`; Layer 7 integer floors use exact `fmpq_floor_si(...)` after exact Jordan |
+| `NormalizeEigenQ[mat]` | local `normalize_eigen_q(...)` in `src/ode/normalize.cpp` |
+| `ShearingTransformation[mat]` | local `shearing_transformation(...)` in `src/ode/normalize.cpp` |
+| `NormalizeEigen[mat]` | local `normalize_eigen(...)` in `src/ode/normalize.cpp` |
+| `NormalizeDiagonal[mat]` | local `normalize_diagonal(...)` in `src/ode/normalize.cpp` |
 
 ---
 
@@ -120,8 +125,8 @@ Block scope `Block[{XOrder=..., SilentMode=True}, ...]` →
 
 | .m symbol | C++ |
 |---|---|
-| `SolveOffDiagonal[a0, b0, c0, p]` | `internal::solve_off_diagonal_fmpq(...)` in `layer7_normalize.cpp` |
-| `ToFuchsianGlobal[mat]` | local `to_fuchsian_global(...)` in `layer7_normalize.cpp` |
+| `SolveOffDiagonal[a0, b0, c0, p]` | `internal::solve_off_diagonal_fmpq(...)` in `src/ode/normalize.cpp` |
+| `ToFuchsianGlobal[mat]` | local `to_fuchsian_global(...)` in `src/ode/normalize.cpp` |
 
 ---
 

@@ -3,6 +3,12 @@
 These conventions are *not* per-layer — they are honoured everywhere in
 the codebase.  Violating any of them will silently produce wrong results.
 
+> _Note_: "Layer N" labels below refer to the legacy module organization
+> used during the v1.0 port.  The current source tree is organized by
+> **domain** (`numeric` → `algebra` → `ode`/`qft`/`ibp`/`pipeline`/`api`/`cli`)
+> under `src/<domain>/`; see [`ARCHITECTURE.md`](ARCHITECTURE.md) for the
+> current layout.
+
 ---
 
 ## 1. Precision is decimal at the API, binary internally
@@ -212,7 +218,7 @@ from the caller.
 
 ## 10. Exact Jordan block counts use kernel-tower differences
 
-In `layer7_jordan_exact.cpp`, for one eigenvalue:
+In `src/ode/jordan.cpp`, for one eigenvalue:
 
 ```text
 V_s = ker((A - lambda I)^s)
@@ -396,7 +402,7 @@ to keep entries as reduced rational functions.  This corrected matrix
 is then passed to `CalcTaylor`, which internally invokes `NHEquations`
 on it.
 
-The correct C++ implementation lives in `layer6_inf.cpp`:
+The correct C++ implementation lives in `src/ode/inf.cpp`:
 
 - `build_taylor_symbolic(mat, int_offsets, ini_rat)` does the full
   BuildTaylor (off-diagonal `η^(int_offsets[j] - int_offsets[i])`

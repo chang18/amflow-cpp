@@ -46,7 +46,7 @@ for full attribution.
 This C++17 implementation was developed primarily by **AI coding
 agents** under the direction of the maintainer, with every behavioural
 change gated by numerical-parity verification against the upstream
-Mathematica reference.  The 33 oracle benchmarks under `tools/bench/`
+Mathematica reference.  The 34 oracle benchmarks under `tools/bench/`
 and the 547-case GoogleTest suite are the contract that the AI-led
 implementation has to honour for any change to land.
 
@@ -82,10 +82,10 @@ Public headers under `include/amflow/<domain>/`; implementation under
 
 | Area | State |
 |---|---|
-| Core ODE solver (port of upstream `DESolver.m`) | Implemented; 33/33 oracle cases match MMA reference at `rel ~1e-30` (rel ~1e-10 on the pentabox 2L corner where the integral's intrinsic cancellation horizon dominates) |
+| Core ODE solver (port of upstream `DESolver.m`) | Implemented; 34/34 oracle cases match MMA reference at `rel ~1e-30` (rel ~1e-10 on the pentabox 2L corner where the integral's intrinsic cancellation horizon dominates) |
 | AMFlow + Kira pipeline (upstream `AMFlow.m` core algorithms) | Implemented for the covered workflows |
 | Top-level entries (`amflow`, `black_box_amflow`, `solve_integrals`) | Implemented; exposed via `amflow_cli` JSON modes |
-| Line-level MMA parity audit | 86 🟢 verified, 0 🟡 unverified, 11 🔴 (10 fixed, 1 D5 out of scope); no silent-wrong-result paths remain. See [`docs/AUDIT_MMA_PARITY.md`](docs/AUDIT_MMA_PARITY.md) |
+| Line-level MMA parity audit | 86 🟢 verified, 0 🟡 unverified, 12 🔴 (11 fixed, 1 D5 out of scope); no silent-wrong-result paths remain. See [`docs/AUDIT_MMA_PARITY.md`](docs/AUDIT_MMA_PARITY.md) |
 | Wall-clock vs MMA | Benchmarking deferred until performed on a dedicated machine; see [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md) |
 | `SolveIntegralsGaugeLink`, HQET / SCET / Wilson lines | Out of scope (intentional) |
 | Complex-valued numeric kinematics (audit D5) | Out of scope (not supported); JSON dispatcher rejects `{"re":..,"im":..}` form. See [`docs/FAQ.md`](docs/FAQ.md) "What's *not* implemented?" |
@@ -121,7 +121,7 @@ ctest --test-dir build --output-on-failure -j 4
 To use as a CMake dependency once installed:
 
 ```cmake
-find_package(AMFlowCpp 1.0 REQUIRED)
+find_package(AMFlowCpp 1.1 REQUIRED)
 target_link_libraries(my_target PRIVATE AMFlowCpp::amflow)
 ```
 
@@ -168,7 +168,7 @@ For current parity benchmarks at `eps = 1/1000` see
 | [`docs/INVARIANTS.md`](docs/INVARIANTS.md) | Project-wide rules that must stay true (precision, RAII, ODE-boundary traps) |
 | [`docs/REFERENCE_MAP.md`](docs/REFERENCE_MAP.md) | Upstream Mathematica symbol → C++ symbol mapping |
 | [`docs/AUDIT_MMA_PARITY.md`](docs/AUDIT_MMA_PARITY.md) | Live parity status against upstream MMA AMFlow (per-row divergence catalog + closure log) |
-| [`docs/ROADMAP.md`](docs/ROADMAP.md) | Active development plan (post-v1.0 implementation completeness + oracle expansion) |
+| [`docs/ROADMAP.md`](docs/ROADMAP.md) | Active development plan (forward-looking — oracle expansion) |
 | [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md) | (Deferred) Performance benchmarking placeholder — to be filled in after a dedicated-machine run |
 | [`notes/mma_*_map.md`](notes/) | Per-file upstream Mathematica source → C++ port maps |
 | [`reference/README.md`](reference/README.md) | How to clone the upstream MMA AMFlow locally for reference data regeneration |

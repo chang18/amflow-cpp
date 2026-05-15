@@ -179,7 +179,7 @@ add new trace categories there when introducing them. Currently:
 | `AMFLOW_DEBUG_STAGES=1` | Emit per-stage system traces (Inf→Reg, RegRun, Zero) |
 | `AMFLOW_DEBUG_CT_PERM=1` | Emit `ct_perm` Cutkosky permutation trace |
 | `AMFLOW_DEBUG_SCHEME=1` | Emit `[scheme] ...` EndingScheme dispatch trace from `amf_system_setup_master` (Cutkosky / SingleMass firing) |
-| `AMFLOW_TRACE_AMFSYSTEM=1` | Gate Layer-16 debug-print scope when compiled in |
+| `AMFLOW_TRACE_LAYER6=1` | Fine-grained `src/ode/inf.cpp` trace (boundary-Taylor / Frobenius diagnostics) |
 
 ## Adding tests
 

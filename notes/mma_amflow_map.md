@@ -111,7 +111,7 @@ time of the v1.0.0 release.)
 - `RegionPower[integrals, region]` (669) — leading-power formula `(2-eps) Total[scale] - Sum[powers indexed by props with eta factor]` for each integral.
 - `BoundaryPattern[powers]` (680) — group rows by integer-shift equivalence on their first column, return one representative per group with the per-row maxima above the representative. **This is the actual leading-power per region used to set BC for the ODE.**
 
-`BoundaryIntegrands[integrals, border, region]` (704) — **the sub-leading integrand engine** (this is what the vtx2 gap is about):
+`BoundaryIntegrands[integrals, border, region]` (704) — **the sub-leading integrand engine**:
 1. Apply trans + RegionRule to ReducedPropagator → `fullde`.
 2. Strip `eta` factors → `factor`. `expde = Coefficient[fullde, $Eta, 0]`.
 3. Complete the leading subsector with `ToCompleteExplicit[expde[topposi]]`.

@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **Doublebox 2L interleaved 2-mass oracle**
+  (`tools/bench/doublebox2m_eps001_*`): two-loop doublebox 4-leg with
+  cross-loop interleaved 2-mass placement (`mAsq` on `l1` prop 0 AND
+  `l2` prop 3; `mBsq` on `l1` prop 1 AND `l2` prop 5), eps = 1/1000.
+  Target is the corner `j[doublebox2m, 1,1,1,1,1,1,1,0,0]`.  Matches
+  MMA at rel ~ 3.3 × 10⁻³¹ (Re) / Im at noise floor on both sides.
+  Regression guard for D12 — see audit §D12.  C++ config requires
+  `working_pre=200, x_order=400, extra_x_order=480` (about doubled
+  vs the other doublebox benches) because the top-sector diffeq
+  matrix has a complex-conjugate pole pair near the NegIm contour.
 - **Pentabox 2L 5-leg oracle**
   (`tools/bench/pentabox_2L_eps001_*`): two-loop pentabox with five
   external legs, all-massless internals, eps = 1/1000.  Target is
@@ -26,30 +36,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   extends the all-massless `pentagon_1L_eps001` along the
   mass-configuration diversity axis.
 
-### Verified — pattern-diverse stress test sweep (2026-05-14)
-
-The post-fix stress test sweep ran eight pattern-diverse pentabox /
-cross-topology variants in addition to the corner pentabox oracle.
-Outcomes (all C++ vs MMA, same WorkingPre = 120 / XOrder = 240):
-
-| Variant | Pattern stressed | rel (Re) | rel (Im) |
-|---|---|---|---|
-| pentabox 2L corner @ eps = 1/100              | ε less extreme               | 2.98e-31 | 1.56e-30 |
-| pentabox 2L corner @ eps = 1/10000            | ε extreme                    | 3.95e-10 | 5.73e-7 |
-| pentabox 2L dotted target j[2,1,1,…]          | dotted-master target         | 3.99e-11 | 4.11e-9 |
-| pentabox 2L all-Euclidean Mandelstam (sij=-1) | cross-threshold removed       | 5.91e-31 | 1.50e-31 |
-| pentagon 1L massive (first prop l²-msq)       | NEW pattern: 1L 5-leg + mass  | 9.15e-31 | 1.27e-30 |
-| doublebox 2L @ eps = 1/10000                  | 2L 4-leg ε extreme            | 7.21e-31 | 1.62e-31 |
-| mercedes 3L dotted j[2,1,1,1,1,1,0,…]          | 3L 2-leg dotted master        | 7.05e-31 | 1.50e-30 |
-| banana 4L equal-mass @ eps = 1/100            | 4L 2-leg ε less extreme       | 1.03e-30 | 7.17e-31 |
-
-The fix landed in D11 holds across every pattern probed.  The only
-precision regressions vs the strict rel ≤ 10⁻³⁰ tolerance are
-**pentabox-specific** and **topology-intrinsic**, not bugs:
-doublebox 2L at the same `eps = 1/10000` matches MMA at rel ≤ 1.6e-31,
-confirming that the pentabox 2L 76-master sub-system's 1/eps cascade
-of T entries is what bounds precision in the extreme-ε / dotted /
-cross-threshold rows above, not a numerical defect in the C++ path.
+D11 fix verified by an eight-variant pattern-diverse stress sweep
+on 2026-05-14 (pentabox / doublebox / mercedes 3L / banana 4L across
+ε, dotted-master, cross-threshold, and 1L/2L/3L/4L axes); all match
+MMA at rel ~ 10⁻³⁰ except the inherently cancellation-bound
+pentabox-extreme rows.  See audit §D11.
 
 ### Fixed
 - **Audit divergence D8** (`canonical_boundary_permutation` +
@@ -112,8 +103,20 @@ cross-threshold rows above, not a numerical defect in the C++ path.
   Mathematica's Eigenvectors / JordanDecomposition convention.
   Regression test
   `JordanTest.JordanEigenvectorsNormalizedToLastEntryOne`.
-  Commit `f4f2aee`.  Audit table is now
-  **86 🟢 / 0 🟡 / 11 🔴 (10 fixed + 1 D5 out of scope) / 17 ⚪**.
+  Commit `f4f2aee`.
+- **Audit divergence D12** — interleaved 2-mass doublebox traced
+  2026-05-15 to insufficient Taylor expansion order, not a code
+  bug.  The cross-loop mass placement gives the top-sector diffeq
+  matrix a complex-conjugate pole pair (`η² + η + 12 = 0`,
+  `|η| ≈ 3.46`) which tightens the Frobenius series convergence
+  radius for the 4 top-sector masters.  At the doublebox defaults
+  `working_pre=160, x_order=200, extra_x_order=240` C++ produced a
+  sign-flipped Re and O(0.1) spurious Im; at `200, 400, 480` C++
+  matches MMA to all printed digits.  Commit `3da778a` (audit
+  rewrite + memo); regression bench
+  `tools/bench/doublebox2m_eps001_*` committed in `11ff61a`.
+  Audit table is now
+  **86 🟢 / 0 🟡 / 12 🔴 (11 fixed + 1 D5 out of scope) / 17 ⚪**.
 
 ### Changed
 - **D5 ComplexMode reclassified from "deferred indefinitely" to "out

@@ -211,7 +211,7 @@ time of the v1.0.0 release.)
 - `LearnFromRuleS / FindLogPower` ↔ `ode::learn_from_rule_s / learn_from_rule_s_all`.
 - `PickZeroRuleS` ↔ `ode::pick_zero_solution`.
 - `LoadSystem / ClearSystem / DE / BC / P / AsyExp` ↔ **intentionally absent** in this port — replaced by value-typed `SolveOdeRequest / SolveOdeResult` so there is no mutable system handle.
-- `DetermineBoundaryOrder` ↔ `ode::determine_boundary_order` (the Track 4 vtx2 sub-leading boundary chain).
+- `DetermineBoundaryOrder` ↔ `ode::determine_boundary_order` (the sub-leading boundary-order chain consumed by `CalcInf`'s region table).
 - `BuildTaylor` ↔ `ode::build_taylor_matrix`.
 - `CalcTaylor` ↔ `ode::calc_taylor`.
 - `ConstructMatrix / SparseGaussian / ForwardSparseGaussian` ↔ `ode::SparseSystem / construct_matrix / forward_sparse_gaussian / sparse_gaussian`.

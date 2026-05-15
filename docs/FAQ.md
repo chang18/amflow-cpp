@@ -57,7 +57,7 @@ installs `lib/cmake/AMFlowCpp/`.  In your downstream `CMakeLists.txt`:
 
 ```cmake
 list(APPEND CMAKE_PREFIX_PATH /some/prefix)   # if non-standard
-find_package(AMFlowCpp 1.0 REQUIRED)
+find_package(AMFlowCpp 1.1 REQUIRED)
 target_link_libraries(my_target PRIVATE AMFlowCpp::amflow)
 ```
 
@@ -238,7 +238,7 @@ This project's C++17 source was developed primarily by AI coding
 agents under the maintainer's direction.  The trustworthiness contract
 is **numerical parity**:
 
-- 33 oracle benchmarks under `tools/bench/` match upstream Mathematica
+- 34 oracle benchmarks under `tools/bench/` match upstream Mathematica
   AMFlow at `rel ~ 10⁻³⁰` (rel ~ 10⁻¹⁰ on the pentabox 2L 5-leg
   corner, where the integral's intrinsic cancellation horizon
   bounds the achievable precision at fixed `WorkingPre`).
