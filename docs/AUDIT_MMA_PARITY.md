@@ -449,15 +449,57 @@ preferred file verbatim:
   setup) or `src/qft/boundary.cpp`.  Differs from D4 (Jacobian
   silently dropped) because the bare-`branch_momenta`
   permutation-matrix invariant is preserved here.
+- **Investigation (2026-05-15 follow-up)**:
+  - Confirmed C++ `find_all_region` returns 4 regions identical to
+    MMA (`{l1->l1, l2->l2}`, `{l1->l1, l2->√η·l2}`,
+    `{l1->√η·l1, l2->l2}`, `{l1->√η·l1, l2->√η·l2}`).  Block
+    (mass-A on same loop) gives 3 regions; the extra interleaved
+    region is the `{l1->l1, l2->√η·l2}` (regions 1 ⟂ 2 swap
+    under l1↔l2).  This matches MMA, so region enumeration is not
+    the bug.
+  - Comparison vs `mma_values.txt` shows **only 4 masters fail**:
+    `preferred[93..96]` = `sorted[105..108]` = the 7-active-prop
+    top sector with various dot configurations
+    (`J[1,1,1,1,1,1,1,0,0]`, `J[1,1,2,1,1,1,1,0,0]`,
+    `J[1,1,1,2,1,1,1,0,0]`, `J[1,1,1,1,1,1,2,0,0]`).  All other 93
+    masters match MMA at rel ≤ 10⁻²⁰.
+  - Of the 4 failing masters, **only `sorted[107]` has a
+    non-(-1) region border** (border 0 in region 0); the other
+    three have border=-1 in all 4 regions, meaning their values
+    come purely from ODE integration of the top sector's
+    differential equation matrix.
+  - C++ region 1 (`{l1->l1, l2->√η·l2}`) computes border=0 for
+    `sorted[19]`; MMA's region 2 prints **NO `AnalyticReduction:
+    reducing N target integrals`** between IBP-system-generated
+    and region-finished — i.e. MMA's `DetermineBoundaryOrder`
+    returns all-(-1) for this pattern group.  C++'s
+    `ode::determine_boundary_order` returns 0 for `sorted[19]` in
+    pattern group 1 (the {region 1, region 2} group).  This is
+    the lowest-level upstream divergence found so far.
+- **Bug zone narrowing**: bug is **either**
+  (a) `ode::determine_boundary_order` over-estimates the
+      required Taylor order for masters whose ODE-block coupling
+      to η-injected propagators carries asymmetric mass placement
+      (block detection or rank counting differs from MMA's
+      `DetermineBlockBoundaryOrder` for this specific block
+      structure); **or**
+  (b) Differential-equation matrix entries for the top-sector
+      block (rows 105-108) carry spurious off-diagonal terms that
+      only manifest when both η-injected propagators sit in
+      different loops.
 - **Reproduction**: bench files staged under
   `tmp/batch5_tests/configs/doublebox_2L_2mass_*` (NOT committed to
   `tools/bench/` until fix lands — committing a known-failing oracle
-  would break CI on parity-check).
-- **Status**: open; root-cause requires region-by-region intermediate-
-  value comparison between C++ and MMA at the AMFSystem solve layer
-  (4 regions × multiple integrals).  Estimated 1-day focused fix
-  session.  Discovered 2026-05-15 during the pattern-diverse
-  multi-mass stress sweep (batch5).
+  would break CI on parity-check).  Full debug traces in
+  `tmp/d12_trace_stderr.log` (interleaved) and
+  `tmp/d12_block_stderr.log` (working block reference).
+- **Status**: open; root-cause requires either a
+  `ode::determine_boundary_order` unit test that exposes the
+  block-structure mismatch, or a side-by-side comparison of the
+  C++ vs MMA differential-equation matrix at η ≈ 0 for the top
+  sector.  Estimated 1-day focused fix session.  Discovered
+  2026-05-15 during the pattern-diverse multi-mass stress sweep
+  (batch5).
 
 ---
 
