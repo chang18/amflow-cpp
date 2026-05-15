@@ -534,11 +534,28 @@ diffeq(const qft::FamilyConfig& fc,
 
     // Compute libp_deriv on each preheat master per requested
     // variable.  Mirrors upstream `der = ComputeDerivative[masters, #]&/@vars`.
+    //
+    // D14 (2026-05-16): apply numeric substitution AND reproject to the
+    // narrow red_ctx ({eta, d}) immediately after libp_deriv returns,
+    // BEFORE `simplify_terms` runs.  Critical for memory: even after
+    // numeric substitution, the Mfrac is STILL stored on the wide fc.ctx
+    // polynomial ring (10+ variables for multi-mass 3L families) —
+    // FLINT does not "know" the substituted variables have collapsed to
+    // constants and still runs multivariate GCD on the full ctx during
+    // every subsequent `simplify_terms +=` and matrix-assembly product.
+    // Reprojecting to {eta, d} shrinks the storage layout, which is the
+    // real source of the 20× memory blowup observed on
+    // `bn3_4mass_3L_eps001` (audit §D14).
     std::vector<std::vector<std::vector<DerivTerm>>> der(vars.size());
     for (std::size_t v = 0; v < vars.size(); ++v) {
         der[v].reserve(masters.size());
         for (const auto& m : masters) {
             auto raw = libp_deriv(fc, m, vars[v]);
+            for (auto& dt : raw) {
+                auto subbed = substitute_fc_vars(
+                    dt.coef, opts.numeric_values, /*keep=*/{"eta"});
+                dt.coef = mfrac_to_ctx(subbed, out.red_ctx.ctx);
+            }
             auto simp = simplify_terms(std::move(raw));
             der[v].push_back(std::move(simp));
         }
@@ -675,20 +692,12 @@ diffeq(const qft::FamilyConfig& fc,
                 if (rit == rule_by_lhs.end()) {
                     continue;
                 }
-                // D14 (2026-05-16): `dt.coef` lives on fc.ctx and
-                // may carry loop momenta / kinematic invariants /
-                // mass scales that are NOT in the narrowed `red_ctx
-                // = {eta, d}`.  Mirror MMA's `/. Numeric` step
-                // (interface.m's ComputeDerivative + DifferentialEquation
-                // pipeline) by substituting numeric values for every
-                // fc.ctx variable except eta before lifting.  After
-                // substitution `dt.coef` only depends symbolically on
-                // eta, and `lift_to_red_ctx` can drop the now-zero
-                // exponents on the other variables.
-                Mfrac dt_coef_subbed = substitute_fc_vars(
-                    dt.coef, opts.numeric_values, /*keep=*/{"eta"});
-                Mfrac coef_lifted = lift_to_red_ctx(dt_coef_subbed,
-                                                     out.red_ctx);
+                // D14 (2026-05-16): `dt.coef` is already on red_ctx.ctx
+                // ({eta, d}) — the substitution + reprojection happens
+                // upstream right after `libp_deriv` above (~line 555).
+                // The clone here just hands a per-iteration owned copy
+                // to the inner accumulator loop.
+                Mfrac coef_lifted = dt.coef.clone();
                 for (const auto& mt : rit->second) {
                     auto mit = master_index.find(int_key(mt.integ));
                     if (mit == master_index.end()) continue;

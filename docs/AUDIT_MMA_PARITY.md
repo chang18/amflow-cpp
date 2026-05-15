@@ -612,9 +612,31 @@ preferred file verbatim:
   lands; bench would explode on CI).  Memory profile captured by
   `/tmp/mem_watch.sh` wrapper.
 
-- **Status**: open; root cause identified 2026-05-16, fix in design
-  phase.  No code change yet; this audit entry serves as the rollback
-  anchor before implementation begins.
+- **Status**: open; root cause identified 2026-05-16, partial fix
+  landed in commits `019ba18` (Stage 1+2: narrow `red_ctx` to
+  `{eta, d}` + substitute_fc_vars at the `ibp::diffeq` matrix-assembly
+  site) and `<v3-commit>` (substitute + reproject `dt.coef` to narrow
+  `red_ctx` immediately after `libp_deriv` returns, before
+  `simplify_terms` runs).  All 548 unit tests + 5 representative
+  oracle benches (`vtx2_2L_3mass`, `pentagon_1L_3mass`, `banana_3loop`,
+  `bn3mix`, `doublebox2m`) match MMA at identical precision.
+  However, `bn3_4mass` retest still hits 20 GB (vs MMA's 1.3 GB) —
+  improvement from 27 GB pre-fix but not yet at parity.
+
+  **Remaining bottleneck** (deferred to future session, requires
+  deeper refactor): `libp_denoms_deriv` (`src/ibp/libp_deriv.cpp:263-288`)
+  internally builds `dd.coef[k][jp]` and `dd.constant[k]` as Mfracs
+  ACCUMULATED on the wide `fc.ctx` (10+ vars).  Each `acc += t` in
+  that function triggers FLINT multivariate GCD on the wide ring —
+  the same root-cause pattern as Stage 1+2 fixed at the outer level,
+  but at the inner libp_denoms_deriv layer the fix hasn't been
+  applied yet.  Fixing requires either (a) threading
+  `numeric_values` into `libp_denoms_deriv` signature so it can
+  substitute internally, or (b) extracting `substitute_fc_vars` to
+  a shared header (e.g. `include/amflow/algebra/numeric_subst.hpp`)
+  so it can be called from `libp_deriv.cpp`.  Option (b) is the
+  cleaner architectural choice but requires moving the helper out
+  of `src/ibp/reduce.cpp`'s anonymous namespace.
 
 ---
 
