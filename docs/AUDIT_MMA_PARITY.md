@@ -527,6 +527,35 @@ preferred file verbatim:
   in `src/ode/regular.cpp` if the path itself is correct but the
   step-by-step ODE integration through the pole-region picks up a
   spurious branch contribution.
+- **Strong evidence the bug is in matrix construction, NOT in
+  the path**: only the **4 top-sector masters** (sorted[105..108])
+  are wrong; the other 93 masters all match MMA at rel ≤ 10⁻²⁰.
+  But the ODE path is shared by *all* masters — if path were
+  mishandled, every master would be wrong, not just the top
+  sector.  Therefore the wrongness must enter via a top-sector-
+  specific *matrix entry* (or matrix-row-specific issue), not
+  via a uniform path mistake.
+  - Top-sector diffeq matrix row 105 has denominators like
+    `eta² + eta + 12` and the cubic `eta³ + 2·eta² + 13·eta + 12
+    = (eta+1)(eta²+eta+12)` and more.
+  - Block top-sector rows have denominators that factor into
+    real-only roots: `(eta+1)`, `(eta+1)²`, etc.
+  - The `eta² + eta + 12 = 0` (roots `-1/2 ± i·√47/2`) is unique
+    to the interleaved case.  Its origin: when both
+    η-injected propagators carry the *same* mass `mAsq` but sit
+    in *different* loops, the differential equation acquires a
+    coupling that produces this complex-conjugate pole pair.
+    The IBP-rule arithmetic at the top sector then encodes this
+    coupling — and if the encoding has a subtle algebra-level
+    sign error in the cross-loop-mass case, only the top sector
+    would manifest the discrepancy.
+- **Next debugging step**: instrument `ibp::diffeq` to dump the
+  matrix construction inputs (the deriv coefficients, the IBP
+  rules, the sortedmaster indexing) for the top-sector rows
+  105-108 ONLY; compare term-by-term against a hand-derived
+  MMA result for the same kinematics.  This pinpoints whether
+  `ibp::libp_deriv`, `ibp::kira_run`, or the assembly stage in
+  `ibp::diffeq` introduces the divergence.
 - **Reproduction**: bench files staged under
   `tmp/batch5_tests/configs/doublebox_2L_2mass_*` (NOT committed to
   `tools/bench/` until fix lands — committing a known-failing oracle
