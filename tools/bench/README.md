@@ -94,6 +94,9 @@ Mathematica reference path.
 | hexagon_1L | 1L hexagon 6-leg all-massless (first 6-leg oracle; pair-only Replacement) | 0/3 | 205 s | — | rel ≲ 2e-30 |
 | doublebox_diagmass_2L | 2L doublebox 4-leg with mass on the inter-loop (l1-l2) rung propagator | 0/1 | 174 s | — | rel ≲ 5e-32 |
 | mercedes_3L | 3L 2-leg Mercedes self-energy (3 outer rails + 3 inner spokes; distinct from banana topology) | 0/5 | 306 s | — | rel ≲ 5e-31 |
+| pentagon_1L_3mass | 1L pentagon with 3 distinct internal masses on non-cyclically-adjacent propagators (mAsq=1, mBsq=4, mCsq=9) | 0/3 | 111 s | — | rel ≲ 7e-31 |
+| doublebox_blockmass_2L | 2L doublebox with BLOCK 2-mass (mA on l1's 2 rails, mB on l2's 2 rails) — complement to interleaved D12 case | 0/1 | 424 s | — | rel ≲ 9e-31 |
+| xbox_crossmass_2L | 2L non-planar xbox with mass on the (l1+l2) cross-rung propagator — first xbox-with-mass oracle | 0/1 | 151 s | — | rel ≲ 3e-30 |
 
 C++ wallclock notes:
 

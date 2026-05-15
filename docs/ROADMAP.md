@@ -17,7 +17,7 @@ quality loop is **oracle diversification**: build new benchmarks
 along axes the existing suite under-covers, and fix anything that
 diverges from MMA inline.
 
-The 37 committed oracle triplets currently cover:
+The 40 committed oracle triplets currently cover:
 
 | Diversity axis | Current coverage |
 |---|---|

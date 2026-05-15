@@ -8,6 +8,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **Mass-and-topology diversity batch** (2026-05-15): three additional
+  novel oracles probing previously-uncovered axes.  All three pass at
+  default precision (no D12-style sensitivity).  Oracle total: 37 → 40.
+  - `tools/bench/pentagon_1L_3mass_eps001_*` — 1L pentagon with three
+    distinct internal masses (mAsq=1, mBsq=4, mCsq=9 on props 0, 2, 4).
+    First 3-mass 1L 5-leg oracle.  Corner matches MMA at rel 6.2e-31.
+    MMA wallclock 111 s.
+  - `tools/bench/doublebox_blockmass_2L_eps001_*` — 2L doublebox with
+    BLOCK 2-mass placement (complement to the interleaved D12 case;
+    same family skeleton, mAsq on l1's two rails + mBsq on l2's two
+    rails).  Confirms the audit's argument that D12 precision
+    sensitivity is interleaved-specific — block converges at default
+    `(working_pre, x_order, extra_x_order) = (120, 240, 280)`.
+    Corner matches MMA at rel 8.6e-31.  MMA wallclock 424 s.
+  - `tools/bench/xbox_crossmass_2L_eps001_*` — 2L non-planar xbox with
+    mass on the (l1+l2) cross-rung propagator.  First xbox-with-mass
+    oracle; exercises non-planar + mass code paths simultaneously.
+    Corner matches MMA at rel 2.4e-30.  MMA wallclock 151 s.
 - **Topology-diverse stress batch** (2026-05-15): three new oracle
   triplets exercising axes the previous suite did not cover.  All three
   match MMA at rel ~ 10⁻³⁰ on first run; oracle total rises 34 → 37.
