@@ -90,6 +90,7 @@ Mathematica reference path.
 | cutbanana_3L | 3L massless cut banana (cut={1,1,1,1,0,0,0,0,0}); Cutkosky fires at L=3 (eps = 1/100) | 0/5 | 93 s | ~90 s | rel ≲ 1e-29 |
 | vtx2_2loop_vertex | 2L on-shell vertex | 0/1 | (cached) | (cached) | rel ≲ 1e-30 |
 | banana_3loop | 3L equal-mass banana, asymmetric ISP basis (psq, msq) | 0/5 | 117 s | 72 s (serial) | rel ≲ 1e-30 |
+| doublebox2m | 2L doublebox 4-leg with interleaved cross-loop 2-mass scheme (mA on l1/l2, mB on l1/l2) | 0/1 | — | — | rel ≲ 3e-31 |
 
 C++ wallclock notes:
 
@@ -142,6 +143,17 @@ C++ wallclock notes:
   explicitly — AMFlow.m's `Max[$BlackBoxDot, JDot/@...]` pre-compute
   cannot raise it on its own when the input integrals all have
   `JDot = 0` (every positive index is exactly 1).
+- `doublebox2m` is the regression guard for D12 (see
+  `docs/AUDIT_MMA_PARITY.md`).  Interleaved cross-loop mass placement
+  gives the top-sector differential-equation matrix a complex-conjugate
+  pole pair (`η² + η + 12 = 0`, `|η| ≈ 3.46`), tightening the
+  Frobenius series convergence radius for the 4 top-sector masters.
+  The committed C++ config sets `working_pre=200, x_order=400,
+  extra_x_order=480` — roughly doubled vs the all-massless / block-mass
+  defaults — to converge.  At the older defaults `(160, 200, 240)` C++
+  produced a sign-flipped Re and `O(0.1)` spurious Im; the elevated
+  parameters are the recommended baseline for any topology with
+  complex-pole pairs near the NegIm contour.
 - `banana_3loop` requires `BlackBoxDot = 5` for both the Masters and
   Reduce passes — at lower dot the Reduce step cannot cover the master
   set returned by Masters, and AMFlow's protocol-level sanity check
