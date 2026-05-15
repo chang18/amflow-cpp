@@ -99,6 +99,20 @@ on 2026-05-14 (pentabox / doublebox / mercedes 3L / banana 4L across
 MMA at rel ~ 10⁻³⁰ except the inherently cancellation-bound
 pentabox-extreme rows.  See audit §D11.
 
+### Investigation in progress
+- **Audit divergence D14** — `ibp::reduce` builds the reduction
+  context with all 9 family variables (`l1, l2, l3, p1, mAsq, mBsq,
+  mCsq, mDsq, psq, eta, d`) even though Kira's output only uses
+  `eta, d`.  Multi-distinct-mass 3L topologies (first observed on
+  `bn3_4mass_3L_eps001`) cause C++ to use 20× more memory than MMA
+  on the same problem: MMA 1.3 GB / 640 s, C++ killed at 27 GB / 205 s.
+  Root cause: FLINT's multivariate GCD inside `fmpz_mpoly_q_canonicalise`
+  scales super-linearly with variable count; the 9 unused-but-declared
+  slots compound across ~88 000 inner-loop GCD calls in
+  `ibp::diffeq`.  Fix in design phase; see audit §D14.  This
+  CHANGELOG entry serves as the rollback anchor for the upcoming
+  implementation work — no code change yet.
+
 ### Fixed
 - **Audit divergence D13** — `build_boundary` projection failed when
   `to_complete_explicit` rank-filtered linearly-dependent mass-bearing

@@ -12,21 +12,19 @@ covered by the oracle benchmarks under
 |---|---|---|
 | 🟢 verified                  | 86 | — |
 | 🟡 unverified (oracle gap)    |  0 | All 21 originally-🟡 audit rows are now closed (see §3 below for per-row closure paths).  Future audit growth comes from oracle-diversity benches under [`tools/bench/`](../tools/bench/), each landing as 🟢 by construction. |
-| 🔴 actual divergence          | 13 | **12 fully fixed; 1 out of scope** (D5 ComplexMode).  D12 (doublebox 2L interleaved 2-mass) was a precision-tuning issue, not a code bug — see §D12.  D13 (`build_boundary` rank-filter + missing `/. Numeric`) added 2026-05-15. |
+| 🔴 actual divergence          | 14 | **12 fully fixed; 1 out of scope** (D5 ComplexMode); **1 open** (D14 `ibp::reduce` oversized reduction context — root cause identified 2026-05-16, fix in design).  D12 (doublebox 2L interleaved 2-mass) was a precision-tuning issue, not a code bug — see §D12.  D13 (`build_boundary` rank-filter + missing `/. Numeric`) added 2026-05-15. |
 | ⚪ intentionally not ported   | 17 | — |
 
 Net assessment: **no committed-oracle path is wrong** (all 42 oracle
 benches under `tools/bench/` match MMA at rel ~10⁻³⁰ except where the
 integral's intrinsic cancellation horizon limits precision).  Twelve
-of the thirteen 🔴 items have been fully corrected (see §2 below for
-per-row details); D5 (complex-valued numeric kinematics) is the
-remaining out-of-scope row (the JSON entry-point rejects loudly).
-D12 (doublebox 2L 4-leg interleaved 2-mass) was traced 2026-05-15 to
-insufficient Taylor expansion order for the topology's tightened
-Frobenius convergence radius — not a code bug — see §D12.
-D13 (`build_boundary` missing MMA `/. Numeric`) was discovered
-2026-05-15 by the new `vtx2_2L_3mass_eps001` oracle and fixed in the
-same session — see §D13.
+of the fourteen 🔴 items have been fully corrected; D5 (complex-valued
+numeric kinematics) is the out-of-scope row.  Two divergences are
+recent: D13 (`build_boundary` missing MMA `/. Numeric`) was discovered
++ fixed 2026-05-15.  D14 (`ibp::reduce` oversized reduction context →
+20× memory blowup on `bn3_4mass_3L_eps001`) was diagnosed 2026-05-16,
+fix in design — see §D14 for the multi-pass investigation trail and
+the three candidate fix approaches.
 
 ---
 
@@ -519,6 +517,104 @@ preferred file verbatim:
     pass.
 - **Status**: closed.  Discovered + resolved 2026-05-15 during the
   multi-mass topology-diversity stress sweep.
+
+### D14. `ibp::reduce` reduction context carries all family vars — **OPEN (root cause identified 2026-05-16, fix in design)**
+
+- **Symptom**: bench `bn3_4mass_3L_eps001` (3L 2-leg banana, 4 distinct
+  internal masses, `BlackBoxDot=5`) — C++ uses **20× more memory** than
+  MMA on the same problem.  MMA finishes in 640 s wall, peak RSS
+  ~1.3 GB across 5 kernels.  C++ killed by memory-watch wrapper at
+  205 s wall, peak RSS **27.4 GB** (would OOM the host without the
+  watcher).  Linear memory growth from 35 MB → 15 GB at 90 s → 27 GB
+  at 205 s.  Fault site: first sub-system's `ibp::diffeq` matrix
+  construction (`src/ibp/reduce.cpp:521-547`).
+
+- **NOT the cause** (ruled out by static + dynamic comparison):
+  - Kira invocation pattern is faithful: C++ writes the same
+    `jobs.yaml` / `target` / `preferred` as MMA, with `r:4, s:0,
+    integral_ordering:5`.  Numeric values are baked into Kira input
+    (verified — `kira_target.m` output contains no `mAsq/mBsq/mCsq/mDsq`
+    symbolic vars).
+  - `single_mass_ending_q_impl` gate (sub-agent's earlier hypothesis):
+    C++ gate logic at `src/pipeline/amfsystem.cpp:879-916` is
+    equivalent to MMA's `AMFSystemEndingQ[..., "SingleMass"]`
+    (`AMFlow.m:1024-1029`).
+  - Propagator-substitution divergence (earlier hypothesis): MMA at
+    no point applies `/. Numeric` to propagator strings (all 7
+    `AMFlowInfo["Propagator"] = ...` sites are mass-substitution-free
+    in upstream).  The literal `-1` constants in cached propagators
+    come from `AMFEtaC`'s `-$Eta` convention surviving region
+    rescaling, not from a Numeric substitution.
+  - FLINT `fmpz_mpoly_q_{add,mul}` *do* canonicalise after every
+    operation (verified via FLINT source `add.c:222,294,329`;
+    `mul.c:41,67,96`).  So Mfrac arithmetic is NOT missing a
+    `Together`/`Cancel` call.
+
+- **Root cause** (~70% confidence per sub-agent audit):
+  `make_reduction_context` (`src/ibp/reduce.cpp:27-44`) builds the
+  polynomial ring with **all** family variables plus `d`.  For
+  `bn3_4mass` that's **11 variables**:
+  `{l1, l2, l3, p1, mAsq, mBsq, mCsq, mDsq, psq, eta, d}`.  Kira's
+  output rationals contain only `eta` and `d` (verified — the other 9
+  variables have exponent 0 in every monomial).  But FLINT's
+  `fmpz_mpoly_t` still allocates space for the 9 unused variables in
+  every monomial's exponent word, AND every multivariate GCD inside
+  `fmpz_mpoly_q_canonicalise` processes the polynomial in the full
+  11-variable lex/grlex ordering.  Multivariate GCD cost scales
+  super-linearly with variable count; over ~88 000 inner-loop GCD
+  calls in `ibp::diffeq`, the 11-var overhead compounds.  MMA, by
+  contrast, represents the diffeq entries in symbolic form where
+  unused variables genuinely don't appear; its `Together` at
+  `Kira/interface.m:505` runs effective bivariate operations
+  (`{eta, d}` only) regardless of how many family masses exist.
+
+- **Contributing factor** (~50% confidence): MMA uses a single batched
+  `Together[der/.j->red]` (`Kira/interface.m:505`); C++ uses pairwise
+  `out.diffeq[v][row][col] += product` (`reduce.cpp:543`) with FLINT
+  canonicalising at *every* `+=`.  Each FLINT call allocates ~3×
+  operand-size temporary buffers; over many iterations the
+  intermediate denominator grows to `lcm(den_1, ..., den_k)` and is
+  re-canonicalised K times instead of once.
+
+- **Why existing 40 oracles don't trigger this**: every existing
+  multi-mass oracle has either ≤ 1 distinct mass scale (after
+  Numeric substitution and SingleMass loop-promotion peels off
+  remaining masses) OR a topologically simpler diffeq matrix.
+  `vtx2_2L_3mass_eps001` (3 distinct masses but only 2L) and
+  `pentagon_1L_3mass_eps001` (3 masses but 1L) sit on the
+  small-system side of the cliff.  `bn3_4mass` is the first
+  committed-targeted bench that combines 3L × 4-distinct-mass ×
+  `dot=5` — large IBP system × maximally-loaded polynomial
+  representation × no early SingleMass peel.
+
+- **Fix direction (design phase)** — three candidate approaches per
+  sub-agent (`src/ibp/reduce.cpp` D14 audit):
+  - **Fix A (high-leverage, primary recommendation)**: narrow
+    `make_reduction_context` to only the actually-active variables
+    (`{eta, d}` for typical AMFlow Kira output).  Mirrors MMA's
+    behaviour where unused symbols don't enter the ring.  Expected
+    memory reduction 3-10×.  Risk: every `lift_to_red_ctx` /
+    `mfrac_to_ctx` call-site that lifts from the wider `fc.ctx` must
+    apply a `mfrac_substitute(..., numeric_q, keep_set)` step first
+    (analogue of the D13 fix, now systematic).
+  - **Fix B (orthogonal, smaller win)**: batch-accumulate per-row
+    diffeq entries (compute `lcm(den_i)` once, sum scaled numerators,
+    one final canonicalise) instead of pairwise `+=`.  Mirrors MMA's
+    `Together[der/.j->red]` pattern.
+  - **Fix C (defensive)**: bake numeric values directly into the
+    Mfrac at parse time so storage is effectively 2-var even though
+    ctx is 11-var.  Lower payoff than A.
+  Implementation will need an independent design pass before code
+  changes (sub-agent will produce the per-call-site change list).
+
+- **Reproduction**: `tmp/bn3_4mass_retest_cpp.json` and
+  `tmp/bn3_4mass_retest_mma.wl` (not committed as oracle until fix
+  lands; bench would explode on CI).  Memory profile captured by
+  `/tmp/mem_watch.sh` wrapper.
+
+- **Status**: open; root cause identified 2026-05-16, fix in design
+  phase.  No code change yet; this audit entry serves as the rollback
+  anchor before implementation begins.
 
 ---
 
