@@ -34,7 +34,7 @@ regenerating reference data.
 The C++17 source in this repository was developed primarily by AI
 coding agents under the direction of the maintainer.  Every
 behavioural change is gated by numerical-parity verification against
-the upstream Mathematica reference; the 34 oracle benchmarks under
+the upstream Mathematica reference; the 37 oracle benchmarks under
 `tools/bench/` and the 547-case GoogleTest suite are the contract
 that any change must honour.
 

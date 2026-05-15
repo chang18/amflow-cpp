@@ -17,13 +17,13 @@ quality loop is **oracle diversification**: build new benchmarks
 along axes the existing suite under-covers, and fix anything that
 diverges from MMA inline.
 
-The 34 committed oracle triplets currently cover:
+The 37 committed oracle triplets currently cover:
 
 | Diversity axis | Current coverage |
 |---|---|
 | Loop number          | L = 1, 2, 3, 4 |
 | Kinematic invariants | 1 (`s`), 2 (`s, t`), 4 (`s, t, mWsq, mZsq`) |
-| External legs        | 2, 3, 4, **5** (pentagon 1L, pentagon 1L massive, pentabox 2L) |
+| External legs        | 2, 3, 4, 5, **6** (pentagon 1L, pentagon 1L massive, pentabox 2L, hexagon 1L) |
 | Mass configurations  | all-massless, all-equal, mixed at L = 1 / 2 / 3 / 4 |
 | Cutkosky cuts        | 2-, 3-, 4-, 5-particle cuts |
 | ε extremes           | `1/2`, `1/100`, `1/1000`, `1/10000` |

@@ -15,7 +15,7 @@ covered by the oracle benchmarks under
 | 🔴 actual divergence          | 12 | **11 fully fixed; 1 out of scope** (D5 ComplexMode).  D12 (doublebox 2L interleaved 2-mass) was a precision-tuning issue, not a code bug — see §D12. |
 | ⚪ intentionally not ported   | 17 | — |
 
-Net assessment: **no committed-oracle path is wrong** (all 34 oracle
+Net assessment: **no committed-oracle path is wrong** (all 37 oracle
 benches under `tools/bench/` match MMA at rel ~10⁻³⁰ except where the
 integral's intrinsic cancellation horizon limits precision).  Eleven
 of the twelve 🔴 items have been fully corrected (see §2 below for

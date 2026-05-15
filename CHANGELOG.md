@@ -8,6 +8,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **Topology-diverse stress batch** (2026-05-15): three new oracle
+  triplets exercising axes the previous suite did not cover.  All three
+  match MMA at rel ~ 10⁻³⁰ on first run; oracle total rises 34 → 37.
+  - `tools/bench/hexagon_1L_eps001_*` — 1L 6-leg hexagon, all-massless,
+    pair-only Replacement.  **First 6-leg oracle** (previous max was
+    pentabox 2L 5-leg).  Corner `j[hexagon, 1,1,1,1,1,1]` matches MMA
+    at rel 1.65 × 10⁻³⁰ (Re).  MMA wallclock 205 s; 31 sampled values.
+  - `tools/bench/doublebox_diagmass_2L_eps001_*` — 2L doublebox 4-leg
+    with mass on the inter-loop `(l1-l2)` rung propagator.  Novel
+    mass-placement axis (existing 2L mass benches put mass within one
+    loop or block-symmetric; none on the shared rung).  Corner matches
+    MMA at rel 5.10 × 10⁻³² (Re); does NOT exhibit D12-style precision
+    sensitivity — converges at default `(working_pre, x_order,
+    extra_x_order) = (120, 240, 280)`.  MMA wallclock 174 s.
+  - `tools/bench/mercedes_3L_*` — 3L 2-leg Mercedes self-energy
+    (triangle of 3 outer rails + 3 inner spokes from a central
+    vertex).  Topologically distinct from existing 3L oracles
+    (banana_3loop, dotted_3L_banana, bn3mix are parallel-banana
+    2-vertex graphs).  Corner matches MMA at rel 4.06 × 10⁻³¹ (Re).
+    MMA wallclock 306 s.
 - **Doublebox 2L interleaved 2-mass oracle**
   (`tools/bench/doublebox2m_eps001_*`): two-loop doublebox 4-leg with
   cross-loop interleaved 2-mass placement (`mAsq` on `l1` prop 0 AND

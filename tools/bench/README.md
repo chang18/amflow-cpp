@@ -91,6 +91,9 @@ Mathematica reference path.
 | vtx2_2loop_vertex | 2L on-shell vertex | 0/1 | (cached) | (cached) | rel ≲ 1e-30 |
 | banana_3loop | 3L equal-mass banana, asymmetric ISP basis (psq, msq) | 0/5 | 117 s | 72 s (serial) | rel ≲ 1e-30 |
 | doublebox2m | 2L doublebox 4-leg with interleaved cross-loop 2-mass scheme (mA on l1/l2, mB on l1/l2) | 0/1 | — | — | rel ≲ 3e-31 |
+| hexagon_1L | 1L hexagon 6-leg all-massless (first 6-leg oracle; pair-only Replacement) | 0/3 | 205 s | — | rel ≲ 2e-30 |
+| doublebox_diagmass_2L | 2L doublebox 4-leg with mass on the inter-loop (l1-l2) rung propagator | 0/1 | 174 s | — | rel ≲ 5e-32 |
+| mercedes_3L | 3L 2-leg Mercedes self-energy (3 outer rails + 3 inner spokes; distinct from banana topology) | 0/5 | 306 s | — | rel ≲ 5e-31 |
 
 C++ wallclock notes:
 
