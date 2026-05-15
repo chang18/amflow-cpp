@@ -8,6 +8,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **Multi-mass stress batch (2026-05-15)**: two additional oracle
+  triplets probing axes that surfaced a latent bug.  Oracle total:
+  40 → 42.
+  - `tools/bench/vtx2_2L_3mass_eps001_*` — 2L 3-leg vertex with three
+    distinct internal masses (mAsq=1, mBsq=4, mCsq=9).  **Surfaced
+    audit divergence D13** in C++ `build_boundary`: the projection
+    from the boundary's Laporta coefficient to the sub-system's
+    reduced context aborted with `residual var 'mAsq' not in dst`
+    because `to_complete_explicit` rank-filtered out one of the
+    mass-bearing propagators.  Fixed in the same commit; corner
+    matches MMA at rel 9.78e-31 (Re).  MMA wallclock 187 s.
+  - `tools/bench/doublebox_2mass_single_2L_eps001_*` — 2L doublebox
+    with SPARSE 2-mass placement (one mass per loop on corner-only
+    propagators).  Different from doublebox2m (interleaved),
+    doublebox_blockmass (block), and doublebox_diagmass (rung).
+    Does NOT trigger D12 precision sensitivity nor D13 rank-filter
+    issue.  Corner matches MMA at rel 3.51e-31 (Re).  MMA wallclock
+    222 s.
+
 - **Mass-and-topology diversity batch** (2026-05-15): three additional
   novel oracles probing previously-uncovered axes.  All three pass at
   default precision (no D12-style sensitivity).  Oracle total: 37 → 40.
@@ -81,6 +100,20 @@ MMA at rel ~ 10⁻³⁰ except the inherently cancellation-bound
 pentabox-extreme rows.  See audit §D11.
 
 ### Fixed
+- **Audit divergence D13** — `build_boundary` projection failed when
+  `to_complete_explicit` rank-filtered linearly-dependent mass-bearing
+  propagators of the boundary sub-family.  The dropped propagator's
+  mass scale was absent from the sub-family's reduced context but
+  still present in the boundary's Laporta coefficient `lt.coeff`,
+  causing `project_mfrac_by_name` to throw `residual var 'mAsq' not
+  in dst`.  Fix in `src/pipeline/amfsystem.cpp::build_boundary`:
+  apply numeric substitution (`mfrac_substitute(lt_coef_in_fc,
+  numeric_q, sub_red_keep_names)`) before the projection, mirroring
+  MMA `ReduceBoundary`'s `/. Numeric` at `AMFlow.m:817`.  No
+  regression: ctest 547/547 pass, all 40 pre-existing oracles still
+  match.  Discovered + resolved 2026-05-15 by the new
+  `vtx2_2L_3mass` oracle.  Audit table is now
+  **86 🟢 / 0 🟡 / 13 🔴 (12 fixed + 1 D5 out of scope) / 17 ⚪**.
 - **Audit divergence D8** (`canonical_boundary_permutation` +
   `canonical_taylor_permutation` re-route SparseGaussian's free
   column): both functions in `src/ode/inf.cpp` previously sorted

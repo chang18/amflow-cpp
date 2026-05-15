@@ -12,18 +12,21 @@ covered by the oracle benchmarks under
 |---|---|---|
 | 🟢 verified                  | 86 | — |
 | 🟡 unverified (oracle gap)    |  0 | All 21 originally-🟡 audit rows are now closed (see §3 below for per-row closure paths).  Future audit growth comes from oracle-diversity benches under [`tools/bench/`](../tools/bench/), each landing as 🟢 by construction. |
-| 🔴 actual divergence          | 12 | **11 fully fixed; 1 out of scope** (D5 ComplexMode).  D12 (doublebox 2L interleaved 2-mass) was a precision-tuning issue, not a code bug — see §D12. |
+| 🔴 actual divergence          | 13 | **12 fully fixed; 1 out of scope** (D5 ComplexMode).  D12 (doublebox 2L interleaved 2-mass) was a precision-tuning issue, not a code bug — see §D12.  D13 (`build_boundary` rank-filter + missing `/. Numeric`) added 2026-05-15. |
 | ⚪ intentionally not ported   | 17 | — |
 
-Net assessment: **no committed-oracle path is wrong** (all 40 oracle
+Net assessment: **no committed-oracle path is wrong** (all 42 oracle
 benches under `tools/bench/` match MMA at rel ~10⁻³⁰ except where the
-integral's intrinsic cancellation horizon limits precision).  Eleven
-of the twelve 🔴 items have been fully corrected (see §2 below for
+integral's intrinsic cancellation horizon limits precision).  Twelve
+of the thirteen 🔴 items have been fully corrected (see §2 below for
 per-row details); D5 (complex-valued numeric kinematics) is the
 remaining out-of-scope row (the JSON entry-point rejects loudly).
 D12 (doublebox 2L 4-leg interleaved 2-mass) was traced 2026-05-15 to
 insufficient Taylor expansion order for the topology's tightened
 Frobenius convergence radius — not a code bug — see §D12.
+D13 (`build_boundary` missing MMA `/. Numeric`) was discovered
+2026-05-15 by the new `vtx2_2L_3mass_eps001` oracle and fixed in the
+same session — see §D13.
 
 ---
 
@@ -466,6 +469,56 @@ preferred file verbatim:
   to `tools/bench/` with the higher-precision parameters as a
   regression guard for cross-loop multi-mass cases.  Discovered and
   resolved 2026-05-15.
+
+### D13. `build_boundary` projection skips MMA `/. Numeric` — **FIXED**
+
+- **Symptom**: any topology with 2+ distinct mass scales where two
+  propagators share their SP-coefficient signature (e.g.
+  `l1²-mAsq` and `l1²-mBsq` both have SP = `[1,0,…]`) aborts in C++
+  with `AMFSystem::build_boundary: lt-to-sub-red projection:
+  project_mfrac_by_name: residual var 'mAsq' not in dst`.  First
+  surfaced 2026-05-15 by `vtx2_2L_3mass_eps001` (3-mass 2L 3-leg
+  vertex), but the same code path also affects 2-mass variants
+  whenever the rank-filter drops a mass-bearing prop.
+- **Root cause** (`src/pipeline/amfsystem.cpp:1840-1846`, the inner
+  projection in `build_boundary`): `qft::to_complete_explicit`
+  (`src/qft/complete.cpp:382-448`) uses `maximal_group_rows_mfrac`
+  to pick a rank-maximal independent set of propagators for the
+  boundary sub-family.  When two propagators are linearly dependent
+  in SP-coefficient space (rare with a single mass; common with
+  multiple masses), only one survives.  The dropped propagator's
+  mass scale is absent from the sub-family's `red.red_ctx.ctx`, but
+  the boundary's Laporta coefficient `lt.coeff` still carries that
+  mass symbolically.  `project_mfrac_by_name` (lines 173-231) errors
+  on the residual non-prefix-droppable variable.
+- **MMA upstream**: `ReduceBoundary` at `AMFlow.m:790-818`.  Line
+  817 reads
+  `coe = Together[Total[f[#[[1]]]*#[[2]]&/@str] /. Numeric]`
+  — applies the user-supplied `AMFlowInfo["Numeric"]` map to the
+  combined coefficient *immediately after* the inner reduction.
+  By the time the coefficient is recorded, all symbolic mass scales
+  are concrete rationals, so MMA never sees a context-mismatch.
+- **Fix**: substitute numeric values into `lt_coef_in_fc` before the
+  projection, mirroring MMA `/. Numeric`.  Implementation:
+  - Build `numeric_q` once at the top of `build_boundary` from
+    `opts_.bb.numeric_values` (`build_numeric_q` at line 504).
+  - Per sub-system, build `sub_red_keep_names` = the set of names
+    in `red.red_ctx.ctx`.
+  - Call `mfrac_substitute(lt_coef_in_fc, numeric_q,
+    sub_red_keep_names)` before the inner
+    `project_mfrac_by_name(lt_coef_in_fc, red.red_ctx.ctx)`.
+  After substitution the only symbolic variables remaining in
+  `lt_coef_in_fc` are those present in `red.red_ctx.ctx`, so the
+  projection succeeds.  The result is numerically identical to MMA's
+  flow (since MMA also applies `/. Numeric` at the same conceptual
+  point).
+- **Regression coverage**:
+  - `tools/bench/vtx2_2L_3mass_eps001_*` — pre-fix abort; post-fix
+    matches MMA at rel 9.78 × 10⁻³¹.
+  - All 40 existing oracle triplets continue to pass; ctest 547/547
+    pass.
+- **Status**: closed.  Discovered + resolved 2026-05-15 during the
+  multi-mass topology-diversity stress sweep.
 
 ---
 

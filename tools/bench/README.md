@@ -97,6 +97,8 @@ Mathematica reference path.
 | pentagon_1L_3mass | 1L pentagon with 3 distinct internal masses on non-cyclically-adjacent propagators (mAsq=1, mBsq=4, mCsq=9) | 0/3 | 111 s | — | rel ≲ 7e-31 |
 | doublebox_blockmass_2L | 2L doublebox with BLOCK 2-mass (mA on l1's 2 rails, mB on l2's 2 rails) — complement to interleaved D12 case | 0/1 | 424 s | — | rel ≲ 9e-31 |
 | xbox_crossmass_2L | 2L non-planar xbox with mass on the (l1+l2) cross-rung propagator — first xbox-with-mass oracle | 0/1 | 151 s | — | rel ≲ 3e-30 |
+| vtx2_2L_3mass | 2L 3-leg vertex with 3 distinct internal masses (mAsq, mBsq, mCsq) — surfaced + fixed audit D13 | 2/0 | 187 s | — | rel ≲ 1e-30 |
+| doublebox_2mass_single_2L | 2L doublebox with sparse 2-mass placement (one mass per loop on corner-only props; not block/interleaved/diag) | 0/1 | 222 s | — | rel ≲ 4e-31 |
 
 C++ wallclock notes:
 

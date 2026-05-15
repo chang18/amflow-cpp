@@ -1185,6 +1185,13 @@ void mfrac_eval_at_small_eps(const algebra::Mfrac& m, fmpq_t out) {
 
 void AMFSystem::build_boundary() {
     auto rctx = qft::make_region_context(*fc_with_eta_);
+    // Numeric substitution map for parent-only variables (kinematic
+    // invariants and mass scales) that may appear in the boundary's
+    // Laporta coefficient but get dropped from a sub-family's reduced
+    // context when `to_complete_explicit` rank-filters linearly
+    // dependent propagators.  Mirrors MMA's `/. Numeric` at
+    // AMFlow.m:817 inside `ReduceBoundary`.
+    auto numeric_q = build_numeric_q(opts_.bb);
     auto top_pattern = qft::get_top_sector(preferred_);
     std::vector<std::size_t> top_posi;
     for (std::size_t i = 0; i < top_pattern.size(); ++i) {
@@ -1826,6 +1833,32 @@ void AMFSystem::build_boundary() {
                         } catch (const std::exception& e) {
                             throw std::runtime_error(
                                 "AMFSystem::build_boundary: lt.coef projection: "
+                                + std::string(e.what()));
+                        }
+
+                        // When `to_complete_explicit` rank-filters linearly
+                        // dependent propagators of the boundary sub-family
+                        // (e.g. two `l1^2 - m_i sq` props with the same
+                        // SP signature), the sub-family's reduced context
+                        // loses one of the mass scales.  `lt.coeff` may
+                        // still carry that mass symbolically.  Substitute
+                        // its numeric value here, mirroring MMA's `/.
+                        // Numeric` at AMFlow.m:817 inside `ReduceBoundary`,
+                        // so the projection to `red.red_ctx.ctx` below
+                        // never sees a residual non-droppable variable.
+                        std::set<std::string> sub_red_keep_names;
+                        for (long v = 0; v < red.red_ctx.ctx->n_vars(); ++v) {
+                            sub_red_keep_names.insert(
+                                red.red_ctx.ctx->var_name(v));
+                        }
+                        try {
+                            lt_coef_in_fc = mfrac_substitute(
+                                lt_coef_in_fc, numeric_q,
+                                sub_red_keep_names);
+                        } catch (const std::exception& e) {
+                            throw std::runtime_error(
+                                "AMFSystem::build_boundary: lt.coef numeric "
+                                "substitution for sub-red projection: "
                                 + std::string(e.what()));
                         }
 

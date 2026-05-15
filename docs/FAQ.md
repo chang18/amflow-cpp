@@ -238,7 +238,7 @@ This project's C++17 source was developed primarily by AI coding
 agents under the maintainer's direction.  The trustworthiness contract
 is **numerical parity**:
 
-- 40 oracle benchmarks under `tools/bench/` match upstream Mathematica
+- 42 oracle benchmarks under `tools/bench/` match upstream Mathematica
   AMFlow at `rel ~ 10⁻³⁰` (rel ~ 10⁻¹⁰ on the pentabox 2L 5-leg
   corner, where the integral's intrinsic cancellation horizon
   bounds the achievable precision at fixed `WorkingPre`).

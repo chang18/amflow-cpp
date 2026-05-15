@@ -11,13 +11,13 @@ parity audit.
 
 ## Active practice — diversity-driven oracle expansion
 
-The audit is closed: **86 🟢 / 0 🟡 / 11 🔴 fixed / 1 🔴 out of scope
+The audit is closed: **86 🟢 / 0 🟡 / 12 🔴 fixed / 1 🔴 out of scope
 (D5, see below) / 17 ⚪ intentional**.  Going forward the project's
 quality loop is **oracle diversification**: build new benchmarks
 along axes the existing suite under-covers, and fix anything that
 diverges from MMA inline.
 
-The 40 committed oracle triplets currently cover:
+The 42 committed oracle triplets currently cover:
 
 | Diversity axis | Current coverage |
 |---|---|
