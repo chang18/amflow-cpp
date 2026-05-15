@@ -487,6 +487,46 @@ preferred file verbatim:
       block (rows 105-108) carry spurious off-diagonal terms that
       only manifest when both η-injected propagators sit in
       different loops.
+- **Investigation (2026-05-15, second pass)**:
+  - Verified the **sub-family corner is correct**.  Constructed a
+    standalone "cross-loop single-mass doublebox" family
+    `dbxCross` (props
+    `{(l1+p1)²-mBsq, (l1+p1+p2)², (l2-p3)², l2²-mBsq, (l1-l2)²,
+    ISP×4}`) and ran both C++ and MMA on its corner integral.
+    C++ result `-0.766941606719961... + 8.57e-60 i` matches MMA
+    `-0.766941606719961... + 2.88e-70 i` to ~30 digits.  The
+    sub-family value that feeds top-master 107's BC is correct.
+  - Verified BC for top-master 107 = `0.7669 + ~0i` at `mu=-3`
+    derived from `coef=-1 × sub_master[12]=-0.7669` — sign and
+    magnitude correct.
+  - **Found the smoking gun**: top-sector matrix entries differ
+    drastically between block and interleaved:
+    - Block (`doublebox2m_alt`) `de[90,*]` (= top-sector
+      diagonals): denominators are simply `(eta + 1)` — a
+      **real-axis simple pole at η = -1**, outside the
+      integration path from η = ∞ to η = 0 along NegIm.
+    - Interleaved (`doublebox2m`) `de[105,*]`: denominators are
+      `(eta^2 + eta + 12)` — **complex conjugate poles at
+      η = -1/2 ± i·√47/2 ≈ -0.5 ± 3.428i** (and the analogous
+      higher-degree polynomials for rows 106-108).  These poles
+      are at |η| ≈ 3.46 in the lower half plane, near the NegIm
+      integration contour.
+  - The spurious Im = 0.15 in `preferred[93]` is roughly
+    `0.7669 × π/16` (= the BC value × a 2π factor / 32), the
+    fingerprint of a **residue pickup at a complex pole that the
+    NegIm path crossing handles wrong** (or a `run_eta_direction`
+    deficiency where the chosen path passes a pole on the wrong
+    side).
+  - The 4 failing top-sector masters all couple through this 4×4
+    block.  Lower sectors don't reach these complex poles
+    (different denominators) and so are unaffected.
+- **Refined suspect location**: `src/ode/path.cpp`
+  `run_eta_direction` / `run_segment` (path construction must
+  pass near complex pole pair without crossing it) — or the
+  upstream `analytic_continuation`/`regular` integration step
+  in `src/ode/regular.cpp` if the path itself is correct but the
+  step-by-step ODE integration through the pole-region picks up a
+  spurious branch contribution.
 - **Reproduction**: bench files staged under
   `tmp/batch5_tests/configs/doublebox_2L_2mass_*` (NOT committed to
   `tools/bench/` until fix lands — committing a known-failing oracle
