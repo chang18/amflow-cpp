@@ -24,27 +24,53 @@ using algebra::MpolyContext;
 
 namespace fs = std::filesystem;
 
-ReductionContext make_reduction_context(const qft::FamilyConfig& fc) {
-    std::vector<std::string> names;
-    names.reserve((std::size_t)fc.ctx->n_vars() + 1);
-    for (long i = 0; i < fc.ctx->n_vars(); ++i) {
-        names.push_back(fc.ctx->var_name(i));
-    }
-    names.emplace_back("d");
+ReductionContext make_reduction_context(const qft::FamilyConfig& /*fc*/) {
+    // D14 fix (2026-05-16): narrow reduction context to only the
+    // variables Kira's output actually uses — `eta` and `d`.
+    //
+    // Background.  The previous implementation declared an MpolyContext
+    // with every variable of `fc.ctx` (typically `{l1, ..., lN, p1, ...,
+    // mAsq, mBsq, ..., psq, s, t, eta}`) plus `d`.  But Kira's output
+    // rationals only carry `{eta, d}` symbolically (`numeric_values`
+    // are baked into the yaml by `kira_yaml.cpp`'s `NumericSubs`).  The
+    // 9-or-so unused variables in the wide context bloated FLINT's
+    // multivariate-GCD inside `fmpz_mpoly_q_canonicalise`, producing the
+    // 20x memory blowup on `bn3_4mass_3L_eps001` (D14 audit row).
+    //
+    // The fixed shape `{eta, d}` mirrors MMA's behaviour: in upstream
+    // AMFlow's `DifferentialEquation` (`Kira/interface.m:505`) the
+    // diffeq tensor lives in symbolic Mathematica expressions where
+    // unused symbols never enter the algebra; the equivalent here is
+    // declaring only the symbols that *do* enter.
+    //
+    // Variables which are in `fc.ctx` but NOT in `red_ctx` (e.g. loop
+    // momenta, kinematic invariants, masses) must be substituted to
+    // their numeric values before any Mfrac is lifted into red_ctx —
+    // see `substitute_fc_vars` in the anonymous namespace below.
+    std::vector<std::string> names = {"eta", "d"};
     auto rctx = std::make_shared<MpolyContext>(std::move(names));
 
     ReductionContext out;
     out.ctx = rctx;
-    out.d_var = fc.ctx->n_vars();
-    out.lift_gens.reserve((std::size_t)fc.ctx->n_vars());
-    for (long i = 0; i < fc.ctx->n_vars(); ++i) {
-        out.lift_gens.push_back(Mpoly::variable(rctx, i));
-    }
+    out.d_var = 1;
+    // lift_gens is intentionally left empty: it is not consumed by any
+    // caller post-D14 (verified with `grep -rn red_ctx\.lift_gens`).
     return out;
 }
 
 namespace {
 
+// Lift / project an Mfrac between two MpolyContexts by variable name.
+//
+// D14 (2026-05-16) semantics update: source-ctx variables that are NOT
+// present in `dst_ctx` are silently dropped IF their exponent is 0 in
+// every monomial.  This supports the narrowed `red_ctx = {eta, d}`
+// scheme: callers `substitute_fc_vars` the source first (replacing
+// fc.ctx-only vars with their numeric values, which produces an Mfrac
+// whose dependence on the substituted vars has been collapsed to a
+// constant) and then call `mfrac_to_ctx` to remap to the narrow ctx.
+// Throws if a missing src var still has a positive exponent — that's
+// always a caller bug (forgot to substitute).
 Mfrac mfrac_to_ctx(const Mfrac& src,
                     const std::shared_ptr<MpolyContext>& dst_ctx) {
     if (src.ctx().get() == dst_ctx.get()) return src.clone();
@@ -57,9 +83,10 @@ Mfrac mfrac_to_ctx(const Mfrac& src,
     for (long i = 0; i < src.ctx()->n_vars(); ++i) {
         auto it = name_to_dst.find(src.ctx()->var_name(i));
         if (it == name_to_dst.end()) {
-            throw std::runtime_error(
-                "mfrac_to_ctx: variable '" + src.ctx()->var_name(i)
-                + "' not in destination ctx");
+            // Leave as -1 (sentinel meaning "drop unless exp != 0").
+            // The per-monomial walk below throws iff any monomial has
+            // a non-zero exponent on this variable.
+            continue;
         }
         src_to_dst[(std::size_t)i] = it->second;
     }
@@ -78,8 +105,20 @@ Mfrac mfrac_to_ctx(const Mfrac& src,
                                             src.ctx()->raw());
             std::fill(dexp.begin(), dexp.end(), 0);
             for (long i = 0; i < src.ctx()->n_vars(); ++i) {
-                dexp[(std::size_t)src_to_dst[(std::size_t)i]]
-                    = exp[(std::size_t)i];
+                long pi = src_to_dst[(std::size_t)i];
+                if (pi < 0) {
+                    if (exp[(std::size_t)i] != 0) {
+                        fmpz_clear(coeff);
+                        throw std::runtime_error(
+                            "mfrac_to_ctx: variable '"
+                            + src.ctx()->var_name(i)
+                            + "' has non-zero exponent but is not in "
+                              "destination ctx (caller forgot to "
+                              "substitute numeric values?)");
+                    }
+                    continue;
+                }
+                dexp[(std::size_t)pi] = exp[(std::size_t)i];
             }
             fmpz_mpoly_set_coeff_fmpz_ui(out.raw(), coeff,
                                           dexp.data(), dst_ctx->raw());
@@ -88,6 +127,109 @@ Mfrac mfrac_to_ctx(const Mfrac& src,
         return out;
     };
     return Mfrac(walk(src.numerator()), walk(src.denominator()));
+}
+
+// FmpqHolder: small RAII wrapper around fmpq_t.  Duplicated locally to
+// keep D14 fix self-contained in src/ibp/reduce.cpp (the pipeline's
+// version in src/pipeline/amfsystem.cpp is in an anonymous namespace).
+class FmpqHolder {
+public:
+    FmpqHolder() { fmpq_init(q_); }
+    FmpqHolder(const FmpqHolder& o) { fmpq_init(q_); fmpq_set(q_, o.q_); }
+    FmpqHolder(FmpqHolder&& o) noexcept { fmpq_init(q_); fmpq_swap(q_, o.q_); }
+    FmpqHolder& operator=(const FmpqHolder& o) {
+        if (this != &o) fmpq_set(q_, o.q_);
+        return *this;
+    }
+    FmpqHolder& operator=(FmpqHolder&& o) noexcept {
+        if (this != &o) fmpq_swap(q_, o.q_);
+        return *this;
+    }
+    ~FmpqHolder() { fmpq_clear(q_); }
+    fmpq_t& raw() { return q_; }
+    const fmpq_t& raw() const { return q_; }
+private:
+    fmpq_t q_;
+};
+
+bool parse_rational_string(const std::string& s, fmpq_t v) {
+    std::size_t slash = s.find('/');
+    try {
+        if (slash != std::string::npos) {
+            long p = std::stol(s.substr(0, slash));
+            long q = std::stol(s.substr(slash + 1));
+            fmpq_set_si(v, p, q);
+            return true;
+        }
+        std::size_t pos;
+        long p = std::stol(s, &pos);
+        if (pos == s.size()) {
+            fmpq_set_si(v, p, 1);
+            return true;
+        }
+        std::size_t dot = s.find('.');
+        if (dot == std::string::npos) return false;
+        std::string sint = s.substr(0, dot) + s.substr(dot + 1);
+        long denom = 1;
+        for (std::size_t i = dot + 1; i < s.size(); ++i) denom *= 10;
+        long num = std::stol(sint);
+        fmpq_set_si(v, num, denom);
+        return true;
+    } catch (...) { return false; }
+}
+
+bool mpoly_has_var(const Mpoly& p, long v) {
+    auto ctx = p.ctx();
+    long len = fmpz_mpoly_length(p.raw(), ctx->raw());
+    std::vector<unsigned long> exp((std::size_t)ctx->n_vars());
+    for (long t = 0; t < len; ++t) {
+        fmpz_mpoly_get_term_exp_ui(exp.data(), p.raw(), t, ctx->raw());
+        if (exp[(std::size_t)v] > 0) return true;
+    }
+    return false;
+}
+
+// Substitute numeric values for every variable in src.ctx that is NOT
+// in `keep_names`, leaving keep_names variables symbolic.  The returned
+// Mfrac is still on src.ctx (same MpolyContext), but the substituted
+// variables now have exponent 0 in every monomial — they can then be
+// safely projected to a narrower context via `mfrac_to_ctx`.
+//
+// Mirrors MMA AMFlow.m's pattern of applying `/. Numeric` to inner
+// reductions; this is the same trick the D13 fix (build_boundary) uses,
+// generalised here so the D14 narrow red_ctx can accept libp_deriv
+// outputs which carry fc.ctx variables (loops, legs, kinematic
+// invariants) symbolically.
+Mfrac substitute_fc_vars(
+        const Mfrac& src,
+        const std::map<std::string, std::string>& numeric_values,
+        const std::set<std::string>& keep_names) {
+    auto ctx = src.ctx();
+    Mfrac cur = src.clone();
+    for (long v = 0; v < ctx->n_vars(); ++v) {
+        const std::string& name = ctx->var_name(v);
+        if (keep_names.count(name)) continue;
+        if (!mpoly_has_var(cur.numerator(), v)
+                && !mpoly_has_var(cur.denominator(), v)) {
+            continue;
+        }
+        auto it = numeric_values.find(name);
+        if (it == numeric_values.end()) {
+            throw std::runtime_error(
+                "substitute_fc_vars: no numeric value for fc variable '"
+                + name + "' (and it is not in the keep set).  "
+                "Caller bug: numeric_values must cover every fc.ctx "
+                "variable that is not eta.");
+        }
+        FmpqHolder h;
+        if (!parse_rational_string(it->second, h.raw())) {
+            throw std::runtime_error(
+                "substitute_fc_vars: cannot parse numeric value '"
+                + it->second + "' for variable '" + name + "'");
+        }
+        cur = cur.substitute(v, h.raw());
+    }
+    return cur;
 }
 
 Mfrac lift_to_red_ctx(const Mfrac& src, const ReductionContext& red_ctx) {
@@ -533,7 +675,20 @@ diffeq(const qft::FamilyConfig& fc,
                 if (rit == rule_by_lhs.end()) {
                     continue;
                 }
-                Mfrac coef_lifted = lift_to_red_ctx(dt.coef, out.red_ctx);
+                // D14 (2026-05-16): `dt.coef` lives on fc.ctx and
+                // may carry loop momenta / kinematic invariants /
+                // mass scales that are NOT in the narrowed `red_ctx
+                // = {eta, d}`.  Mirror MMA's `/. Numeric` step
+                // (interface.m's ComputeDerivative + DifferentialEquation
+                // pipeline) by substituting numeric values for every
+                // fc.ctx variable except eta before lifting.  After
+                // substitution `dt.coef` only depends symbolically on
+                // eta, and `lift_to_red_ctx` can drop the now-zero
+                // exponents on the other variables.
+                Mfrac dt_coef_subbed = substitute_fc_vars(
+                    dt.coef, opts.numeric_values, /*keep=*/{"eta"});
+                Mfrac coef_lifted = lift_to_red_ctx(dt_coef_subbed,
+                                                     out.red_ctx);
                 for (const auto& mt : rit->second) {
                     auto mit = master_index.find(int_key(mt.integ));
                     if (mit == master_index.end()) continue;

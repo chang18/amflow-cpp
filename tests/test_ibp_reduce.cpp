@@ -20,20 +20,20 @@ namespace ibp = amflow::ibp;
 namespace qft = amflow::qft;
 namespace fs  = std::filesystem;
 
-TEST(IbpReduceTest, MakeReductionContext_AppendsD) {
+TEST(IbpReduceTest, MakeReductionContext_NarrowsToEtaAndD) {
+    // D14 fix (2026-05-16): make_reduction_context returns an MpolyContext
+    // with exactly the two variables `{eta, d}`, independent of the
+    // family's variable count.  See audit AUDIT_MMA_PARITY.md §D14.
     auto fc = qft::FamilyConfig::build(
         "bubble", {"l"}, {"p"}, {}, {{"p^2", "s"}},
         {"l^2 - msq", "(l - p)^2 - msq"});
     auto rctx = ibp::make_reduction_context(fc);
 
-    EXPECT_EQ(rctx.d_var, fc.ctx->n_vars());
-    EXPECT_EQ(rctx.ctx->n_vars(), fc.ctx->n_vars() + 1);
-    EXPECT_EQ(rctx.ctx->var_name(rctx.d_var), "d");
-    ASSERT_EQ((long)rctx.lift_gens.size(), fc.ctx->n_vars());
-    for (long i = 0; i < fc.ctx->n_vars(); ++i) {
-        EXPECT_EQ(rctx.lift_gens[(std::size_t)i].to_string(),
-                  rctx.ctx->var_name(i));
-    }
+    EXPECT_EQ(rctx.ctx->n_vars(), 2);
+    EXPECT_EQ(rctx.ctx->var_name(0), "eta");
+    EXPECT_EQ(rctx.ctx->var_name(1), "d");
+    EXPECT_EQ(rctx.d_var, 1);
+    EXPECT_TRUE(rctx.lift_gens.empty());
 }
 
 TEST(IbpReduceTest, MakeReductionContext_DoesNotMutateFc) {
@@ -44,6 +44,21 @@ TEST(IbpReduceTest, MakeReductionContext_DoesNotMutateFc) {
     auto rctx = ibp::make_reduction_context(fc);
     EXPECT_EQ(fc.ctx->n_vars(), n_before);
     EXPECT_NE(rctx.ctx.get(), fc.ctx.get());
+}
+
+TEST(IbpReduceTest, MakeReductionContext_ShapeIsFamilyIndependent) {
+    // Different family with many more variables must still yield a
+    // narrow {eta, d} ctx — the whole point of D14.
+    auto fc = qft::FamilyConfig::build(
+        "tribox", {"l1", "l2", "l3"}, {"p1", "p2"}, {},
+        {{"p1^2", "0"}, {"p2^2", "0"}, {"(p1 + p2)^2", "s"}},
+        {"l1^2 - mAsq", "l2^2 - mBsq", "l3^2 - mCsq",
+         "(l1 + p1)^2", "(l2 + p2)^2", "(l3 + p1 + p2)^2"});
+    auto rctx = ibp::make_reduction_context(fc);
+    EXPECT_EQ(rctx.ctx->n_vars(), 2);
+    EXPECT_EQ(rctx.ctx->var_name(0), "eta");
+    EXPECT_EQ(rctx.ctx->var_name(1), "d");
+    EXPECT_EQ(rctx.d_var, 1);
 }
 
 namespace {
