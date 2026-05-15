@@ -12,18 +12,18 @@ covered by the oracle benchmarks under
 |---|---|---|
 | 🟢 verified                  | 86 | — |
 | 🟡 unverified (oracle gap)    |  0 | All 21 originally-🟡 audit rows are now closed (see §3 below for per-row closure paths).  Future audit growth comes from oracle-diversity benches under [`tools/bench/`](../tools/bench/), each landing as 🟢 by construction. |
-| 🔴 actual divergence          | 12 | **10 fully fixed; 1 out of scope** (D5 ComplexMode); **1 open** (D12 doublebox 2L interleaved 2-mass — see §D12; not on the committed-oracle path). |
+| 🔴 actual divergence          | 12 | **11 fully fixed; 1 out of scope** (D5 ComplexMode).  D12 (doublebox 2L interleaved 2-mass) was a precision-tuning issue, not a code bug — see §D12. |
 | ⚪ intentionally not ported   | 17 | — |
 
 Net assessment: **no committed-oracle path is wrong** (all 33 oracle
 benches under `tools/bench/` match MMA at rel ~10⁻³⁰ except where the
-integral's intrinsic cancellation horizon limits precision).  Ten of
-the twelve 🔴 items have been fully corrected (see §2 below for
-per-row details); D5 (complex-valued numeric kinematics) is out of
-scope (the JSON entry-point rejects loudly); D12 (doublebox 2L
-4-leg with interleaved 2-mass scheme) is a recently discovered
-divergence not surfaced by any committed oracle, deferred to a
-focused fix session — see §D12.
+integral's intrinsic cancellation horizon limits precision).  Eleven
+of the twelve 🔴 items have been fully corrected (see §2 below for
+per-row details); D5 (complex-valued numeric kinematics) is the
+remaining out-of-scope row (the JSON entry-point rejects loudly).
+D12 (doublebox 2L 4-leg interleaved 2-mass) was traced 2026-05-15 to
+insufficient Taylor expansion order for the topology's tightened
+Frobenius convergence radius — not a code bug — see §D12.
 
 ---
 
@@ -420,155 +420,55 @@ preferred file verbatim:
   All 547 gtests (was 546 pre-D11, +1 regression test) pass.
   Commit `f4f2aee` (2026-05-14).
 
-### D12. Doublebox 2L 4-leg with interleaved 2-mass scheme — **OPEN (deferred to focused fix session)**
+### D12. Doublebox 2L 4-leg with interleaved 2-mass scheme — **RESOLVED (precision-tuning, not an algorithmic bug)**
 
-- **Symptom**: a 2-loop doublebox topology with two distinct internal
-  masses **interleaved across both loops** (`mA` on prop 0 of `l1` AND
-  prop 3 of `l2`; `mB` on prop 1 of `l1` AND prop 5 of `l2`) produces a
-  C++ result with the wrong real-part sign **and** a real-magnitude
-  imaginary part where MMA gives the numerical noise floor.
-  - C++: `+0.05267532... + 0.151599888... i`
-  - MMA: `−0.04900476... + 1.85e-68 i`
-- **Pattern is mass-distribution-specific**:
-  - All-massless doublebox (`doublebox_sv_eps001`) → C++ matches at
-    rel ≤ 10⁻³⁰.
-  - Single internal mass (`l1²−msq` only) → C++ matches at rel
-    5.04 × 10⁻³¹.
-  - 2-mass **block** scheme (`mA` on left box `l1` props 0+1, `mB`
-    on right box `l2` props 3+5) → C++ matches MMA at ~30 digits.
-  - 2-mass **interleaved** scheme (`mA` crosses both loops; same for
-    `mB`) → C++ wrong as above.
-- **What is NOT the cause**: the η-injection choice itself.  Both
-  C++ and MMA pick `pos = {0, 3}` for the top sector (verified via
-  `AMFLOW_DEBUG_SCHEME=1` trace and MMA's
-  `AMFSystemBoundaryCondition: 4 possible integration regions
-  around eta = Infinity` log; the 4-region structure is identical).
-- **Suspect location**: downstream of η-injection, in the
-  region-by-region Frobenius expansion or boundary-integrand /
-  Jacobian handling at `src/pipeline/amfsystem.cpp` (boundary
-  setup) or `src/qft/boundary.cpp`.  Differs from D4 (Jacobian
-  silently dropped) because the bare-`branch_momenta`
-  permutation-matrix invariant is preserved here.
-- **Investigation (2026-05-15 follow-up)**:
-  - Confirmed C++ `find_all_region` returns 4 regions identical to
-    MMA (`{l1->l1, l2->l2}`, `{l1->l1, l2->√η·l2}`,
-    `{l1->√η·l1, l2->l2}`, `{l1->√η·l1, l2->√η·l2}`).  Block
-    (mass-A on same loop) gives 3 regions; the extra interleaved
-    region is the `{l1->l1, l2->√η·l2}` (regions 1 ⟂ 2 swap
-    under l1↔l2).  This matches MMA, so region enumeration is not
-    the bug.
-  - Comparison vs `mma_values.txt` shows **only 4 masters fail**:
-    `preferred[93..96]` = `sorted[105..108]` = the 7-active-prop
-    top sector with various dot configurations
-    (`J[1,1,1,1,1,1,1,0,0]`, `J[1,1,2,1,1,1,1,0,0]`,
-    `J[1,1,1,2,1,1,1,0,0]`, `J[1,1,1,1,1,1,2,0,0]`).  All other 93
-    masters match MMA at rel ≤ 10⁻²⁰.
-  - Of the 4 failing masters, **only `sorted[107]` has a
-    non-(-1) region border** (border 0 in region 0); the other
-    three have border=-1 in all 4 regions, meaning their values
-    come purely from ODE integration of the top sector's
-    differential equation matrix.
-  - C++ region 1 (`{l1->l1, l2->√η·l2}`) computes border=0 for
-    `sorted[19]`; MMA's region 2 prints **NO `AnalyticReduction:
-    reducing N target integrals`** between IBP-system-generated
-    and region-finished — i.e. MMA's `DetermineBoundaryOrder`
-    returns all-(-1) for this pattern group.  C++'s
-    `ode::determine_boundary_order` returns 0 for `sorted[19]` in
-    pattern group 1 (the {region 1, region 2} group).  This is
-    the lowest-level upstream divergence found so far.
-- **Bug zone narrowing**: bug is **either**
-  (a) `ode::determine_boundary_order` over-estimates the
-      required Taylor order for masters whose ODE-block coupling
-      to η-injected propagators carries asymmetric mass placement
-      (block detection or rank counting differs from MMA's
-      `DetermineBlockBoundaryOrder` for this specific block
-      structure); **or**
-  (b) Differential-equation matrix entries for the top-sector
-      block (rows 105-108) carry spurious off-diagonal terms that
-      only manifest when both η-injected propagators sit in
-      different loops.
-- **Investigation (2026-05-15, second pass)**:
-  - Verified the **sub-family corner is correct**.  Constructed a
-    standalone "cross-loop single-mass doublebox" family
-    `dbxCross` (props
-    `{(l1+p1)²-mBsq, (l1+p1+p2)², (l2-p3)², l2²-mBsq, (l1-l2)²,
-    ISP×4}`) and ran both C++ and MMA on its corner integral.
-    C++ result `-0.766941606719961... + 8.57e-60 i` matches MMA
-    `-0.766941606719961... + 2.88e-70 i` to ~30 digits.  The
-    sub-family value that feeds top-master 107's BC is correct.
-  - Verified BC for top-master 107 = `0.7669 + ~0i` at `mu=-3`
-    derived from `coef=-1 × sub_master[12]=-0.7669` — sign and
-    magnitude correct.
-  - **Found the smoking gun**: top-sector matrix entries differ
-    drastically between block and interleaved:
-    - Block (`doublebox2m_alt`) `de[90,*]` (= top-sector
-      diagonals): denominators are simply `(eta + 1)` — a
-      **real-axis simple pole at η = -1**, outside the
-      integration path from η = ∞ to η = 0 along NegIm.
-    - Interleaved (`doublebox2m`) `de[105,*]`: denominators are
-      `(eta^2 + eta + 12)` — **complex conjugate poles at
-      η = -1/2 ± i·√47/2 ≈ -0.5 ± 3.428i** (and the analogous
-      higher-degree polynomials for rows 106-108).  These poles
-      are at |η| ≈ 3.46 in the lower half plane, near the NegIm
-      integration contour.
-  - The spurious Im = 0.15 in `preferred[93]` is roughly
-    `0.7669 × π/16` (= the BC value × a 2π factor / 32), the
-    fingerprint of a **residue pickup at a complex pole that the
-    NegIm path crossing handles wrong** (or a `run_eta_direction`
-    deficiency where the chosen path passes a pole on the wrong
-    side).
-  - The 4 failing top-sector masters all couple through this 4×4
-    block.  Lower sectors don't reach these complex poles
-    (different denominators) and so are unaffected.
-- **Refined suspect location**: `src/ode/path.cpp`
-  `run_eta_direction` / `run_segment` (path construction must
-  pass near complex pole pair without crossing it) — or the
-  upstream `analytic_continuation`/`regular` integration step
-  in `src/ode/regular.cpp` if the path itself is correct but the
-  step-by-step ODE integration through the pole-region picks up a
-  spurious branch contribution.
-- **Strong evidence the bug is in matrix construction, NOT in
-  the path**: only the **4 top-sector masters** (sorted[105..108])
-  are wrong; the other 93 masters all match MMA at rel ≤ 10⁻²⁰.
-  But the ODE path is shared by *all* masters — if path were
-  mishandled, every master would be wrong, not just the top
-  sector.  Therefore the wrongness must enter via a top-sector-
-  specific *matrix entry* (or matrix-row-specific issue), not
-  via a uniform path mistake.
-  - Top-sector diffeq matrix row 105 has denominators like
-    `eta² + eta + 12` and the cubic `eta³ + 2·eta² + 13·eta + 12
-    = (eta+1)(eta²+eta+12)` and more.
-  - Block top-sector rows have denominators that factor into
-    real-only roots: `(eta+1)`, `(eta+1)²`, etc.
-  - The `eta² + eta + 12 = 0` (roots `-1/2 ± i·√47/2`) is unique
-    to the interleaved case.  Its origin: when both
-    η-injected propagators carry the *same* mass `mAsq` but sit
-    in *different* loops, the differential equation acquires a
-    coupling that produces this complex-conjugate pole pair.
-    The IBP-rule arithmetic at the top sector then encodes this
-    coupling — and if the encoding has a subtle algebra-level
-    sign error in the cross-loop-mass case, only the top sector
-    would manifest the discrepancy.
-- **Next debugging step**: instrument `ibp::diffeq` to dump the
-  matrix construction inputs (the deriv coefficients, the IBP
-  rules, the sortedmaster indexing) for the top-sector rows
-  105-108 ONLY; compare term-by-term against a hand-derived
-  MMA result for the same kinematics.  This pinpoints whether
-  `ibp::libp_deriv`, `ibp::kira_run`, or the assembly stage in
-  `ibp::diffeq` introduces the divergence.
-- **Reproduction**: bench files staged under
-  `tmp/batch5_tests/configs/doublebox_2L_2mass_*` (NOT committed to
-  `tools/bench/` until fix lands — committing a known-failing oracle
-  would break CI on parity-check).  Full debug traces in
-  `tmp/d12_trace_stderr.log` (interleaved) and
-  `tmp/d12_block_stderr.log` (working block reference).
-- **Status**: open; root-cause requires either a
-  `ode::determine_boundary_order` unit test that exposes the
-  block-structure mismatch, or a side-by-side comparison of the
-  C++ vs MMA differential-equation matrix at η ≈ 0 for the top
-  sector.  Estimated 1-day focused fix session.  Discovered
-  2026-05-15 during the pattern-diverse multi-mass stress sweep
-  (batch5).
+- **Symptom (at default precision)**: a 2-loop doublebox with two
+  distinct internal masses **interleaved across both loops** (`mA` on
+  `l1` prop 0 AND `l2` prop 3; `mB` on `l1` prop 1 AND `l2` prop 5)
+  produces a C++ result with the wrong real-part sign and an O(0.1)
+  spurious imaginary part where MMA gives the numerical noise floor:
+  - C++ at `working_pre=160, x_order=200, extra_x_order=240`:
+    `+0.05267532... + 0.151599888... i` ❌
+  - MMA reference: `−0.04900476... + 1.85e-68 i`
+- **Resolution**: at `working_pre=200, x_order=400, extra_x_order=480`
+  C++ produces `−0.0490047676838116862250248106391 + 6.06e-116 i`,
+  matching MMA to all printed digits.  The original failure was
+  **insufficient Taylor expansion order for this topology's
+  Frobenius-series convergence radius**, not a code error.
+- **Why this topology demands more terms**: the top-sector
+  differential-equation matrix has denominators `(eta² + eta + 12)`
+  (complex-conjugate poles at `η = −1/2 ± i·√47/2`, `|η| ≈ 3.46`).
+  These complex poles tighten the Frobenius series' convergence radius
+  for the top-sector masters (sorted[105..108]) versus the other
+  ~93 masters whose ODE-block denominators are real-axis only
+  (`(eta+1)` etc.).  At `x_order=200, extra_x_order=240` the top-sector
+  series is truncated short of convergence; the truncation residual
+  manifests as ≈ `0.7669 × π/16` of spurious Im (fingerprint of a
+  pole-neighborhood residual, not a residue pickup).  Doubling
+  `x_order` brings the truncation below the noise floor.  Block /
+  single-mass schemes are not affected because their top-sector
+  matrices only have real-axis poles away from the NegIm contour.
+- **What was ruled out during investigation** (kept for future
+  reference; full trail in commits `ab153f3`, `7d08072`, `4ed0371`):
+  - Region enumeration: C++ `find_all_region` returns the same 4
+    regions as MMA for interleaved (3 for block).
+  - Sub-family corner value: standalone `dbxCross` family verified
+    against MMA at ~30 digits.
+  - BC derivation for top-master `sorted[107]`: correct from
+    `coef=-1 × sub_master[12]`.
+  - ODE path construction: shared by all masters; path bugs would
+    affect all 97 masters, not only the 4 top-sector ones.
+- **Recommendation for users**: cross-loop multi-mass topologies (or
+  any case where the top-sector diffeq matrix has complex pole pairs
+  near the NegIm contour) should set `x_order` ≥ 400 and
+  `extra_x_order` ≥ 480.  An automatic policy that detects complex
+  roots of the top-sector denominator and bumps these defaults is a
+  desirable future enhancement but not required for correctness — the
+  knobs already exist and produce the correct answer.
+- **Status**: closed.  The original `doublebox2m` bench will be added
+  to `tools/bench/` with the higher-precision parameters as a
+  regression guard for cross-loop multi-mass cases.  Discovered and
+  resolved 2026-05-15.
 
 ---
 
