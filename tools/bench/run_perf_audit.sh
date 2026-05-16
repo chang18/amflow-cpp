@@ -24,6 +24,8 @@ BENCHES=(
   tools/bench/hexagon_1L_2mass_eps001_black_box_amflow_cpp.json
   tools/bench/hexagon_1L_3mass_eps001_black_box_amflow_cpp.json
   tools/bench/hexagon_1L_4mass_eps001_black_box_amflow_cpp.json
+  tools/bench/hexagon_1L_5mass_eps001_black_box_amflow_cpp.json
+  tools/bench/hexagon_1L_6mass_eps001_black_box_amflow_cpp.json
   tools/bench/pentagon_1L_2mass_eps001_black_box_amflow_cpp.json
   tools/bench/pentagon_1L_4mass_eps001_black_box_amflow_cpp.json
   tools/bench/pentagon_1L_5mass_eps001_black_box_amflow_cpp.json
