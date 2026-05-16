@@ -51,6 +51,7 @@ BENCHES=(
   tools/bench/sunset_2L_onshell_black_box_amflow_cpp.json
   tools/bench/tadbubble_2L_black_box_amflow_cpp.json
   tools/bench/triangle_1L_2mass_black_box_amflow_cpp.json
+  tools/bench/triangle_1L_3mass_alt_eps001_black_box_amflow_cpp.json
   tools/bench/triangle_1L_3mass_black_box_amflow_cpp.json
   tools/bench/tt_2loop_box_black_box_amflow_cpp.json
   tools/bench/tt_cutkosky_probe_eps001_black_box_amflow_cpp.json
