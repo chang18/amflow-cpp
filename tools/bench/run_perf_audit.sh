@@ -17,6 +17,7 @@ CLI="./build/src/cli/amflow_cli"
 
 BENCHES=(
   tools/bench/banana_3loop_eps001_black_box_amflow_cpp.json
+  tools/bench/banana_4L_2mass_eps001_black_box_amflow_cpp.json
   tools/bench/banana_4L_mixed_black_box_amflow_cpp.json
   tools/bench/banana_4loop_eps001_black_box_amflow_cpp.json
   tools/bench/bn3_4mass_3L_eps001_black_box_amflow_cpp.json
