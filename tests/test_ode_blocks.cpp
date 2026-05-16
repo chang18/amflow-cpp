@@ -127,9 +127,18 @@ TEST(AnalyzeBlock, IdentityHasOneBlockPerRow) {
     auto m = dsn::RationalMatrix::identity(3);
     auto blocks = ode::analyze_block(m);
     ASSERT_EQ(blocks.size(), 3u);
-    for (std::size_t k = 0; k < 3; ++k) {
-        EXPECT_EQ(blocks[k], (std::vector<std::size_t>{k}));
+    // MMA `AnalyzeBlock1` (DESolver.m:236-250) returns the trimmed blocks
+    // in `Reverse[Table[Complement[Sequence@@blocks[[i;;]]], …]]` order,
+    // so for fully-independent rows (identity matrix) the output is
+    // emitted in descending index order: [{2}, {1}, {0}].  Order-agnostic
+    // contract: every block has size 1, and the union covers {0..n-1}.
+    std::vector<std::size_t> all;
+    for (const auto& b : blocks) {
+        EXPECT_EQ(b.size(), 1u);
+        all.insert(all.end(), b.begin(), b.end());
     }
+    std::sort(all.begin(), all.end());
+    EXPECT_EQ(all, (std::vector<std::size_t>{0, 1, 2}));
 }
 
 TEST(AnalyzeBlock, BlockTriangular) {

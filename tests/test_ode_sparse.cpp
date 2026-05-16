@@ -353,19 +353,23 @@ TEST(ChopSparse, RemovesValuesBelowThreshold) {
     ode::SparseRow row;
     row.emplace_back(0, acb_si(1));            // |x| = 1 → keep
     {
-        // 10^-30
+        // 10^-90 — well below the new sparse-layer chop floor
+        // `max(chop_pre, working_pre - 40)` (= max(20, 60) = 60 at the
+        // default working_pre = 100).
         dsn::AcbValue tiny;
         arb_set_si(acb_realref(tiny.raw()), 1);
         arb_t denom; arb_init(denom);
         arb_set_si(denom, 10);
-        arb_pow_ui(denom, denom, 30u, dsn::working_prec_bits());
+        arb_pow_ui(denom, denom, 90u, dsn::working_prec_bits());
         arb_div(acb_realref(tiny.raw()),
                 acb_realref(tiny.raw()), denom, dsn::working_prec_bits());
         arb_clear(denom);
         row.emplace_back(1, std::move(tiny));
     }
 
-    // Default chop digits = chop_pre() = 20; 10^-30 should be chopped.
+    // chop_sparse() picks up `sparse_chop_digits()`; at the default
+    // working_pre=100 / chop_pre=20 that's 60 digits, so 10^-90 must be
+    // chopped while the unit entry survives.
     ode::chop_sparse(row);
     ASSERT_EQ(row.size(), 1u);
     EXPECT_EQ(row[0].col, 0);
