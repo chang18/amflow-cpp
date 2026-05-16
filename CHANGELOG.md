@@ -99,21 +99,43 @@ on 2026-05-14 (pentabox / doublebox / mercedes 3L / banana 4L across
 MMA at rel ~ 10⁻³⁰ except the inherently cancellation-bound
 pentabox-extreme rows.  See audit §D11.
 
-### Investigation in progress
-- **Audit divergence D14** — `ibp::reduce` builds the reduction
-  context with all 9 family variables (`l1, l2, l3, p1, mAsq, mBsq,
-  mCsq, mDsq, psq, eta, d`) even though Kira's output only uses
-  `eta, d`.  Multi-distinct-mass 3L topologies (first observed on
-  `bn3_4mass_3L_eps001`) cause C++ to use 20× more memory than MMA
-  on the same problem: MMA 1.3 GB / 640 s, C++ killed at 27 GB / 205 s.
-  Root cause: FLINT's multivariate GCD inside `fmpz_mpoly_q_canonicalise`
-  scales super-linearly with variable count; the 9 unused-but-declared
-  slots compound across ~88 000 inner-loop GCD calls in
-  `ibp::diffeq`.  Fix in design phase; see audit §D14.  This
-  CHANGELOG entry serves as the rollback anchor for the upcoming
-  implementation work — no code change yet.
-
 ### Fixed
+- **Audit divergence D14** (boundary-order chain on multi-mass 3L) —
+  closed 2026-05-16.  bench `bn3_4mass_3L_eps001` (3L 2-leg banana,
+  4 distinct internal masses, `BlackBoxDot=5`) could not complete
+  in C++: the boundary `BlackBoxReduce` for system_0/region_0 handed
+  Kira 162 J targets with numerator rank up to 56, vs MMA's 1 J
+  target at rank 0; Kira couldn't reduce the C++ input within the
+  100 GB memory cap.  Root cause was four chained MMA-faithfulness
+  gaps in `src/ode/blocks.cpp` + `src/ode/sparse.cpp`; the
+  load-bearing fix is `sparse_chop_digits` defaulting to
+  `max(chop_pre, working_pre − 40)` so the acb-arithmetic sparse
+  layer always has ≥ 40 decimal digits of chop headroom below
+  working precision (default `chop_pre = 20` left accumulated
+  `forward_sparse_gaussian` rounding noise un-chopped, re-routing
+  pivot choice and inflating the *unsolved* column set at the wrong
+  low-fid-order positions → spurious positive boundary orders →
+  over-expanded boundary integrand → 162-vs-1 J-target divergence).
+  The other three fixes are MMA-faithfulness cleanups:
+  `analyze_block` Gather predicate `subset_or_superset` → `same_set`
+  (per MMA's `samesetQ`); missing
+  `Reverse[Table[Complement[Sequence@@blocks[[i;;]]], …]]` SCC trim
+  added; `extend` forward-closure filter removed.
+  `construct_matrix` also switched to `acb_contains_zero` for the
+  cancellation discard so freshly-computed `(k)·dn − an` cancellations
+  don't carry forward as spurious entries.  Final result:
+  bn3_4mass_3L_eps001 matches MMA at ≥ 28-decimal-digit precision;
+  ctest 548/548 pass; existing oracle benches unaffected.  User can
+  override the new chop floor via `AMFLOW_SPARSE_CHOP_DIGITS` env
+  var.  Earlier "Stage 1-6" patches (commits `019ba18`, `4de9245`,
+  `625bf58`, `c522132`, `66db94c`) landed against a wrong hypothesis
+  ("11-variable polynomial ring blowup in `ibp::reduce` algebra")
+  remain in place as MMA-faithful cleanup but were not load-bearing
+  for bn3_4mass; see audit §D14 for full investigation trail.  Audit
+  table is now **86 🟢 / 0 🟡 / 14 🔴 (13 fixed + 1 D5 out of scope) /
+  17 ⚪**.
+
+
 - **Audit divergence D13** — `build_boundary` projection failed when
   `to_complete_explicit` rank-filtered linearly-dependent mass-bearing
   propagators of the boundary sub-family.  The dropped propagator's

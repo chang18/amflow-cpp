@@ -85,7 +85,7 @@ Public headers under `include/amflow/<domain>/`; implementation under
 | Core ODE solver (port of upstream `DESolver.m`) | Implemented; 42/42 oracle cases match MMA reference at `rel ~1e-30` (rel ~1e-10 on the pentabox 2L corner where the integral's intrinsic cancellation horizon dominates) |
 | AMFlow + Kira pipeline (upstream `AMFlow.m` core algorithms) | Implemented for the covered workflows |
 | Top-level entries (`amflow`, `black_box_amflow`, `solve_integrals`) | Implemented; exposed via `amflow_cli` JSON modes |
-| Line-level MMA parity audit | 86 🟢 verified, 0 🟡 unverified, 14 🔴 (12 fixed, 1 D5 out of scope, 1 open D14 memory bug); no silent-wrong-result paths remain. See [`docs/AUDIT_MMA_PARITY.md`](docs/AUDIT_MMA_PARITY.md) |
+| Line-level MMA parity audit | 86 🟢 verified, 0 🟡 unverified, 14 🔴 (13 fixed, 1 D5 out of scope); no silent-wrong-result paths remain. See [`docs/AUDIT_MMA_PARITY.md`](docs/AUDIT_MMA_PARITY.md) |
 | Wall-clock vs MMA | Benchmarking deferred until performed on a dedicated machine; see [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md) |
 | `SolveIntegralsGaugeLink`, HQET / SCET / Wilson lines | Out of scope (intentional) |
 | Complex-valued numeric kinematics (audit D5) | Out of scope (not supported); JSON dispatcher rejects `{"re":..,"im":..}` form. See [`docs/FAQ.md`](docs/FAQ.md) "What's *not* implemented?" |

@@ -12,19 +12,20 @@ covered by the oracle benchmarks under
 |---|---|---|
 | 🟢 verified                  | 86 | — |
 | 🟡 unverified (oracle gap)    |  0 | All 21 originally-🟡 audit rows are now closed (see §3 below for per-row closure paths).  Future audit growth comes from oracle-diversity benches under [`tools/bench/`](../tools/bench/), each landing as 🟢 by construction. |
-| 🔴 actual divergence          | 14 | **12 fully fixed; 1 out of scope** (D5 ComplexMode); **1 open** (D14 `ibp::reduce` oversized reduction context — root cause identified 2026-05-16, fix in design).  D12 (doublebox 2L interleaved 2-mass) was a precision-tuning issue, not a code bug — see §D12.  D13 (`build_boundary` rank-filter + missing `/. Numeric`) added 2026-05-15. |
+| 🔴 actual divergence          | 14 | **13 fully fixed; 1 out of scope** (D5 ComplexMode).  D12 (doublebox 2L interleaved 2-mass) was a precision-tuning issue, not a code bug — see §D12.  D13 (`build_boundary` rank-filter + missing `/. Numeric`) added 2026-05-15.  D14 (boundary-order chain on multi-mass 3L: `analyze_block` + sparse `chop_pre` headroom) closed 2026-05-16. |
 | ⚪ intentionally not ported   | 17 | — |
 
 Net assessment: **no committed-oracle path is wrong** (all 42 oracle
 benches under `tools/bench/` match MMA at rel ~10⁻³⁰ except where the
-integral's intrinsic cancellation horizon limits precision).  Twelve
+integral's intrinsic cancellation horizon limits precision).  Thirteen
 of the fourteen 🔴 items have been fully corrected; D5 (complex-valued
 numeric kinematics) is the out-of-scope row.  Two divergences are
 recent: D13 (`build_boundary` missing MMA `/. Numeric`) was discovered
-+ fixed 2026-05-15.  D14 (`ibp::reduce` oversized reduction context →
-20× memory blowup on `bn3_4mass_3L_eps001`) was diagnosed 2026-05-16,
-fix in design — see §D14 for the multi-pass investigation trail and
-the three candidate fix approaches.
++ fixed 2026-05-15.  D14 (boundary-order chain divergence on
+`bn3_4mass_3L_eps001`) was diagnosed and closed 2026-05-16 — see §D14
+for the investigation trail and the four MMA-faithfulness fixes
+(`analyze_block` extend/Gather/Complement; sparse `chop_pre`
+headroom).
 
 ---
 
@@ -518,170 +519,100 @@ preferred file verbatim:
 - **Status**: closed.  Discovered + resolved 2026-05-15 during the
   multi-mass topology-diversity stress sweep.
 
-### D14. `ibp::reduce` reduction context carries all family vars — **OPEN (root cause identified 2026-05-16, fix in design)**
+
+### D14. Boundary-order chain on multi-mass 3L topologies — **CLOSED (2026-05-16)**
 
 - **Symptom**: bench `bn3_4mass_3L_eps001` (3L 2-leg banana, 4 distinct
-  internal masses, `BlackBoxDot=5`) — C++ uses **20× more memory** than
-  MMA on the same problem.  MMA finishes in 640 s wall, peak RSS
-  ~1.3 GB across 5 kernels.  C++ killed by memory-watch wrapper at
-  205 s wall, peak RSS **27.4 GB** (would OOM the host without the
-  watcher).  Linear memory growth from 35 MB → 15 GB at 90 s → 27 GB
-  at 205 s.  Fault site: first sub-system's `ibp::diffeq` matrix
-  construction (`src/ibp/reduce.cpp:521-547`).
+  internal masses, `BlackBoxDot=5`).  C++ could not complete: the
+  *boundary* `BlackBoxReduce` for system_0 / region_0 handed Kira **162
+  J targets** with max numerator rank **56**.  MMA handed Kira **1 J
+  target with rank 0** for the same call.  C++'s heavier Kira input
+  exceeded the 100 GB memory cap; MMA finished in seconds.  The 161
+  extra J targets came from `qft::boundary_integrals` over-expanding
+  the integrand: `determine_boundary_order` returned positive orders
+  (23, 27, 56, 25, 25) for size-12 inner-block masters that MMA
+  returned `−1` (skip) for.
 
-- **NOT the cause** (ruled out by static + dynamic comparison):
-  - Kira invocation pattern is faithful: C++ writes the same
-    `jobs.yaml` / `target` / `preferred` as MMA, with `r:4, s:0,
-    integral_ordering:5`.  Numeric values are baked into Kira input
-    (verified — `kira_target.m` output contains no `mAsq/mBsq/mCsq/mDsq`
-    symbolic vars).
-  - `single_mass_ending_q_impl` gate (sub-agent's earlier hypothesis):
-    C++ gate logic at `src/pipeline/amfsystem.cpp:879-916` is
-    equivalent to MMA's `AMFSystemEndingQ[..., "SingleMass"]`
-    (`AMFlow.m:1024-1029`).
-  - Propagator-substitution divergence (earlier hypothesis): MMA at
-    no point applies `/. Numeric` to propagator strings (all 7
-    `AMFlowInfo["Propagator"] = ...` sites are mass-substitution-free
-    in upstream).  The literal `-1` constants in cached propagators
-    come from `AMFEtaC`'s `-$Eta` convention surviving region
-    rescaling, not from a Numeric substitution.
-  - FLINT `fmpz_mpoly_q_{add,mul}` *do* canonicalise after every
-    operation (verified via FLINT source `add.c:222,294,329`;
-    `mul.c:41,67,96`).  So Mfrac arithmetic is NOT missing a
-    `Together`/`Cancel` call.
+- **Root cause** — four chained C++-vs-MMA divergences in
+  `src/ode/blocks.cpp` and `src/ode/sparse.cpp`:
+  1. `analyze_block` Gather predicate was `subset_or_superset`.  MMA
+     uses `samesetQ` (exact same-set, `DESolver.m:245`).  The wrong
+     predicate could collapse nested closures (`{0} ⊂ {0,1} ⊂ {0,1,2}
+     ⊂ …`) into one giant block instead of N separate closures.
+  2. `analyze_block` was missing the final
+     `Reverse[Table[Complement[Sequence@@blocks[[i;;]]], …]]` step
+     (`DESolver.m:247`) — without the SCC trim, each block can
+     contain downstream masters it shouldn't.
+  3. `extend` (forward closure) filtered the union by
+     "`subint[j] ∩ bl ≠ ∅`" (back-edge requirement).  MMA's `extend`
+     (`DESolver.m:240`) is the plain union; the filter shrinks
+     closures to fragments of an SCC.
+  4. **Load-bearing for bn3_4mass**: `sparse_chop_digits` defaulted to
+     `chop_pre = 20` (10⁻²⁰).  MMA's `ConstructMatrix + SparseGaussian`
+     runs on exact rationals — `(k)·dn − an` cancellations vanish
+     exactly, `Sparsify` discards them.  C++'s acb path: rationals
+     enter via `set_fmpq` (rounding ~10⁻ʷᵒʳᵏⁱⁿᵍ⁻ᵖʳᵉ) and
+     `acb_mul_si + acb_sub` yields a ball with midpoint ≈ 0 but
+     nonzero radius.  Through ill-conditioned `acb_inv` pivots in
+     `forward_sparse_gaussian`, accumulated noise can land above
+     10⁻²⁰; `chop_sparse` then leaves spurious entries that re-route
+     pivot choice and inflate the *unsolved* column set at the wrong
+     (low-fid-order) positions → positive boundary orders → over-
+     expanded boundary integrand → 162 J targets → Kira OOM.
 
-- **Root cause** (~70% confidence per sub-agent audit):
-  `make_reduction_context` (`src/ibp/reduce.cpp:27-44`) builds the
-  polynomial ring with **all** family variables plus `d`.  For
-  `bn3_4mass` that's **11 variables**:
-  `{l1, l2, l3, p1, mAsq, mBsq, mCsq, mDsq, psq, eta, d}`.  Kira's
-  output rationals contain only `eta` and `d` (verified — the other 9
-  variables have exponent 0 in every monomial).  But FLINT's
-  `fmpz_mpoly_t` still allocates space for the 9 unused variables in
-  every monomial's exponent word, AND every multivariate GCD inside
-  `fmpz_mpoly_q_canonicalise` processes the polynomial in the full
-  11-variable lex/grlex ordering.  Multivariate GCD cost scales
-  super-linearly with variable count; over ~88 000 inner-loop GCD
-  calls in `ibp::diffeq`, the 11-var overhead compounds.  MMA, by
-  contrast, represents the diffeq entries in symbolic form where
-  unused variables genuinely don't appear; its `Together` at
-  `Kira/interface.m:505` runs effective bivariate operations
-  (`{eta, d}` only) regardless of how many family masses exist.
+  Fixes (1)–(3) are MMA-faithfulness cleanups that on bn3_4mass
+  happen to produce the same partition C++ already had (the
+  closures aren't a strict-superset chain at this level), but they
+  close known semantic gaps that other topologies could hit.  Fix
+  (4) is what unblocks bn3_4mass.
 
-- **Contributing factor** (~50% confidence): MMA uses a single batched
-  `Together[der/.j->red]` (`Kira/interface.m:505`); C++ uses pairwise
-  `out.diffeq[v][row][col] += product` (`reduce.cpp:543`) with FLINT
-  canonicalising at *every* `+=`.  Each FLINT call allocates ~3×
-  operand-size temporary buffers; over many iterations the
-  intermediate denominator grows to `lcm(den_1, ..., den_k)` and is
-  re-canonicalised K times instead of once.
+- **Fix**:
+  - `src/ode/blocks.cpp`: rewrite `extend` to plain forward closure;
+    rewrite `analyze_block` post-closure stage to `same_set` Gather +
+    topblock-first `sortblocks` + `Reverse[Complement]` SCC-trim.
+  - `src/ode/sparse.cpp`: `construct_matrix` discards freshly-computed
+    cancellations via `acb_contains_zero` (was `acb_is_zero`);
+    `sparse_chop_digits` default = `max(chop_pre, working_pre − 40)`
+    so the sparse layer always has ≥ 40-decimal-digit headroom below
+    working precision.  User can override via the
+    `AMFLOW_SPARSE_CHOP_DIGITS` env var.
 
-- **Why existing 40 oracles don't trigger this**: every existing
-  multi-mass oracle has either ≤ 1 distinct mass scale (after
-  Numeric substitution and SingleMass loop-promotion peels off
-  remaining masses) OR a topologically simpler diffeq matrix.
-  `vtx2_2L_3mass_eps001` (3 distinct masses but only 2L) and
-  `pentagon_1L_3mass_eps001` (3 masses but 1L) sit on the
-  small-system side of the cliff.  `bn3_4mass` is the first
-  committed-targeted bench that combines 3L × 4-distinct-mass ×
-  `dot=5` — large IBP system × maximally-loaded polynomial
-  representation × no early SingleMass peel.
+- **Verification**:
+  - All 548 ctest tests pass.
+  - bn3_4mass_3L_eps001 (`tmp/bn3_4mass_retest_cpp.json`, eps =
+    1/1000) completes end-to-end.  Region-0 border becomes
+    `[-1,-1,-1,0,-1×17]` matching MMA exactly; boundary BBR hands
+    Kira 1 J target (was 162 pre-fix).  Final result:
 
-- **Fix direction (design phase)** — three candidate approaches per
-  sub-agent (`src/ibp/reduce.cpp` D14 audit):
-  - **Fix A (high-leverage, primary recommendation)**: narrow
-    `make_reduction_context` to only the actually-active variables
-    (`{eta, d}` for typical AMFlow Kira output).  Mirrors MMA's
-    behaviour where unused symbols don't enter the ring.  Expected
-    memory reduction 3-10×.  Risk: every `lift_to_red_ctx` /
-    `mfrac_to_ctx` call-site that lifts from the wider `fc.ctx` must
-    apply a `mfrac_substitute(..., numeric_q, keep_set)` step first
-    (analogue of the D13 fix, now systematic).
-  - **Fix B (orthogonal, smaller win)**: batch-accumulate per-row
-    diffeq entries (compute `lcm(den_i)` once, sum scaled numerators,
-    one final canonicalise) instead of pairwise `+=`.  Mirrors MMA's
-    `Together[der/.j->red]` pattern.
-  - **Fix C (defensive)**: bake numeric values directly into the
-    Mfrac at parse time so storage is effectively 2-var even though
-    ctx is 11-var.  Lower payoff than A.
-  Implementation will need an independent design pass before code
-  changes (sub-agent will produce the per-call-site change list).
+    | | MMA | C++ |
+    |---|---|---|
+    | Re J[bn34m,1,1,1,1,…] | `9.0595431429331640914606506828945…e10` | `9.05954314293316409146065068289e10` |
+    | Im J[bn34m,1,1,1,1,…] | `3.1753842859258203138806181100151…e-50` | `3.17538428592582031388061811002e-50` |
 
-- **Reproduction**: `tmp/bn3_4mass_retest_cpp.json` and
-  `tmp/bn3_4mass_retest_mma.wl` (not committed as oracle until fix
-  lands; bench would explode on CI).  Memory profile captured by
-  `/tmp/mem_watch.sh` wrapper.
+    ≥28-decimal-digit agreement on both real and imaginary parts.
 
-- **Status**: open; root cause identified 2026-05-16.  Partial fix
-  landed in three stages on the same day:
-  - Stage 1+2 (`019ba18`): narrow `red_ctx` to `{eta, d}` +
-    substitute_fc_vars at the `ibp::diffeq` matrix-assembly site.
-  - Stage 2 extension (`4de9245`): substitute + reproject `dt.coef`
-    to narrow `red_ctx` immediately after `libp_deriv` returns,
-    before `simplify_terms` runs.
-  - Stage 3 (`625bf58`): new narrow-context overload of
-    `libp_denoms_deriv` and `libp_deriv` that substitutes
-    `numeric_values` into ALL intermediates and runs the
-    accumulator loop on the caller-supplied `target_ctx`.  Shared
-    helpers extracted to `include/amflow/algebra/numeric_subst.hpp`
-    so the substitution is no longer duplicated across files.
+- **Why existing 40 oracles didn't trigger this**: smaller diffeq
+  matrices and simpler boundary structure kept compounded acb error
+  below 10⁻²⁰.  bn3_4mass's 12-master inner block at
+  `ExtraXOrder = 240` with ill-conditioned pivots was the first
+  committed-targeted case to push compounded noise above the chop
+  threshold.
 
-  All 548 unit tests + 5 representative oracle benches
-  (`vtx2_2L_3mass`, `pentagon_1L_3mass`, `banana_3loop`,
-  `bn3mix`, `doublebox2m`) match MMA at identical precision after
-  Stage 3.  Memory profile on `bn3_4mass_3L_eps001` improves
-  significantly: at t=60s the C++ process now sits at 9 GB (vs
-  15 GB pre-Stage-2 ext; the killer wall-time still 20 GB at
-  t=130s — improvement vs pre-fix 27 GB at 205s).
-
-  **CORRECTION 2026-05-16 (post-instrumentation)**: the "20× memory"
-  hypothesis was based on conflating amflow_cli with its `kira`
-  subprocess children.  After splitting the watchdog to report
-  per-process RSS:
-
-  | | C++ amflow_cli | Kira+fer64 children |
-  |---|---|---|
-  | Peak RSS on `bn3_4mass` | **189 MB** | **22.9 GB** |
-
-  C++ amflow_cli itself uses *less* memory than MMA's WolframKernel
-  (which sits around 230 MB across 5 parallel kernels = 1.3 GB
-  total).  The 22.9 GB peak that triggered the memory-cap wrapper is
-  Kira's *own* IBP-reduction memory on a multi-distinct-mass 3L
-  topology — completely independent of C++/MMA code differences.
-
-  **Stages 1-5 of D14 fixes** (narrow `red_ctx`, substitute_fc_vars,
-  libp_denoms_deriv narrow overload, Fix B batched lcm-sum,
-  libp_denoms_deriv hoist) — these reduce amflow_cli's *own* memory
-  marginally (from ~250 MB pre-fix to ~190 MB post-fix), but that
-  was never the dominant cost on bn3_4mass.  The stages remain
-  correctness-preserving cleanup and align C++ closer to MMA's
-  pipeline structure, but they do NOT address the actual Kira-memory
-  bound.
-
-  **Stage 6 (this commit)**: stop appending `masters` to `all_ints`
-  in `ibp::diffeq`.  Upstream MMA `DifferentialEquation`
-  (`Kira/interface.m:500`) writes `Cases[der, j[...], Infinity] //
-  DeleteDuplicates` to Kira — derivative-produced integrals only,
-  NOT the preheat masters.  Pre-fix C++ added the masters too (37
-  targets to Kira instead of MMA's 20 for bn3_4mass).  Stage 6
-  matches MMA exactly; ctest 548/548 still pass; oracle benches
-  unaffected.  Kira's own RSS unchanged (22.9 GB) — confirming the
-  Kira-memory bound is intrinsic to the IBP problem.
-
-  **bn3_4mass status**: out-of-budget for both C++ and MMA on a
-  single-machine 20-GB-class run.  MMA appears to "fit" only because
-  its 5 parallel kernels SAMPLE different sub-systems sequentially
-  AND because Kira's transient memory is released back to the OS
-  between MMA's per-system Kira calls.  C++ runs sequentially in a
-  single process — the watchdog sees Kira's per-call peak directly.
-
-  **Net effect for the audit**: amflow_cli's algebra layer is now
-  more compact and closer to MMA's data-flow shape (a genuine
-  improvement).  bn3_4mass-class problems are limited by Kira itself,
-  not by C++; the bench remains uncommitted as an oracle to avoid CI
-  explosion.
-
----
+- **Investigation history** (preserved for context): an earlier
+  hypothesis attributed bn3_4mass's failure to a 20× memory blowup
+  in C++ algebra, traced (incorrectly) to `make_reduction_context`
+  declaring an 11-variable polynomial ring instead of `{eta, d}`.
+  Five "Stage 1-5" patches landed against that hypothesis
+  (`019ba18`, `4de9245`, `625bf58`, `c522132`, plus the lcm-sum
+  batching), and a Stage-6 patch (`66db94c`) stopped appending
+  masters to `all_ints`.  Once per-process RSS was separated
+  (amflow_cli: 189 MB, Kira: 22.9 GB), the C++ algebra layer was
+  ruled out and the investigation pivoted to comparing C++'s Kira
+  inputs against MMA's preserved cache (`tools/bench/mma_refs/
+  bn3_4mass_3L_eps001_mma_cache/`), which surfaced the
+  162-vs-1 J-target gap and led upstream into the boundary-order
+  chain.  Stage 1-6 patches remain landed as MMA-faithful cleanup
+  but are not load-bearing for bn3_4mass.
 
 ## 3. 🟡 → 🟢 Closure log (originally-unverified branches)
 
