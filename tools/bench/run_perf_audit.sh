@@ -62,6 +62,7 @@ BENCHES=(
   tools/bench/tt_higher_rank_eps001_black_box_amflow_cpp.json
   tools/bench/vacuum_2L_2mass_eps001_black_box_amflow_cpp.json
   tools/bench/vacuum_2L_sunrise_black_box_amflow_cpp.json
+  tools/bench/vtx2_2L_1mass_eps001_black_box_amflow_cpp.json
   tools/bench/vtx2_2L_2mass_eps001_black_box_amflow_cpp.json
   tools/bench/vtx2_2loop_vertex_black_box_amflow_cpp.json
   tools/bench/vtx2_2loop_vertex_masters_only_cpp.json
