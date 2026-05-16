@@ -612,31 +612,42 @@ preferred file verbatim:
   lands; bench would explode on CI).  Memory profile captured by
   `/tmp/mem_watch.sh` wrapper.
 
-- **Status**: open; root cause identified 2026-05-16, partial fix
-  landed in commits `019ba18` (Stage 1+2: narrow `red_ctx` to
-  `{eta, d}` + substitute_fc_vars at the `ibp::diffeq` matrix-assembly
-  site) and `<v3-commit>` (substitute + reproject `dt.coef` to narrow
-  `red_ctx` immediately after `libp_deriv` returns, before
-  `simplify_terms` runs).  All 548 unit tests + 5 representative
-  oracle benches (`vtx2_2L_3mass`, `pentagon_1L_3mass`, `banana_3loop`,
-  `bn3mix`, `doublebox2m`) match MMA at identical precision.
-  However, `bn3_4mass` retest still hits 20 GB (vs MMA's 1.3 GB) —
-  improvement from 27 GB pre-fix but not yet at parity.
+- **Status**: open; root cause identified 2026-05-16.  Partial fix
+  landed in three stages on the same day:
+  - Stage 1+2 (`019ba18`): narrow `red_ctx` to `{eta, d}` +
+    substitute_fc_vars at the `ibp::diffeq` matrix-assembly site.
+  - Stage 2 extension (`4de9245`): substitute + reproject `dt.coef`
+    to narrow `red_ctx` immediately after `libp_deriv` returns,
+    before `simplify_terms` runs.
+  - Stage 3 (`625bf58`): new narrow-context overload of
+    `libp_denoms_deriv` and `libp_deriv` that substitutes
+    `numeric_values` into ALL intermediates and runs the
+    accumulator loop on the caller-supplied `target_ctx`.  Shared
+    helpers extracted to `include/amflow/algebra/numeric_subst.hpp`
+    so the substitution is no longer duplicated across files.
 
-  **Remaining bottleneck** (deferred to future session, requires
-  deeper refactor): `libp_denoms_deriv` (`src/ibp/libp_deriv.cpp:263-288`)
-  internally builds `dd.coef[k][jp]` and `dd.constant[k]` as Mfracs
-  ACCUMULATED on the wide `fc.ctx` (10+ vars).  Each `acc += t` in
-  that function triggers FLINT multivariate GCD on the wide ring —
-  the same root-cause pattern as Stage 1+2 fixed at the outer level,
-  but at the inner libp_denoms_deriv layer the fix hasn't been
-  applied yet.  Fixing requires either (a) threading
-  `numeric_values` into `libp_denoms_deriv` signature so it can
-  substitute internally, or (b) extracting `substitute_fc_vars` to
-  a shared header (e.g. `include/amflow/algebra/numeric_subst.hpp`)
-  so it can be called from `libp_deriv.cpp`.  Option (b) is the
-  cleaner architectural choice but requires moving the helper out
-  of `src/ibp/reduce.cpp`'s anonymous namespace.
+  All 548 unit tests + 5 representative oracle benches
+  (`vtx2_2L_3mass`, `pentagon_1L_3mass`, `banana_3loop`,
+  `bn3mix`, `doublebox2m`) match MMA at identical precision after
+  Stage 3.  Memory profile on `bn3_4mass_3L_eps001` improves
+  significantly: at t=60s the C++ process now sits at 9 GB (vs
+  15 GB pre-Stage-2 ext; the killer wall-time still 20 GB at
+  t=130s — improvement vs pre-fix 27 GB at 205s).
+
+  **Remaining bottleneck**: the `ibp::diffeq` matrix-assembly hot
+  loop (`src/ibp/reduce.cpp:535-554`) accumulates `out.diffeq[v][row]
+  [col] += product` PAIRWISE.  FLINT canonicalises on every `+=`
+  allocating ~3× operand-size temporaries.  Even on the narrow
+  `{eta, d}` ring, K pairwise canonicalisations with K~200 for
+  bn3_4mass produces enough heap pressure to push the process over
+  20 GB.  MMA's equivalent at `Kira/interface.m:505` is a single
+  batched `Together[der/.j->red]` — one canonicalisation per matrix
+  entry rather than K.  **Fix B (batched lcm-sum)** is the remaining
+  step: collect all `(num_i, den_i)` per matrix entry, compute
+  `lcm(den_1, ..., den_K)` via FLINT's `fmpz_mpoly_gcd`, scale
+  numerators, sum, canonicalise once.  Deferred to a future session;
+  requires either extending `Mpoly` API with `gcd`/`lcm`/
+  `exact_divide` helpers, or using raw FLINT calls inline.
 
 ---
 
