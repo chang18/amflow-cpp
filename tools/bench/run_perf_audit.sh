@@ -75,6 +75,12 @@ BENCHES=(
   tools/bench/xbox_2L_2mass_eps001_black_box_amflow_cpp.json
   tools/bench/xbox_2L_eps10_black_box_amflow_cpp.json
   tools/bench/xbox_2loop_eps001_black_box_amflow_cpp.json
+  tools/bench/hexagon_1L_2mass_eps01_black_box_amflow_cpp.json
+  tools/bench/hexagon_1L_3mass_eps01_black_box_amflow_cpp.json
+  tools/bench/doublebox_3mass_alt_2L_eps001_black_box_amflow_cpp.json
+  tools/bench/pentagon_1L_2mass_eps01_black_box_amflow_cpp.json
+  tools/bench/triangle_1L_2mass_eps01_black_box_amflow_cpp.json
+  tools/bench/bubble_1L_diffmass_eps01_black_box_amflow_cpp.json
 )
 
 for input in "${BENCHES[@]}"; do
