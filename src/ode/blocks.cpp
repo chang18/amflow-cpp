@@ -109,14 +109,13 @@ bool same_set(const std::vector<std::size_t>& a, const std::vector<std::size_t>&
     return true;
 }
 
-bool subset_or_superset(const std::vector<std::size_t>& a,
-                        const std::vector<std::size_t>& b) {
-    auto subset_of = [](const std::vector<std::size_t>& s,
-                        const std::vector<std::size_t>& t) {
-        for (auto v : s) if (std::find(t.begin(), t.end(), v) == t.end()) return false;
-        return true;
-    };
-    return subset_of(a, b) || subset_of(b, a);
+bool subset_of(const std::vector<std::size_t>& s,
+               const std::vector<std::size_t>& t) {
+    if (s.size() > t.size()) return false;
+    for (auto v : s) {
+        if (!std::binary_search(t.begin(), t.end(), v)) return false;
+    }
+    return true;
 }
 
 std::vector<std::size_t> sorted_unique(std::vector<std::size_t> v) {
@@ -146,35 +145,26 @@ analyze_block(const RationalMatrix& mat) {
         subint[i] = sorted_unique(std::move(tmp));
     }
 
-    // Closure under "shares element with subint".
+    // Forward closure: iterate `bl ← ∪ subint[i] for i in bl` until fixpoint.
+    // Matches MMA `extend` (DESolver.m:240) verbatim.  The previous version
+    // additionally filtered `dep` by "subint[j] ∩ bl ≠ ∅", which discards
+    // forward-only edges (j has no back-edge into bl) and shrinks closures
+    // to fragments of an SCC.  On bn3_4mass inner sub-mat (size 12), this
+    // gave singletons {0}, {1}, ..., {4} instead of MMA's `{0,1,4,..,11}`
+    // chain — letting an oversized 12-master block reach
+    // `determine_block_boundary_order`, which then over-estimated boundary
+    // orders for masters 9, 10, 11, 13, 14 and inflated boundary integrand
+    // expansion to numerator rank 56 (see AUDIT_MMA_PARITY.md §D14).
     auto extend = [&](std::vector<std::size_t> bl) -> std::vector<std::size_t> {
         bl = sorted_unique(std::move(bl));
         for (;;) {
-            // dep = ∪ subint[bl]
-            std::vector<std::size_t> dep;
+            std::vector<std::size_t> next_;
             for (auto i : bl) {
-                dep.insert(dep.end(), subint[i].begin(), subint[i].end());
+                next_.insert(next_.end(), subint[i].begin(), subint[i].end());
             }
-            dep = sorted_unique(std::move(dep));
-
-            // ext = { j ∈ dep : subint[j] ∩ bl ≠ ∅ }
-            std::vector<std::size_t> ext;
-            for (auto j : dep) {
-                bool intersects = false;
-                for (auto v : subint[j]) {
-                    if (std::binary_search(bl.begin(), bl.end(), v)) {
-                        intersects = true;
-                        break;
-                    }
-                }
-                if (intersects) ext.push_back(j);
-            }
-
-            std::vector<std::size_t> full = bl;
-            full.insert(full.end(), ext.begin(), ext.end());
-            full = sorted_unique(std::move(full));
-            if (full == bl) return bl;
-            bl = std::move(full);
+            next_ = sorted_unique(std::move(next_));
+            if (next_ == bl) return bl;
+            bl = std::move(next_);
         }
     };
 
@@ -182,75 +172,86 @@ analyze_block(const RationalMatrix& mat) {
     std::vector<std::vector<std::size_t>> blocks(n);
     for (std::size_t i = 0; i < n; ++i) blocks[i] = extend({i});
 
-    // 3. Group by "subset_or_superset".
-    std::vector<std::vector<std::size_t>> grouped;
-    {
-        std::vector<bool> done(blocks.size(), false);
-        for (std::size_t i = 0; i < blocks.size(); ++i) {
-            if (done[i]) continue;
-            std::vector<std::size_t> merged = blocks[i];
-            done[i] = true;
-            for (std::size_t j = i + 1; j < blocks.size(); ++j) {
-                if (done[j]) continue;
-                if (subset_or_superset(blocks[i], blocks[j])) {
-                    merged.insert(merged.end(), blocks[j].begin(), blocks[j].end());
-                    done[j] = true;
-                }
-            }
-            grouped.push_back(sorted_unique(std::move(merged)));
+    // 3. Dedupe closures by SAME-SET (.m line 245: `First/@Gather[blocks, samesetQ]`).
+    //    A previous version merged by `subset_or_superset`, which collapsed
+    //    nested-closure chains ({4} ⊂ {4,5} ⊂ {4,5,6} ⊂ …) into a single big
+    //    block instead of n singletons, driving determine_block_boundary_order
+    //    to over-couple masters and emit large (incorrect) orders.  See the
+    //    bn3_4mass investigation: AUDIT_MMA_PARITY.md §D14.
+    std::vector<std::vector<std::size_t>> unique_closures;
+    for (std::size_t i = 0; i < blocks.size(); ++i) {
+        bool dup = false;
+        for (const auto& uc : unique_closures) {
+            if (same_set(blocks[i], uc)) { dup = true; break; }
         }
+        if (!dup) unique_closures.push_back(blocks[i]);
     }
 
-    // 4. Topological sort: peel off "self-contained" blocks.  See .m line 220-227.
-    std::vector<std::vector<std::size_t>> sorted;
-    std::vector<std::vector<std::size_t>> remaining = grouped;
-
-    while (!remaining.empty()) {
-        std::vector<std::size_t> remaining_union;
-        for (const auto& r : remaining)
-            remaining_union.insert(remaining_union.end(), r.begin(), r.end());
-        remaining_union = sorted_unique(std::move(remaining_union));
-
-        std::vector<std::vector<std::size_t>> ready;
-        std::vector<std::vector<std::size_t>> not_ready;
-        for (const auto& cand : remaining) {
-            std::vector<std::size_t> dep;
-            for (auto i : cand) {
-                dep.insert(dep.end(), subint[i].begin(), subint[i].end());
-            }
-            dep = sorted_unique(std::move(dep));
-
-            std::vector<std::size_t> inter;
-            std::set_intersection(dep.begin(), dep.end(),
-                                  remaining_union.begin(), remaining_union.end(),
-                                  std::back_inserter(inter));
-            if (same_set(inter, cand)) ready.push_back(cand);
-            else                       not_ready.push_back(cand);
+    // 4. MMA `sortblocks` (.m line 242):  iteratively peel off "top blocks",
+    //    i.e. closures that have no strict superset among the remaining set.
+    //    Output order: largest closures first, smaller ones last.
+    auto is_topblock = [&](const std::vector<std::vector<std::size_t>>& bls,
+                            const std::vector<std::size_t>& block) -> bool {
+        for (const auto& b : bls) {
+            if (b.size() == block.size() && same_set(b, block)) continue;
+            if (subset_of(block, b)) return false;  // strict superset exists
         }
-        if (ready.empty()) {
-            // Would loop forever; emit anyway.
+        return true;
+    };
+
+    std::vector<std::vector<std::size_t>> sorted;
+    std::vector<std::vector<std::size_t>> remaining_bls = std::move(unique_closures);
+    while (!remaining_bls.empty()) {
+        std::vector<std::vector<std::size_t>> tops;
+        std::vector<std::vector<std::size_t>> rest;
+        for (auto& b : remaining_bls) {
+            if (is_topblock(remaining_bls, b)) tops.push_back(std::move(b));
+            else                                rest.push_back(std::move(b));
+        }
+        if (tops.empty()) {
             numeric::log_line(
-                "analyze_block: topological sort stalled; emitting remaining as-is");
-            for (auto& r : remaining) sorted.push_back(std::move(r));
+                "analyze_block: sortblocks stalled; emitting remaining as-is");
+            for (auto& r : rest) sorted.push_back(std::move(r));
             break;
         }
-        for (auto& r : ready) sorted.push_back(std::move(r));
-        remaining = std::move(not_ready);
+        for (auto& t : tops) sorted.push_back(std::move(t));
+        remaining_bls = std::move(rest);
     }
 
-    // Cover/duplication sanity check (matches .m guard at line 235).
+    // 5. .m line 247: `Reverse[Table[Complement[Sequence@@blocks[[i;;]]], ...]]`.
+    //    Each block becomes its members MINUS all subsequent (smaller) blocks'
+    //    members, then the whole list is reversed (smallest first).
+    //    This is the key step that turns nested closures into disjoint SCCs.
+    std::vector<std::vector<std::size_t>> trimmed(sorted.size());
+    for (std::size_t i = 0; i < sorted.size(); ++i) {
+        std::vector<std::size_t> downstream;
+        for (std::size_t j = i + 1; j < sorted.size(); ++j) {
+            downstream.insert(downstream.end(),
+                              sorted[j].begin(), sorted[j].end());
+        }
+        downstream = sorted_unique(std::move(downstream));
+        for (auto v : sorted[i]) {
+            if (!std::binary_search(downstream.begin(), downstream.end(), v)) {
+                trimmed[i].push_back(v);
+            }
+        }
+    }
+    std::reverse(trimmed.begin(), trimmed.end());
+
+    // 6. Cover/duplication sanity check (matches .m guard at line 248).
     {
         std::vector<std::size_t> all;
-        for (const auto& r : sorted) all.insert(all.end(), r.begin(), r.end());
+        for (const auto& r : trimmed) all.insert(all.end(), r.begin(), r.end());
         all = sorted_unique(std::move(all));
         std::vector<std::size_t> expected(n);
         for (std::size_t i = 0; i < n; ++i) expected[i] = i;
         if (all != expected) {
-            throw std::runtime_error("analyze_block: bad blocks (cover or duplication mismatch)");
+            throw std::runtime_error(
+                "analyze_block: bad blocks (cover or duplication mismatch)");
         }
     }
 
-    return sorted;
+    return trimmed;
 }
 
 // ===========================================================================
