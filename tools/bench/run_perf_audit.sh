@@ -16,6 +16,12 @@ CLI="./build/src/cli/amflow_cli"
 # unless that is missing (which it shouldn't be for committed benches).
 
 BENCHES=(
+  tools/bench/doublebox_4mass_2L_eps001_black_box_amflow_cpp.json
+  tools/bench/xbox_2L_3mass_eps001_black_box_amflow_cpp.json
+  tools/bench/vtx2_2L_4mass_eps001_black_box_amflow_cpp.json
+  tools/bench/sunset_2L_4mass_eps001_black_box_amflow_cpp.json
+  tools/bench/box_1L_4mass_alt_eps001_black_box_amflow_cpp.json
+  tools/bench/triangle_1L_2mass_alt_eps001_black_box_amflow_cpp.json
   tools/bench/banana_3loop_eps001_black_box_amflow_cpp.json
   tools/bench/banana_4L_2mass_eps001_black_box_amflow_cpp.json
   tools/bench/banana_4L_mixed_black_box_amflow_cpp.json
