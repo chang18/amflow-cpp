@@ -34,6 +34,7 @@ BENCHES=(
   tools/bench/box1_d0_7_3_solve_integrals_cpp.json
   tools/bench/box1_multitarget_black_box_amflow_cpp.json
   tools/bench/box1_single_solve_integrals_cpp.json
+  tools/bench/bubble_1L_largemass_eps001_black_box_amflow_cpp.json
   tools/bench/bubble_1L_diffmass_black_box_amflow_cpp.json
   tools/bench/cutbanana_3L_eps001_black_box_amflow_cpp.json
   tools/bench/cutbanana_4L_eps001_black_box_amflow_cpp.json
