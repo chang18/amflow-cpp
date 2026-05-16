@@ -81,6 +81,7 @@ BENCHES=(
   tools/bench/pentagon_1L_2mass_eps01_black_box_amflow_cpp.json
   tools/bench/triangle_1L_2mass_eps01_black_box_amflow_cpp.json
   tools/bench/bubble_1L_diffmass_eps01_black_box_amflow_cpp.json
+  tools/bench/hexagon_1L_5mass_eps01_black_box_amflow_cpp.json
 )
 
 for input in "${BENCHES[@]}"; do
