@@ -45,6 +45,7 @@ BENCHES=(
   tools/bench/ewbox_1loop_eps001_black_box_amflow_cpp.json
   tools/bench/sunset_2L_3mass_eps001_black_box_amflow_cpp.json
   tools/bench/sunset_2L_2mass_eps001_black_box_amflow_cpp.json
+  tools/bench/sunrise_2L_2mass_eps001_black_box_amflow_cpp.json
   tools/bench/sunrise_2L_threshold_black_box_amflow_cpp.json
   tools/bench/sunset_2L_onshell_black_box_amflow_cpp.json
   tools/bench/tadbubble_2L_black_box_amflow_cpp.json
