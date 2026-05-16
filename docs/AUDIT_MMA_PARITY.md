@@ -634,51 +634,52 @@ preferred file verbatim:
   15 GB pre-Stage-2 ext; the killer wall-time still 20 GB at
   t=130s — improvement vs pre-fix 27 GB at 205s).
 
-  **What we verified is identical between C++ and MMA**: Kira's
-  `jobs.yaml`, `integralfamilies.yaml`, `kinematics.yaml`, `target`,
-  and `preferred` files are byte-equivalent (modulo formatting); the
-  top-level Reduce-phase master output is `{j[bn34m, 1,1,1,1,0,...]}`
-  on both sides; the `BlackBoxReduce` two-Kira-call pattern (Masters
-  preheat + Reduce) is mirrored faithfully (see §D7); the per-system
-  IBP-system size and master count agree.  So C++ is *algorithmically
-  aligned* with MMA: same inputs to Kira, same outputs from Kira,
-  same downstream diffeq-matrix shape.
+  **CORRECTION 2026-05-16 (post-instrumentation)**: the "20× memory"
+  hypothesis was based on conflating amflow_cli with its `kira`
+  subprocess children.  After splitting the watchdog to report
+  per-process RSS:
 
-  **Fix B (batched lcm-sum)** was added in commit `<v5>` to mirror
-  MMA's `Together[der/.j->red]` (`Kira/interface.m:505`) — one
-  canonicalisation per matrix entry rather than K pairwise.
-  Memory profile after Fix B unchanged from Stage 3 within
-  measurement noise.
+  | | C++ amflow_cli | Kira+fer64 children |
+  |---|---|---|
+  | Peak RSS on `bn3_4mass` | **189 MB** | **22.9 GB** |
 
-  **Stage 5** (commit `<v6>`) hoisted `libp_denoms_deriv` out of the
-  per-master loop (was called `masters.size()=21` times redundantly
-  per var; now called once per var).  Eliminates a 21x duplication
-  but again no observable memory improvement.
+  C++ amflow_cli itself uses *less* memory than MMA's WolframKernel
+  (which sits around 230 MB across 5 parallel kernels = 1.3 GB
+  total).  The 22.9 GB peak that triggered the memory-cap wrapper is
+  Kira's *own* IBP-reduction memory on a multi-distinct-mass 3L
+  topology — completely independent of C++/MMA code differences.
 
-  **Remaining 20× gap on `bn3_4mass`** is therefore NOT an
-  algorithmic divergence.  It is the representation-level cost
-  difference between FLINT's `fmpz_mpoly_q_t` (multivariate poly ring
-  with dense exponent vectors and persistent memory pools) and
-  Mathematica's tree-based symbolic expressions (where unused
-  variables genuinely don't appear and intermediate allocations are
-  released back to the OS).  For `bn3_4mass`'s 21-master 3L sub-system
-  with degree-3+ polynomials in `(eta, d)` and high-digit integer
-  coefficients, FLINT's persistent pool growth + canonicalisation
-  temporaries push the process past 20 GB while MMA tracks 1.3 GB
-  across its 5 kernels.  Further fixes would require either
-  FLINT-level pool-shrinking (not exposed via the public API) or a
-  ground-up shift to a different polynomial representation; both
-  are outside the audit-fix scope.
+  **Stages 1-5 of D14 fixes** (narrow `red_ctx`, substitute_fc_vars,
+  libp_denoms_deriv narrow overload, Fix B batched lcm-sum,
+  libp_denoms_deriv hoist) — these reduce amflow_cli's *own* memory
+  marginally (from ~250 MB pre-fix to ~190 MB post-fix), but that
+  was never the dominant cost on bn3_4mass.  The stages remain
+  correctness-preserving cleanup and align C++ closer to MMA's
+  pipeline structure, but they do NOT address the actual Kira-memory
+  bound.
 
-  **Net effect of D14 fixes** (commits `5deca64`, `019ba18`,
-  `4de9245`, `625bf58`, plus the Fix-B and hoist commits to land):
-  every existing oracle bench is unaffected at numerical precision;
-  ctest 548/548 passes; the 20 GB → 27 GB regression that pre-fix
-  C++ exhibited on multi-mass 3L topologies is partially recovered
-  (kill-wall improved from 205s to ~120s before hitting the same
-  cap).  `bn3_4mass_3L_eps001` is documented as out-of-budget for
-  the current FLINT-based pipeline; the bench is NOT committed as
-  an oracle (would explode on CI).
+  **Stage 6 (this commit)**: stop appending `masters` to `all_ints`
+  in `ibp::diffeq`.  Upstream MMA `DifferentialEquation`
+  (`Kira/interface.m:500`) writes `Cases[der, j[...], Infinity] //
+  DeleteDuplicates` to Kira — derivative-produced integrals only,
+  NOT the preheat masters.  Pre-fix C++ added the masters too (37
+  targets to Kira instead of MMA's 20 for bn3_4mass).  Stage 6
+  matches MMA exactly; ctest 548/548 still pass; oracle benches
+  unaffected.  Kira's own RSS unchanged (22.9 GB) — confirming the
+  Kira-memory bound is intrinsic to the IBP problem.
+
+  **bn3_4mass status**: out-of-budget for both C++ and MMA on a
+  single-machine 20-GB-class run.  MMA appears to "fit" only because
+  its 5 parallel kernels SAMPLE different sub-systems sequentially
+  AND because Kira's transient memory is released back to the OS
+  between MMA's per-system Kira calls.  C++ runs sequentially in a
+  single process — the watchdog sees Kira's per-call peak directly.
+
+  **Net effect for the audit**: amflow_cli's algebra layer is now
+  more compact and closer to MMA's data-flow shape (a genuine
+  improvement).  bn3_4mass-class problems are limited by Kira itself,
+  not by C++; the bench remains uncommitted as an oracle to avoid CI
+  explosion.
 
 ---
 

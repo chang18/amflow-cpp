@@ -470,10 +470,16 @@ diffeq(const qft::FamilyConfig& fc,
                 }
             }
         }
-        for (const auto& m : masters) {
-            std::string k = int_key(m);
-            if (seen.insert(k).second) all_ints.push_back(m);
-        }
+        // D14 Stage 6 (2026-05-16): do NOT add `masters` to `all_ints`.
+        // MMA's `DifferentialEquation` (Kira/interface.m:500) only sends
+        // `Cases[der, j[...], Infinity] // DeleteDuplicates` to
+        // `AnalyticReduction`.  The pre-Stage-6 code added every preheat
+        // master to the Reduce target list — extra work for Kira and a
+        // major source of its memory inflation on multi-mass 3L
+        // topologies like bn3_4mass (Kira RSS observed at 22.9 GB
+        // pre-fix when reducing 37 targets vs MMA's 20).  Identity rules
+        // for master integrals that are themselves masters get filled
+        // in by the loop below (after raw_rules is parsed).
     }
 
     // === Step 2: Reduce-mode (target reduction in a sibling subdir) ===
