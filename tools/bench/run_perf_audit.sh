@@ -171,6 +171,10 @@ BENCHES=(
   tools/bench/banana_3L_1mass_psq2_eps001_black_box_amflow_cpp.json
   tools/bench/banana_3L_eqmass_psq3_eps001_black_box_amflow_cpp.json
   tools/bench/bn3mix_2mass_alt_3L_eps001_black_box_amflow_cpp.json
+  tools/bench/banana_4L_1mass_psq8_eps001_black_box_amflow_cpp.json
+  tools/bench/banana_4L_1mass_psq16_eps001_black_box_amflow_cpp.json
+  tools/bench/banana_4L_2mass_alt2_psq2_eps001_black_box_amflow_cpp.json
+  tools/bench/banana_4L_2mass_alt_psq4_eps001_black_box_amflow_cpp.json
 )
 
 for input in "${BENCHES[@]}"; do
