@@ -26,12 +26,31 @@ bool sparse_chop_enabled() {
 
 int sparse_chop_digits() {
     const char* env = std::getenv("AMFLOW_SPARSE_CHOP_DIGITS");
-    if (!env || !*env) return chop_pre();
-    char* end = nullptr;
-    long v = std::strtol(env, &end, 10);
-    if (end == env || *end != '\0') return chop_pre();
-    if (v < 0) return 0;
-    return static_cast<int>(v);
+    if (env && *env) {
+        char* end = nullptr;
+        long v = std::strtol(env, &end, 10);
+        if (end != env && *end == '\0') {
+            if (v < 0) return 0;
+            return static_cast<int>(v);
+        }
+    }
+    // Default: chop_pre, but bumped to (working_pre - 40) for the sparse
+    // layer.  Reason: in big sparse Gauss-eliminations (e.g. bn3_4mass's
+    // 12-master 240-order boundary-order system), acb rounding noise
+    // compounds across divisions by ill-conditioned pivots and can land
+    // a residual at ~10^-(working_pre/2) to ~10^-(working_pre-30).  A
+    // 10^-20 cut keeps that noise as spurious matrix entries, which
+    // re-route Gauss elimination's pivot choice and inflate the
+    // `unsolved` set at the wrong columns.  Tying the floor to
+    // `working_pre - 40` gives a noise budget of 40 decimal digits while
+    // keeping ~80% of the working precision available for legitimate
+    // values.  See AUDIT_MMA_PARITY.md §D14 (bn3_4mass: 162-J BBR vs
+    // MMA's 1-J BBR) for the failure mode.  User can override via
+    // AMFLOW_SPARSE_CHOP_DIGITS.
+    int chop_pre_val = chop_pre();
+    int wp = numeric::working_pre();
+    int floor_val = (wp > 60) ? (wp - 40) : chop_pre_val;
+    return std::max(chop_pre_val, floor_val);
 }
 
 }  // namespace
@@ -239,7 +258,20 @@ ConstructedMatrix construct_matrix(const std::vector<AcbValue>& dxexp,
                         // value -= an_c
                         acb_sub(value.raw(), value.raw(), an_c, prec);
                     }
-                    if (value.is_zero()) continue;
+                    // MMA's ConstructMatrix (DESolver.m:620-636) operates on
+                    // exact rationals, so a `(k)*dn - an` cancellation gives
+                    // an exact 0 and `Sparsify` discards the entry.  In acb
+                    // arithmetic, the same cancellation yields a ball with
+                    // midpoint 0 but nonzero radius (from set_fmpq rounding
+                    // error), so `acb_is_zero` returns false and we keep a
+                    // spurious nonzero entry.  Use `acb_contains_zero` so that
+                    // any ball straddling zero is dropped — this matches
+                    // MMA's exact-rational behavior at our working precision
+                    // (legitimate nonzero values have |mid| >> rad).  See
+                    // AUDIT_MMA_PARITY.md §D14: this drives bn3_4mass C++
+                    // boundary-order divergence (orders 23/27/56/25/25 vs
+                    // MMA's all-(-1) on the size-12 sub-block).
+                    if (acb_contains_zero(value.raw())) continue;
 
                     block_rows[r].emplace_back(col_local, std::move(value));
                 }
