@@ -40,9 +40,11 @@ BENCHES=(
   tools/bench/dotted_3L_banana_black_box_amflow_cpp.json
   tools/bench/doublebox_sv_eps001_black_box_amflow_cpp.json
   tools/bench/ewbox_1loop_eps001_black_box_amflow_cpp.json
+  tools/bench/sunset_2L_3mass_eps001_black_box_amflow_cpp.json
   tools/bench/sunrise_2L_threshold_black_box_amflow_cpp.json
   tools/bench/sunset_2L_onshell_black_box_amflow_cpp.json
   tools/bench/tadbubble_2L_black_box_amflow_cpp.json
+  tools/bench/triangle_1L_2mass_black_box_amflow_cpp.json
   tools/bench/triangle_1L_3mass_black_box_amflow_cpp.json
   tools/bench/tt_2loop_box_black_box_amflow_cpp.json
   tools/bench/tt_cutkosky_probe_eps001_black_box_amflow_cpp.json
