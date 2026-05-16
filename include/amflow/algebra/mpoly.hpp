@@ -135,6 +135,10 @@ public:
     // for Bareiss elimination in MpolyMatrix::det.  All three Mpolys share ctx.
     static bool exact_divide(Mpoly& out, const Mpoly& a, const Mpoly& b);
 
+    // Returns gcd(a, b).  All three Mpolys share ctx.  Used by the D14
+    // Fix B batched-lcm-sum path in `ibp::diffeq` matrix assembly.
+    static Mpoly gcd(const Mpoly& a, const Mpoly& b);
+
     Mpoly& multiply_by_si(long c);
     Mpoly& multiply_by_fmpz(const fmpz_t c);
 

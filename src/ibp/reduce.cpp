@@ -387,20 +387,68 @@ diffeq(const qft::FamilyConfig& fc,
     // Reprojecting to {eta, d} shrinks the storage layout, which is the
     // real source of the 20× memory blowup observed on
     // `bn3_4mass_3L_eps001` (audit §D14).
+    // D14 Stage 5 (2026-05-16): hoist `libp_denoms_deriv` out of the
+    // per-master loop.  `dd` only depends on (fc, var), not on the
+    // master integral, so computing it once per `var` saves
+    // `masters.size()` ✕ duplicate work (21x for bn3_4mass).
+    //
+    // The per-master `libp_deriv` is then inlined here using the shared
+    // `dd`, mirroring `src/ibp/libp_deriv.cpp::libp_deriv`'s body.  We
+    // pre-build `neg_ak_cache[ak]` once per unique `ak` value to also
+    // amortise the `Mfrac::from_si` allocations.
+    long N_props = (long)fc.propagators_after_conservation.size();
     std::vector<std::vector<std::vector<DerivTerm>>> der(vars.size());
     for (std::size_t v = 0; v < vars.size(); ++v) {
+        auto dd = libp_denoms_deriv(fc, vars[v],
+                                     opts.numeric_values,
+                                     out.red_ctx.ctx);
+        long n_d_local = (long)dd.completede.size();
+        std::map<long, Mfrac> neg_ak_cache;
+
         der[v].reserve(masters.size());
         for (const auto& m : masters) {
-            // D14 (2026-05-16): call the narrow-context `libp_deriv`
-            // overload so all intermediate Mfracs inside
-            // `libp_denoms_deriv` are substituted + reprojected onto
-            // `out.red_ctx.ctx` BEFORE any `+=` accumulator runs.
-            // This bounds FLINT's multivariate-GCD overhead and avoids
-            // the previous-iteration scheme of post-substituting after
-            // libp_deriv returned (which still paid wide-ctx cost
-            // inside libp_denoms_deriv's hot loop).
-            auto raw = libp_deriv(fc, m, vars[v],
-                                   opts.numeric_values, out.red_ctx.ctx);
+            if ((long)m.n_indices() != N_props) {
+                throw std::invalid_argument(
+                    "ibp::diffeq: master indices length != #propagators");
+            }
+            std::vector<DerivTerm> raw;
+            for (long k = 0; k < N_props; ++k) {
+                long ak = m.indices()[(std::size_t)k];
+                if (ak == 0) continue;
+
+                auto cache_it = neg_ak_cache.find(ak);
+                if (cache_it == neg_ak_cache.end()) {
+                    cache_it = neg_ak_cache.emplace(
+                        ak, Mfrac::from_si(out.red_ctx.ctx, -ak)).first;
+                }
+                const Mfrac& neg_ak = cache_it->second;
+
+                for (long jp = 0; jp < n_d_local; ++jp) {
+                    const Mfrac& cf = dd.coef[(std::size_t)k][(std::size_t)jp];
+                    if (cf.is_zero()) continue;
+                    std::vector<long> new_idx = m.indices();
+                    new_idx[(std::size_t)k] += 1;
+                    if (jp < N_props) new_idx[(std::size_t)jp] -= 1;
+                    qft::JIntegral shifted(m.family(), new_idx);
+                    DerivTerm dt;
+                    dt.integ = shifted;
+                    dt.coef = neg_ak.clone();
+                    dt.coef *= cf;
+                    raw.push_back(std::move(dt));
+                }
+
+                const Mfrac& ck = dd.constant[(std::size_t)k];
+                if (!ck.is_zero()) {
+                    std::vector<long> new_idx = m.indices();
+                    new_idx[(std::size_t)k] += 1;
+                    qft::JIntegral shifted(m.family(), new_idx);
+                    DerivTerm dt;
+                    dt.integ = shifted;
+                    dt.coef = neg_ak.clone();
+                    dt.coef *= ck;
+                    raw.push_back(std::move(dt));
+                }
+            }
             auto simp = simplify_terms(std::move(raw));
             der[v].push_back(std::move(simp));
         }
@@ -522,34 +570,82 @@ diffeq(const qft::FamilyConfig& fc,
         }
     }
 
+    // D14 Stage 4 (Fix B, 2026-05-16): batched lcm-sum per matrix
+    // entry instead of pairwise += accumulation.
+    //
+    // The previous implementation looped
+    //   `out.diffeq[v][row][col] += product`
+    // over many products per (row, col), triggering K FLINT
+    // canonicalisations (each allocating ~3x operand-size temporaries).
+    // MMA at `Kira/interface.m:505` (`Together[der/.j->red]`) instead
+    // does a single batched canonicalisation per matrix entry: collect
+    // all (num_i, den_i) pairs, compute `L = lcm(den_1, ..., den_K)`
+    // once, scale each numerator by `L / den_i`, sum, and canonicalise
+    // once into `(N_total / L)`.
+    //
+    // For bn3_4mass-style multi-distinct-mass 3L topologies this is
+    // the difference between K~200 canonicalisations and 1.  See
+    // audit `docs/AUDIT_MMA_PARITY.md` §D14.
+    auto batched_sum = [](std::vector<Mfrac>& terms,
+                          const std::shared_ptr<MpolyContext>& ctx) -> Mfrac {
+        if (terms.empty()) return Mfrac::zero(ctx);
+        if (terms.size() == 1) return std::move(terms.front());
+        // L = lcm of all denominators.
+        // lcm(a, b) = a / gcd(a, b) * b  (uses exact_divide for the
+        // division step, since gcd divides a by definition).
+        Mpoly L = terms[0].denominator();
+        for (std::size_t i = 1; i < terms.size(); ++i) {
+            Mpoly g = Mpoly::gcd(L, terms[i].denominator());
+            Mpoly L_div_g(ctx);
+            if (!Mpoly::exact_divide(L_div_g, L, g)) {
+                throw std::runtime_error(
+                    "ibp::diffeq batched_sum: gcd did not divide lcm "
+                    "(should be impossible)");
+            }
+            L = L_div_g * terms[i].denominator();
+        }
+        // N_total = sum_i (num_i * (L / den_i)).
+        Mpoly N_total = Mpoly::zero(ctx);
+        for (auto& t : terms) {
+            Mpoly scale(ctx);
+            if (!Mpoly::exact_divide(scale, L, t.denominator())) {
+                throw std::runtime_error(
+                    "ibp::diffeq batched_sum: term denominator does not "
+                    "divide lcm (should be impossible)");
+            }
+            N_total += t.numerator() * scale;
+        }
+        return Mfrac(std::move(N_total), std::move(L));  // canonicalises once
+    };
+
     out.diffeq.reserve(vars.size());
     for (std::size_t v = 0; v < vars.size(); ++v) {
         out.diffeq.emplace_back();
         out.diffeq[v].reserve(masters.size());
         for (std::size_t row = 0; row < masters.size(); ++row) {
-            out.diffeq[v].emplace_back();
-            out.diffeq[v][row].reserve(masters.size());
-            for (std::size_t col = 0; col < masters.size(); ++col) {
-                out.diffeq[v][row].push_back(Mfrac::zero(out.red_ctx.ctx));
-            }
+            // Collect all products per column for this row, deferring
+            // canonicalisation to one batched_sum call per column.
+            std::map<std::size_t, std::vector<Mfrac>> per_col_products;
             for (const auto& dt : der[v][row]) {
                 auto rit = rule_by_lhs.find(int_key(dt.integ));
-                if (rit == rule_by_lhs.end()) {
-                    continue;
-                }
-                // D14 (2026-05-16): `dt.coef` is already on red_ctx.ctx
-                // ({eta, d}) — the substitution + reprojection happens
-                // upstream right after `libp_deriv` above (~line 555).
-                // The clone here just hands a per-iteration owned copy
-                // to the inner accumulator loop.
-                Mfrac coef_lifted = dt.coef.clone();
+                if (rit == rule_by_lhs.end()) continue;
                 for (const auto& mt : rit->second) {
                     auto mit = master_index.find(int_key(mt.integ));
                     if (mit == master_index.end()) continue;
-                    Mfrac product = coef_lifted.clone();
-                    Mfrac mt_coef_in_red = mfrac_to_ctx(mt.coef, out.red_ctx.ctx);
-                    product *= mt_coef_in_red;
-                    out.diffeq[v][row][mit->second] += product;
+                    Mfrac product = dt.coef.clone();
+                    product *= mt.coef;
+                    per_col_products[mit->second].push_back(std::move(product));
+                }
+            }
+            out.diffeq[v].emplace_back();
+            out.diffeq[v][row].reserve(masters.size());
+            for (std::size_t col = 0; col < masters.size(); ++col) {
+                auto it = per_col_products.find(col);
+                if (it == per_col_products.end()) {
+                    out.diffeq[v][row].push_back(Mfrac::zero(out.red_ctx.ctx));
+                } else {
+                    out.diffeq[v][row].push_back(
+                        batched_sum(it->second, out.red_ctx.ctx));
                 }
             }
         }

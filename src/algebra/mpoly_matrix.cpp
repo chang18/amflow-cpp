@@ -32,6 +32,18 @@ bool Mpoly::exact_divide(Mpoly& out, const Mpoly& a, const Mpoly& b) {
     return divides != 0;
 }
 
+Mpoly Mpoly::gcd(const Mpoly& a, const Mpoly& b) {
+    if (a.ctx().get() != b.ctx().get()) {
+        throw std::invalid_argument("Mpoly::gcd: context mismatch");
+    }
+    Mpoly out(a.ctx());
+    int ok = fmpz_mpoly_gcd(out.raw(), a.raw(), b.raw(), a.ctx()->raw());
+    if (!ok) {
+        throw std::runtime_error("Mpoly::gcd: FLINT gcd failed");
+    }
+    return out;
+}
+
 // ===========================================================================
 //  MpolyMatrix
 // ===========================================================================

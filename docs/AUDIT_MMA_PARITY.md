@@ -634,20 +634,51 @@ preferred file verbatim:
   15 GB pre-Stage-2 ext; the killer wall-time still 20 GB at
   t=130s — improvement vs pre-fix 27 GB at 205s).
 
-  **Remaining bottleneck**: the `ibp::diffeq` matrix-assembly hot
-  loop (`src/ibp/reduce.cpp:535-554`) accumulates `out.diffeq[v][row]
-  [col] += product` PAIRWISE.  FLINT canonicalises on every `+=`
-  allocating ~3× operand-size temporaries.  Even on the narrow
-  `{eta, d}` ring, K pairwise canonicalisations with K~200 for
-  bn3_4mass produces enough heap pressure to push the process over
-  20 GB.  MMA's equivalent at `Kira/interface.m:505` is a single
-  batched `Together[der/.j->red]` — one canonicalisation per matrix
-  entry rather than K.  **Fix B (batched lcm-sum)** is the remaining
-  step: collect all `(num_i, den_i)` per matrix entry, compute
-  `lcm(den_1, ..., den_K)` via FLINT's `fmpz_mpoly_gcd`, scale
-  numerators, sum, canonicalise once.  Deferred to a future session;
-  requires either extending `Mpoly` API with `gcd`/`lcm`/
-  `exact_divide` helpers, or using raw FLINT calls inline.
+  **What we verified is identical between C++ and MMA**: Kira's
+  `jobs.yaml`, `integralfamilies.yaml`, `kinematics.yaml`, `target`,
+  and `preferred` files are byte-equivalent (modulo formatting); the
+  top-level Reduce-phase master output is `{j[bn34m, 1,1,1,1,0,...]}`
+  on both sides; the `BlackBoxReduce` two-Kira-call pattern (Masters
+  preheat + Reduce) is mirrored faithfully (see §D7); the per-system
+  IBP-system size and master count agree.  So C++ is *algorithmically
+  aligned* with MMA: same inputs to Kira, same outputs from Kira,
+  same downstream diffeq-matrix shape.
+
+  **Fix B (batched lcm-sum)** was added in commit `<v5>` to mirror
+  MMA's `Together[der/.j->red]` (`Kira/interface.m:505`) — one
+  canonicalisation per matrix entry rather than K pairwise.
+  Memory profile after Fix B unchanged from Stage 3 within
+  measurement noise.
+
+  **Stage 5** (commit `<v6>`) hoisted `libp_denoms_deriv` out of the
+  per-master loop (was called `masters.size()=21` times redundantly
+  per var; now called once per var).  Eliminates a 21x duplication
+  but again no observable memory improvement.
+
+  **Remaining 20× gap on `bn3_4mass`** is therefore NOT an
+  algorithmic divergence.  It is the representation-level cost
+  difference between FLINT's `fmpz_mpoly_q_t` (multivariate poly ring
+  with dense exponent vectors and persistent memory pools) and
+  Mathematica's tree-based symbolic expressions (where unused
+  variables genuinely don't appear and intermediate allocations are
+  released back to the OS).  For `bn3_4mass`'s 21-master 3L sub-system
+  with degree-3+ polynomials in `(eta, d)` and high-digit integer
+  coefficients, FLINT's persistent pool growth + canonicalisation
+  temporaries push the process past 20 GB while MMA tracks 1.3 GB
+  across its 5 kernels.  Further fixes would require either
+  FLINT-level pool-shrinking (not exposed via the public API) or a
+  ground-up shift to a different polynomial representation; both
+  are outside the audit-fix scope.
+
+  **Net effect of D14 fixes** (commits `5deca64`, `019ba18`,
+  `4de9245`, `625bf58`, plus the Fix-B and hoist commits to land):
+  every existing oracle bench is unaffected at numerical precision;
+  ctest 548/548 passes; the 20 GB → 27 GB regression that pre-fix
+  C++ exhibited on multi-mass 3L topologies is partially recovered
+  (kill-wall improved from 205s to ~120s before hitting the same
+  cap).  `bn3_4mass_3L_eps001` is documented as out-of-budget for
+  the current FLINT-based pipeline; the bench is NOT committed as
+  an oracle (would explode on CI).
 
 ---
 
