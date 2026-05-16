@@ -146,6 +146,31 @@ BENCHES=(
   tools/bench/mercedes_3L_3mass_eps0001_black_box_amflow_cpp.json
   tools/bench/mercedes_3L_3mass_psq4_eps001_black_box_amflow_cpp.json
   tools/bench/bn3_4mass_eps01_3L_black_box_amflow_cpp.json
+  tools/bench/mercedes_3L_2mass_psq2_eps001_black_box_amflow_cpp.json
+  tools/bench/banana_4L_2mass_psq1Quarter_eps001_black_box_amflow_cpp.json
+  tools/bench/banana_4L_2mass_psq1Half_eps001_black_box_amflow_cpp.json
+  tools/bench/mercedes_3L_eqmass_psq2_eps001_black_box_amflow_cpp.json
+  tools/bench/banana_3L_eqmass_psq6_eps001_black_box_amflow_cpp.json
+  tools/bench/mercedes_3L_1mass_psq8_eps001_black_box_amflow_cpp.json
+  tools/bench/banana_3L_eqmass_psq8_eps001_black_box_amflow_cpp.json
+  tools/bench/mercedes_3L_1mass_psq2_eps001_black_box_amflow_cpp.json
+  tools/bench/mercedes_3L_1mass_psq4_eps001_black_box_amflow_cpp.json
+  tools/bench/mercedes_3L_eqmass_psq4_eps001_black_box_amflow_cpp.json
+  tools/bench/banana_4L_2mass_psq2_eps001_black_box_amflow_cpp.json
+  tools/bench/banana_4L_1mass_psq4_eps001_black_box_amflow_cpp.json
+  tools/bench/banana_4L_1mass_psq1Half_eps001_black_box_amflow_cpp.json
+  tools/bench/mercedes_3L_3mass_psq8_eps001_black_box_amflow_cpp.json
+  tools/bench/banana_3L_2mass_psq2_eps001_black_box_amflow_cpp.json
+  tools/bench/mercedes_3L_3mass_psq2_eps001_black_box_amflow_cpp.json
+  tools/bench/banana_3L_1mass_psq4_eps001_black_box_amflow_cpp.json
+  tools/bench/banana_3L_2mass_psq8_eps001_black_box_amflow_cpp.json
+  tools/bench/banana_4L_2mass_psq6_eps001_black_box_amflow_cpp.json
+  tools/bench/mercedes_3L_2mass_psq4_eps001_black_box_amflow_cpp.json
+  tools/bench/banana_3L_eqmass_psq5_eps001_black_box_amflow_cpp.json
+  tools/bench/banana_4L_1mass_psq2_eps001_black_box_amflow_cpp.json
+  tools/bench/banana_3L_1mass_psq2_eps001_black_box_amflow_cpp.json
+  tools/bench/banana_3L_eqmass_psq3_eps001_black_box_amflow_cpp.json
+  tools/bench/bn3mix_2mass_alt_3L_eps001_black_box_amflow_cpp.json
 )
 
 for input in "${BENCHES[@]}"; do
