@@ -14,6 +14,8 @@
 #include <flint/fmpz_mpoly.h>
 #include <flint/fmpz_mpoly_q.h>
 
+#include "amflow/algebra/numeric_subst.hpp"
+
 namespace amflow::ibp {
 
 using algebra::Mfrac;
@@ -382,6 +384,159 @@ simplify_terms(std::vector<DerivTerm> terms) {
         acc.coef = Mfrac::zero(terms[idxs.front()].coef.ctx());
         for (std::size_t i : idxs) acc.coef += terms[i].coef;
         if (!acc.coef.is_zero()) out.push_back(std::move(acc));
+    }
+    return out;
+}
+
+// ===========================================================================
+// D14 (2026-05-16) narrow-context overloads.
+//
+// These mirror `libp_denoms_deriv` / `libp_deriv` above but substitute
+// the user-supplied `numeric_values` into intermediates and reproject
+// everything to a caller-provided narrow polynomial-ring context
+// (`target_ctx`).  This avoids the FLINT multivariate-GCD overhead
+// that dominates the wide-fc.ctx path on multi-distinct-mass 3L+
+// topologies (audit §D14 — 27 GB blowup on `bn3_4mass_3L_eps001`).
+//
+// The wide-ctx version is preserved for tests and any caller that
+// genuinely needs symbolic dependence on family variables.
+// ===========================================================================
+
+LibpDenomsDerivResult
+libp_denoms_deriv(const qft::FamilyConfig& fc, const std::string& s_name,
+                  const std::map<std::string, std::string>& numeric_values,
+                  const std::shared_ptr<algebra::MpolyContext>& target_ctx) {
+    (void)find_var_index(fc, s_name);  // sanity check: s_name is in fc.ctx
+
+    // Build sp_map on fc.ctx (this is essentially free — sp_map's
+    // Mfracs are small rational coefficients of the inverse of a
+    // SP-coefficient matrix).
+    SpToDMap sp_map = build_sp_to_d_map(fc);
+
+    LibpDenomsDerivResult out;
+    out.completede = std::move(sp_map.completede);
+    long n_d = (long)out.completede.size();
+
+    // Pre-substitute + reproject sp_map.alpha[l][j] and sp_map.beta[l]
+    // onto `target_ctx`.  Done ONCE up front so the per-k loop below
+    // does arithmetic only on the narrow ctx.
+    const std::size_t n_sp = sp_map.alpha.size();
+    std::vector<std::vector<Mfrac>> alpha_narrow(n_sp);
+    std::vector<Mfrac> beta_narrow;
+    beta_narrow.reserve(n_sp);
+    for (std::size_t l = 0; l < n_sp; ++l) {
+        alpha_narrow[l].reserve((std::size_t)n_d);
+        for (long j = 0; j < n_d; ++j) {
+            alpha_narrow[l].push_back(
+                algebra::substitute_and_narrow(
+                    sp_map.alpha[l][(std::size_t)j],
+                    numeric_values, target_ctx));
+        }
+        beta_narrow.push_back(
+            algebra::substitute_and_narrow(
+                sp_map.beta[l], numeric_values, target_ctx));
+    }
+
+    std::size_t N = fc.propagators_after_conservation.size();
+    long s_var = find_var_index(fc, s_name);
+    out.coef.reserve(N);
+    out.constant.reserve(N);
+    for (std::size_t k = 0; k < N; ++k) {
+        Mpoly d_k = fc.propagators_after_conservation[k]
+                        .derivative(s_var);
+        SpDecomposition dec = decompose_into_splist(fc, d_k);
+
+        // Pre-substitute + reproject dec.sp_coef[l] (Mpoly on fc.ctx)
+        // and dec.constant (Mpoly on fc.ctx) to target_ctx.
+        std::vector<Mfrac> sp_coef_narrow;
+        sp_coef_narrow.reserve(dec.sp_coef.size());
+        for (auto& mp : dec.sp_coef) {
+            sp_coef_narrow.push_back(
+                algebra::substitute_and_narrow(
+                    Mfrac::from_mpoly(std::move(mp)),
+                    numeric_values, target_ctx));
+        }
+        Mfrac const_narrow =
+            algebra::substitute_and_narrow(
+                Mfrac::from_mpoly(std::move(dec.constant)),
+                numeric_values, target_ctx);
+
+        std::vector<Mfrac> coef_row;
+        coef_row.reserve((std::size_t)n_d);
+        for (long j = 0; j < n_d; ++j) {
+            Mfrac acc = Mfrac::zero(target_ctx);
+            for (std::size_t l = 0; l < sp_coef_narrow.size(); ++l) {
+                if (sp_coef_narrow[l].is_zero()) continue;
+                Mfrac t = sp_coef_narrow[l].clone();
+                t *= alpha_narrow[l][(std::size_t)j];
+                acc += t;
+            }
+            coef_row.push_back(std::move(acc));
+        }
+        Mfrac const_term = const_narrow.clone();
+        for (std::size_t l = 0; l < sp_coef_narrow.size(); ++l) {
+            if (sp_coef_narrow[l].is_zero()) continue;
+            Mfrac t = sp_coef_narrow[l].clone();
+            t *= beta_narrow[l];
+            const_term += t;
+        }
+        out.coef.push_back(std::move(coef_row));
+        out.constant.push_back(std::move(const_term));
+    }
+    return out;
+}
+
+std::vector<DerivTerm>
+libp_deriv(const qft::FamilyConfig& fc,
+           const qft::JIntegral& j,
+           const std::string& s_name,
+           const std::map<std::string, std::string>& numeric_values,
+           const std::shared_ptr<algebra::MpolyContext>& target_ctx) {
+    auto dd = libp_denoms_deriv(fc, s_name, numeric_values, target_ctx);
+    long n_d = (long)dd.completede.size();
+    long N   = (long)fc.propagators_after_conservation.size();
+
+    if ((long)j.n_indices() != N) {
+        throw std::invalid_argument(
+            "libp_deriv: J integral indices length != #propagators");
+    }
+
+    std::vector<DerivTerm> out;
+    for (long k = 0; k < N; ++k) {
+        long ak = j.indices()[(std::size_t)k];
+        if (ak == 0) continue;
+
+        // neg_ak is a constant rational on target_ctx (no symbolic
+        // dependence — it's just `-ak`).
+        Mfrac neg_ak = Mfrac::from_si(target_ctx, -ak);
+
+        for (long jp = 0; jp < n_d; ++jp) {
+            const Mfrac& cf = dd.coef[(std::size_t)k][(std::size_t)jp];
+            if (cf.is_zero()) continue;
+            std::vector<long> new_idx = j.indices();
+            new_idx[(std::size_t)k] += 1;
+            if (jp < N) {
+                new_idx[(std::size_t)jp] -= 1;
+            }
+            qft::JIntegral shifted(j.family(), new_idx);
+            DerivTerm dt;
+            dt.integ = shifted;
+            dt.coef = neg_ak.clone();
+            dt.coef *= cf;
+            out.push_back(std::move(dt));
+        }
+
+        const Mfrac& ck = dd.constant[(std::size_t)k];
+        if (!ck.is_zero()) {
+            std::vector<long> new_idx = j.indices();
+            new_idx[(std::size_t)k] += 1;
+            qft::JIntegral shifted(j.family(), new_idx);
+            DerivTerm dt;
+            dt.integ = shifted;
+            dt.coef = neg_ak.clone();
+            dt.coef *= ck;
+            out.push_back(std::move(dt));
+        }
     }
     return out;
 }

@@ -4,6 +4,8 @@
 
 #include "amflow/ibp/reduce.hpp"
 
+#include "amflow/algebra/numeric_subst.hpp"
+
 #include <algorithm>
 #include <filesystem>
 #include <initializer_list>
@@ -60,176 +62,15 @@ ReductionContext make_reduction_context(const qft::FamilyConfig& /*fc*/) {
 
 namespace {
 
-// Lift / project an Mfrac between two MpolyContexts by variable name.
-//
-// D14 (2026-05-16) semantics update: source-ctx variables that are NOT
-// present in `dst_ctx` are silently dropped IF their exponent is 0 in
-// every monomial.  This supports the narrowed `red_ctx = {eta, d}`
-// scheme: callers `substitute_fc_vars` the source first (replacing
-// fc.ctx-only vars with their numeric values, which produces an Mfrac
-// whose dependence on the substituted vars has been collapsed to a
-// constant) and then call `mfrac_to_ctx` to remap to the narrow ctx.
-// Throws if a missing src var still has a positive exponent — that's
-// always a caller bug (forgot to substitute).
-Mfrac mfrac_to_ctx(const Mfrac& src,
-                    const std::shared_ptr<MpolyContext>& dst_ctx) {
-    if (src.ctx().get() == dst_ctx.get()) return src.clone();
+// D14 (2026-05-16) numeric-substitution helpers are now in
+// `include/amflow/algebra/numeric_subst.hpp`.  Local aliases keep the
+// existing call sites in this file readable.
+using algebra::substitute_fc_vars;
+using algebra::mfrac_to_ctx_lenient;
 
-    std::map<std::string, long> name_to_dst;
-    for (long i = 0; i < dst_ctx->n_vars(); ++i) {
-        name_to_dst[dst_ctx->var_name(i)] = i;
-    }
-    std::vector<long> src_to_dst((std::size_t)src.ctx()->n_vars(), -1);
-    for (long i = 0; i < src.ctx()->n_vars(); ++i) {
-        auto it = name_to_dst.find(src.ctx()->var_name(i));
-        if (it == name_to_dst.end()) {
-            // Leave as -1 (sentinel meaning "drop unless exp != 0").
-            // The per-monomial walk below throws iff any monomial has
-            // a non-zero exponent on this variable.
-            continue;
-        }
-        src_to_dst[(std::size_t)i] = it->second;
-    }
-
-    auto walk = [&](const Mpoly& p) -> Mpoly {
-        Mpoly out(dst_ctx);
-        long len = fmpz_mpoly_length(p.raw(), src.ctx()->raw());
-        std::vector<unsigned long> exp((std::size_t)src.ctx()->n_vars());
-        std::vector<unsigned long> dexp((std::size_t)dst_ctx->n_vars(), 0);
-        fmpz_t coeff;
-        fmpz_init(coeff);
-        for (long t = 0; t < len; ++t) {
-            fmpz_mpoly_get_term_exp_ui(exp.data(), p.raw(), t,
-                                        src.ctx()->raw());
-            fmpz_mpoly_get_term_coeff_fmpz(coeff, p.raw(), t,
-                                            src.ctx()->raw());
-            std::fill(dexp.begin(), dexp.end(), 0);
-            for (long i = 0; i < src.ctx()->n_vars(); ++i) {
-                long pi = src_to_dst[(std::size_t)i];
-                if (pi < 0) {
-                    if (exp[(std::size_t)i] != 0) {
-                        fmpz_clear(coeff);
-                        throw std::runtime_error(
-                            "mfrac_to_ctx: variable '"
-                            + src.ctx()->var_name(i)
-                            + "' has non-zero exponent but is not in "
-                              "destination ctx (caller forgot to "
-                              "substitute numeric values?)");
-                    }
-                    continue;
-                }
-                dexp[(std::size_t)pi] = exp[(std::size_t)i];
-            }
-            fmpz_mpoly_set_coeff_fmpz_ui(out.raw(), coeff,
-                                          dexp.data(), dst_ctx->raw());
-        }
-        fmpz_clear(coeff);
-        return out;
-    };
-    return Mfrac(walk(src.numerator()), walk(src.denominator()));
-}
-
-// FmpqHolder: small RAII wrapper around fmpq_t.  Duplicated locally to
-// keep D14 fix self-contained in src/ibp/reduce.cpp (the pipeline's
-// version in src/pipeline/amfsystem.cpp is in an anonymous namespace).
-class FmpqHolder {
-public:
-    FmpqHolder() { fmpq_init(q_); }
-    FmpqHolder(const FmpqHolder& o) { fmpq_init(q_); fmpq_set(q_, o.q_); }
-    FmpqHolder(FmpqHolder&& o) noexcept { fmpq_init(q_); fmpq_swap(q_, o.q_); }
-    FmpqHolder& operator=(const FmpqHolder& o) {
-        if (this != &o) fmpq_set(q_, o.q_);
-        return *this;
-    }
-    FmpqHolder& operator=(FmpqHolder&& o) noexcept {
-        if (this != &o) fmpq_swap(q_, o.q_);
-        return *this;
-    }
-    ~FmpqHolder() { fmpq_clear(q_); }
-    fmpq_t& raw() { return q_; }
-    const fmpq_t& raw() const { return q_; }
-private:
-    fmpq_t q_;
-};
-
-bool parse_rational_string(const std::string& s, fmpq_t v) {
-    std::size_t slash = s.find('/');
-    try {
-        if (slash != std::string::npos) {
-            long p = std::stol(s.substr(0, slash));
-            long q = std::stol(s.substr(slash + 1));
-            fmpq_set_si(v, p, q);
-            return true;
-        }
-        std::size_t pos;
-        long p = std::stol(s, &pos);
-        if (pos == s.size()) {
-            fmpq_set_si(v, p, 1);
-            return true;
-        }
-        std::size_t dot = s.find('.');
-        if (dot == std::string::npos) return false;
-        std::string sint = s.substr(0, dot) + s.substr(dot + 1);
-        long denom = 1;
-        for (std::size_t i = dot + 1; i < s.size(); ++i) denom *= 10;
-        long num = std::stol(sint);
-        fmpq_set_si(v, num, denom);
-        return true;
-    } catch (...) { return false; }
-}
-
-bool mpoly_has_var(const Mpoly& p, long v) {
-    auto ctx = p.ctx();
-    long len = fmpz_mpoly_length(p.raw(), ctx->raw());
-    std::vector<unsigned long> exp((std::size_t)ctx->n_vars());
-    for (long t = 0; t < len; ++t) {
-        fmpz_mpoly_get_term_exp_ui(exp.data(), p.raw(), t, ctx->raw());
-        if (exp[(std::size_t)v] > 0) return true;
-    }
-    return false;
-}
-
-// Substitute numeric values for every variable in src.ctx that is NOT
-// in `keep_names`, leaving keep_names variables symbolic.  The returned
-// Mfrac is still on src.ctx (same MpolyContext), but the substituted
-// variables now have exponent 0 in every monomial — they can then be
-// safely projected to a narrower context via `mfrac_to_ctx`.
-//
-// Mirrors MMA AMFlow.m's pattern of applying `/. Numeric` to inner
-// reductions; this is the same trick the D13 fix (build_boundary) uses,
-// generalised here so the D14 narrow red_ctx can accept libp_deriv
-// outputs which carry fc.ctx variables (loops, legs, kinematic
-// invariants) symbolically.
-Mfrac substitute_fc_vars(
-        const Mfrac& src,
-        const std::map<std::string, std::string>& numeric_values,
-        const std::set<std::string>& keep_names) {
-    auto ctx = src.ctx();
-    Mfrac cur = src.clone();
-    for (long v = 0; v < ctx->n_vars(); ++v) {
-        const std::string& name = ctx->var_name(v);
-        if (keep_names.count(name)) continue;
-        if (!mpoly_has_var(cur.numerator(), v)
-                && !mpoly_has_var(cur.denominator(), v)) {
-            continue;
-        }
-        auto it = numeric_values.find(name);
-        if (it == numeric_values.end()) {
-            throw std::runtime_error(
-                "substitute_fc_vars: no numeric value for fc variable '"
-                + name + "' (and it is not in the keep set).  "
-                "Caller bug: numeric_values must cover every fc.ctx "
-                "variable that is not eta.");
-        }
-        FmpqHolder h;
-        if (!parse_rational_string(it->second, h.raw())) {
-            throw std::runtime_error(
-                "substitute_fc_vars: cannot parse numeric value '"
-                + it->second + "' for variable '" + name + "'");
-        }
-        cur = cur.substitute(v, h.raw());
-    }
-    return cur;
+inline Mfrac mfrac_to_ctx(const Mfrac& src,
+                           const std::shared_ptr<MpolyContext>& dst_ctx) {
+    return algebra::mfrac_to_ctx_lenient(src, dst_ctx);
 }
 
 Mfrac lift_to_red_ctx(const Mfrac& src, const ReductionContext& red_ctx) {
@@ -550,12 +391,16 @@ diffeq(const qft::FamilyConfig& fc,
     for (std::size_t v = 0; v < vars.size(); ++v) {
         der[v].reserve(masters.size());
         for (const auto& m : masters) {
-            auto raw = libp_deriv(fc, m, vars[v]);
-            for (auto& dt : raw) {
-                auto subbed = substitute_fc_vars(
-                    dt.coef, opts.numeric_values, /*keep=*/{"eta"});
-                dt.coef = mfrac_to_ctx(subbed, out.red_ctx.ctx);
-            }
+            // D14 (2026-05-16): call the narrow-context `libp_deriv`
+            // overload so all intermediate Mfracs inside
+            // `libp_denoms_deriv` are substituted + reprojected onto
+            // `out.red_ctx.ctx` BEFORE any `+=` accumulator runs.
+            // This bounds FLINT's multivariate-GCD overhead and avoids
+            // the previous-iteration scheme of post-substituting after
+            // libp_deriv returned (which still paid wide-ctx cost
+            // inside libp_denoms_deriv's hot loop).
+            auto raw = libp_deriv(fc, m, vars[v],
+                                   opts.numeric_values, out.red_ctx.ctx);
             auto simp = simplify_terms(std::move(raw));
             der[v].push_back(std::move(simp));
         }

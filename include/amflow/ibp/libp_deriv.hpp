@@ -43,6 +43,8 @@
 #ifndef AMFLOW_IBP_LIBP_DERIV_HPP
 #define AMFLOW_IBP_LIBP_DERIV_HPP
 
+#include <map>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -71,6 +73,32 @@ std::vector<DerivTerm>
 libp_deriv(const qft::FamilyConfig& fc,
            const qft::JIntegral& j,
            const std::string& s_name);
+
+// D14 (2026-05-16) overload: same as `libp_denoms_deriv(fc, s_name)`
+// but applies `numeric_values` substitution to every intermediate
+// Mfrac AND reprojects the result onto `target_ctx`.  Use this when
+// you have a narrow target context (e.g. `{eta, d}` from
+// `make_reduction_context`) and want to avoid FLINT's
+// multivariate-GCD overhead on the wide `fc.ctx` polynomial ring.
+//
+// Preconditions: `target_ctx` must contain `s_name` as one of its
+// variables, and `numeric_values` must supply rationals for every
+// `fc.ctx` variable that is NOT in `target_ctx`.
+//
+// Returned `coef[k][j]` and `constant[k]` Mfracs live on `target_ctx`.
+LibpDenomsDerivResult
+libp_denoms_deriv(const qft::FamilyConfig& fc, const std::string& s_name,
+                  const std::map<std::string, std::string>& numeric_values,
+                  const std::shared_ptr<algebra::MpolyContext>& target_ctx);
+
+// D14 (2026-05-16) overload of libp_deriv mirroring the above:
+// returns DerivTerms whose `.coef` lives on `target_ctx`.
+std::vector<DerivTerm>
+libp_deriv(const qft::FamilyConfig& fc,
+           const qft::JIntegral& j,
+           const std::string& s_name,
+           const std::map<std::string, std::string>& numeric_values,
+           const std::shared_ptr<algebra::MpolyContext>& target_ctx);
 
 std::vector<DerivTerm>
 compute_derivative(const qft::FamilyConfig& fc,
