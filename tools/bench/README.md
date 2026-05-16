@@ -37,7 +37,7 @@ benchmark commands, not default `ctest` entries.
 
 ```bash
 ./build/src/cli/amflow_cli \
-  tools/bench/tt_2loop_box_black_box_amflow_cpp.json \
+  tools/bench/tt_2loop_box_eps001_black_box_amflow_cpp.json \
   /tmp/amflow_bench_tt_2loop_box_cpp_out.json
 
 ./build/src/cli/amflow_cli \
