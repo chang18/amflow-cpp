@@ -27,6 +27,7 @@ BENCHES=(
   tools/bench/pentagon_1L_4mass_eps001_black_box_amflow_cpp.json
   tools/bench/pentagon_1L_5mass_eps001_black_box_amflow_cpp.json
   tools/bench/bn3mix_eps001_black_box_amflow_cpp.json
+  tools/bench/box_1L_4mass_eps001_black_box_amflow_cpp.json
   tools/bench/box1_d0_7_3_solve_integrals_cpp.json
   tools/bench/box1_multitarget_black_box_amflow_cpp.json
   tools/bench/box1_single_solve_integrals_cpp.json
