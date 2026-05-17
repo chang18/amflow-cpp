@@ -1,0 +1,3 @@
+{"Family" -> bhabha2sebox, "Loop" -> {l2}, "Leg" -> {l1}, 
+ "Conservation" -> {}, "Replacement" -> {l1^2 -> -1}, 
+ "Propagator" -> {-eta + l2^2, l1^2 - 2*l1*l2 + l2^2}, "Numeric" -> {}}

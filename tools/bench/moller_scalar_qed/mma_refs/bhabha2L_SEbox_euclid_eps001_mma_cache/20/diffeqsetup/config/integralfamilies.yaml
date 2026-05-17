@@ -1,0 +1,8 @@
+integralfamilies:
+  - name: "bhabha2sebox"
+    loop_momenta: [l2]
+    top_level_sectors: [3]
+    propagators:
+      - [ "-eta + l2^2", 0 ]
+      - [ "l1^2 - 2*l1*l2 + l2^2", 0 ]
+    cut_propagators: []
