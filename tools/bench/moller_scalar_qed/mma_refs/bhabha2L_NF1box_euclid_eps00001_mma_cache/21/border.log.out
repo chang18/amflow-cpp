@@ -1,0 +1,4 @@
+SetGlobalOptions -> {"WorkingPre" -> 100, "ChopPre" -> 20, "SilentMode" -> False, "RationalizePre" -> 100}
+SetExpansionOptions -> {"XOrder" -> 100, "ExtraXOrder" -> 20, "LearnXOrder" -> -1, "TestXOrder" -> 5}
+SetRunningOptions -> {"RunRadius" -> 2, "RunLength" -> 1000, "RunCandidate" -> 10, "RunDirection" -> "NegIm"}
+SetExpansionOptions -> {"XOrder" -> 100, "ExtraXOrder" -> 480, "LearnXOrder" -> -1, "TestXOrder" -> 5}

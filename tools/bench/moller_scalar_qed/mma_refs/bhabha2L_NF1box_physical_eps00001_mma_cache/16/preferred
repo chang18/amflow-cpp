@@ -1,0 +1,3 @@
+{{j[bhabha2lp, 1, 1, 1, 0, 0, 0, 0, 0, 0]}, 
+ {-((Gamma[2 - 2*eps]*Gamma[-1 + 2*eps])/Gamma[2 - eps])}, 
+ {j[bhabha2lp, 1, 1]}, Identity}
