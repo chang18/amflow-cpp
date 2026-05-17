@@ -1,0 +1,4 @@
+{{{1 - eps, -eps}, {"Family" -> bhabha2vbox, "Loop" -> {l2}, "Leg" -> {l1}, 
+   "Conservation" -> {}, "Replacement" -> {l1^2 -> -1}, 
+   "Propagator" -> {-1 + l2^2, (l1 + l2)^2}, "Numeric" -> {}}, 
+  {j[bhabha2vbox, 1, 0]}, {{{1}}, {}}}}

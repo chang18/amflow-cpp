@@ -1,0 +1,23 @@
+jobs:
+ - reduce_sectors:
+    reduce:
+     - {topologies: [bhabha2vbox], sectors: [15], r: 7, s: 0}
+
+
+    select_integrals:
+      select_mandatory_list:
+        - [bhabha2vbox, target]
+
+
+    preferred_masters: preferred
+    integral_ordering: 5
+
+
+    run_initiate: true
+    run_triangular: true
+    run_back_substitution: true
+
+
+ - kira2math:
+    target:
+     - [bhabha2vbox, target]

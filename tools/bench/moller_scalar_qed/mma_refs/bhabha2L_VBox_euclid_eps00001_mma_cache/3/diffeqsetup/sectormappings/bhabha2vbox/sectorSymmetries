@@ -1,0 +1,10 @@
+7 placeholder placeholder placeholder placeholder 1 7 3 0 {p1==p1,p2==p2,p3==p3,bhabha2vboxAuxLeg==bhabha2vboxAuxLeg} {bhabha2vboxAuxLeg==-p1-p2-p3} 2 1 0 -1 -1 -1 -1 -1 -1 1 0
+17 placeholder placeholder placeholder placeholder 1 17 2 0 {p1==p1,p2==p2,p3==p3,bhabha2vboxAuxLeg==bhabha2vboxAuxLeg} {bhabha2vboxAuxLeg==-p1-p2-p3} 4 -1 -1 -1 0 -1 -1 -1 -1 1 0
+21 placeholder placeholder placeholder placeholder 1 21 3 0 {p1==p1,p2==p2,p3==p3,bhabha2vboxAuxLeg==bhabha2vboxAuxLeg} {bhabha2vboxAuxLeg==-p1-p2-p3} 0 -1 4 -1 2 -1 -1 -1 -1 1 0
+21 placeholder placeholder placeholder placeholder 1 21 3 0 {p1==p1,p2==p2,p3==p3,bhabha2vboxAuxLeg==bhabha2vboxAuxLeg} {bhabha2vboxAuxLeg==-p1-p2-p3} 2 -1 0 -1 4 -1 -1 -1 -1 1 0
+21 placeholder placeholder placeholder placeholder 1 21 3 0 {p1==p1,p2==p2,p3==p3,bhabha2vboxAuxLeg==bhabha2vboxAuxLeg} {bhabha2vboxAuxLeg==-p1-p2-p3} 2 -1 4 -1 0 -1 -1 -1 -1 1 0
+21 placeholder placeholder placeholder placeholder 1 21 3 0 {p1==p1,p2==p2,p3==p3,bhabha2vboxAuxLeg==bhabha2vboxAuxLeg} {bhabha2vboxAuxLeg==-p1-p2-p3} 4 -1 2 -1 0 -1 -1 -1 -1 1 0
+21 placeholder placeholder placeholder placeholder 1 21 3 0 {p1==p1,p2==p2,p3==p3,bhabha2vboxAuxLeg==bhabha2vboxAuxLeg} {bhabha2vboxAuxLeg==-p1-p2-p3} 4 -1 0 -1 2 -1 -1 -1 -1 1 0
+23 placeholder placeholder placeholder placeholder 1 23 4 0 {p1==p1,p2==p2,p3==p3,bhabha2vboxAuxLeg==bhabha2vboxAuxLeg} {bhabha2vboxAuxLeg==-p1-p2-p3} 2 1 0 -1 4 -1 -1 -1 -1 1 0
+25 placeholder placeholder placeholder placeholder 1 25 3 0 {p1==p1,p2==p2,p3==p3,bhabha2vboxAuxLeg==bhabha2vboxAuxLeg} {bhabha2vboxAuxLeg==-p1-p2-p3} 4 -1 -1 3 0 -1 -1 -1 -1 1 0
+29 placeholder placeholder placeholder placeholder 1 29 4 0 {p1==p1,p2==p2,p3==p3,bhabha2vboxAuxLeg==bhabha2vboxAuxLeg} {bhabha2vboxAuxLeg==-p1-p2-p3} 4 -1 2 3 0 -1 -1 -1 -1 1 0

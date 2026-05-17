@@ -1,0 +1,16 @@
+jobs:
+ - reduce_sectors:
+    reduce:
+     - {topologies: [bhabha2vbox], sectors: [3], r: 5, s: 0}
+
+
+    select_integrals:
+      select_mandatory_recursively:
+        - {topologies: [bhabha2vbox], sectors: [3], r: 5, s: 0, d: 3}
+
+
+    preferred_masters: preferred
+    integral_ordering: 5
+
+
+    run_initiate: masters

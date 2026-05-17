@@ -1,0 +1,7 @@
+kinematics:
+  incoming_momenta: [l1, bhabha2vboxAuxLeg]
+  outgoing_momenta: []
+  momentum_conservation: [bhabha2vboxAuxLeg, -l1]
+  kinematic_invariants:
+  scalarproduct_rules:
+    - [[l1,l1], -1]
