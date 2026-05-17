@@ -1,0 +1,2 @@
+{"Family" -> bhabha2pb, "Loop" -> {}, "Leg" -> {l1}, "Conservation" -> {}, 
+ "Replacement" -> {l1^2 -> -1}, "Propagator" -> {}, "Numeric" -> {}}

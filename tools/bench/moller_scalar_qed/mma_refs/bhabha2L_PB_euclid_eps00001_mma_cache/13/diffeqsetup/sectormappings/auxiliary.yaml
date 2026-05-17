@@ -1,0 +1,3 @@
+auxiliary:
+ - name: "bhabha2pb"
+   permutation: [0,1]
