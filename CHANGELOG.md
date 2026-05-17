@@ -8,238 +8,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
-- **Multi-mass stress batch (2026-05-15)**: two additional oracle
-  triplets probing axes that surfaced a latent bug.  Oracle total:
-  40 → 42.
-  - `tools/bench/vtx2_2L_3mass_eps001_*` — 2L 3-leg vertex with three
-    distinct internal masses (mAsq=1, mBsq=4, mCsq=9).  **Surfaced
-    audit divergence D13** in C++ `build_boundary`: the projection
-    from the boundary's Laporta coefficient to the sub-system's
-    reduced context aborted with `residual var 'mAsq' not in dst`
-    because `to_complete_explicit` rank-filtered out one of the
-    mass-bearing propagators.  Fixed in the same commit; corner
-    matches MMA at rel 9.78e-31 (Re).  MMA wallclock 187 s.
-  - `tools/bench/doublebox_2mass_single_2L_eps001_*` — 2L doublebox
-    with SPARSE 2-mass placement (one mass per loop on corner-only
-    propagators).  Different from doublebox2m (interleaved),
-    doublebox_blockmass (block), and doublebox_diagmass (rung).
-    Does NOT trigger D12 precision sensitivity nor D13 rank-filter
-    issue.  Corner matches MMA at rel 3.51e-31 (Re).  MMA wallclock
-    222 s.
-
-- **Mass-and-topology diversity batch** (2026-05-15): three additional
-  novel oracles probing previously-uncovered axes.  All three pass at
-  default precision (no D12-style sensitivity).  Oracle total: 37 → 40.
-  - `tools/bench/pentagon_1L_3mass_eps001_*` — 1L pentagon with three
-    distinct internal masses (mAsq=1, mBsq=4, mCsq=9 on props 0, 2, 4).
-    First 3-mass 1L 5-leg oracle.  Corner matches MMA at rel 6.2e-31.
-    MMA wallclock 111 s.
-  - `tools/bench/doublebox_blockmass_2L_eps001_*` — 2L doublebox with
-    BLOCK 2-mass placement (complement to the interleaved D12 case;
-    same family skeleton, mAsq on l1's two rails + mBsq on l2's two
-    rails).  Confirms the audit's argument that D12 precision
-    sensitivity is interleaved-specific — block converges at default
-    `(working_pre, x_order, extra_x_order) = (120, 240, 280)`.
-    Corner matches MMA at rel 8.6e-31.  MMA wallclock 424 s.
-  - `tools/bench/xbox_crossmass_2L_eps001_*` — 2L non-planar xbox with
-    mass on the (l1+l2) cross-rung propagator.  First xbox-with-mass
-    oracle; exercises non-planar + mass code paths simultaneously.
-    Corner matches MMA at rel 2.4e-30.  MMA wallclock 151 s.
-- **Topology-diverse stress batch** (2026-05-15): three new oracle
-  triplets exercising axes the previous suite did not cover.  All three
-  match MMA at rel ~ 10⁻³⁰ on first run; oracle total rises 34 → 37.
-  - `tools/bench/hexagon_1L_eps001_*` — 1L 6-leg hexagon, all-massless,
-    pair-only Replacement.  **First 6-leg oracle** (previous max was
-    pentabox 2L 5-leg).  Corner `j[hexagon, 1,1,1,1,1,1]` matches MMA
-    at rel 1.65 × 10⁻³⁰ (Re).  MMA wallclock 205 s; 31 sampled values.
-  - `tools/bench/doublebox_diagmass_2L_eps001_*` — 2L doublebox 4-leg
-    with mass on the inter-loop `(l1-l2)` rung propagator.  Novel
-    mass-placement axis (existing 2L mass benches put mass within one
-    loop or block-symmetric; none on the shared rung).  Corner matches
-    MMA at rel 5.10 × 10⁻³² (Re); does NOT exhibit D12-style precision
-    sensitivity — converges at default `(working_pre, x_order,
-    extra_x_order) = (120, 240, 280)`.  MMA wallclock 174 s.
-  - `tools/bench/mercedes_3L_*` — 3L 2-leg Mercedes self-energy
-    (triangle of 3 outer rails + 3 inner spokes from a central
-    vertex).  Topologically distinct from existing 3L oracles
-    (banana_3loop, dotted_3L_banana, bn3mix are parallel-banana
-    2-vertex graphs).  Corner matches MMA at rel 4.06 × 10⁻³¹ (Re).
-    MMA wallclock 306 s.
-- **Doublebox 2L interleaved 2-mass oracle**
-  (`tools/bench/doublebox2m_eps001_*`): two-loop doublebox 4-leg with
-  cross-loop interleaved 2-mass placement (`mAsq` on `l1` prop 0 AND
-  `l2` prop 3; `mBsq` on `l1` prop 1 AND `l2` prop 5), eps = 1/1000.
-  Target is the corner `j[doublebox2m, 1,1,1,1,1,1,1,0,0]`.  Matches
-  MMA at rel ~ 3.3 × 10⁻³¹ (Re) / Im at noise floor on both sides.
-  Regression guard for D12 — see audit §D12.  C++ config requires
-  `working_pre=200, x_order=400, extra_x_order=480` (about doubled
-  vs the other doublebox benches) because the top-sector diffeq
-  matrix has a complex-conjugate pole pair near the NegIm contour.
-- **Pentabox 2L 5-leg oracle**
-  (`tools/bench/pentabox_2L_eps001_*`): two-loop pentabox with five
-  external legs, all-massless internals, eps = 1/1000.  Target is
-  the corner `j[pentabox2L, 1,1,1,1,1,1,1,1,0,0,0]`.  Matches MMA at
-  rel 9.35 × 10⁻¹² (Re) / 4.67 × 10⁻¹⁰ (Im); precision is
-  bounded by the ~120-digit working precision minus the cancellation
-  horizon inherent to the 76-master sub-system (intermediate values
-  reach 10²⁰⁰⁺).  First 2L 5-leg massless oracle.  MMA reference
-  JSON includes 172 sampled values (corner + 171 dotted masters).
-- **Pentagon 1L massive oracle**
-  (`tools/bench/pentagon_1L_W_mass_*`): one-loop pentagon with one
-  massive propagator (`l^2 - msq`, `msq = 1`), eps = 1/1000.  Target
-  is the corner `j[pentagon, 1, 1, 1, 1, 1]`.  Matches MMA at
-  rel 9.15 × 10⁻³¹ (Re) / 1.27 × 10⁻³⁰ (Im) — full
-  working-precision agreement.  First 1L 5-leg single-mass oracle;
-  extends the all-massless `pentagon_1L_eps001` along the
-  mass-configuration diversity axis.
-
-D11 fix verified by an eight-variant pattern-diverse stress sweep
-on 2026-05-14 (pentabox / doublebox / mercedes 3L / banana 4L across
-ε, dotted-master, cross-threshold, and 1L/2L/3L/4L axes); all match
-MMA at rel ~ 10⁻³⁰ except the inherently cancellation-bound
-pentabox-extreme rows.  See audit §D11.
+- **Oracle suite expanded from 42 → 228 triplets** (2026-05-13 to
+  2026-05-17). Coverage now: 1L=52, 2L=53, 3L=64, 4L=59. Sub-master
+  reuse of parent MMA caches enables cheap 4L diversity. Per-commit
+  detail is in `git log -- tools/bench/`.
+- **Deferred-bug oracle scaffold** (3 entries, NOT in
+  `run_perf_audit.sh`): `sunset_bubble_4L_1mass_l4` returns
+  sub-sector value silently; `sunset_bubble_4L_{2leg_alt,alt1}_eqmass`
+  crash with "no Vacuum entry". All three are 4L 2-leg
+  `sunset_bubble` variants and likely share a SingleMass loop-choice
+  root cause (D15, open).
 
 ### Fixed
-- **Audit divergence D14** (boundary-order chain on multi-mass 3L) —
-  closed 2026-05-16.  bench `bn3_4mass_3L_eps001` (3L 2-leg banana,
-  4 distinct internal masses, `BlackBoxDot=5`) could not complete
-  in C++: the boundary `BlackBoxReduce` for system_0/region_0 handed
-  Kira 162 J targets with numerator rank up to 56, vs MMA's 1 J
-  target at rank 0; Kira couldn't reduce the C++ input within the
-  100 GB memory cap.  Root cause was four chained MMA-faithfulness
-  gaps in `src/ode/blocks.cpp` + `src/ode/sparse.cpp`; the
-  load-bearing fix is `sparse_chop_digits` defaulting to
-  `max(chop_pre, working_pre − 40)` so the acb-arithmetic sparse
-  layer always has ≥ 40 decimal digits of chop headroom below
-  working precision (default `chop_pre = 20` left accumulated
-  `forward_sparse_gaussian` rounding noise un-chopped, re-routing
-  pivot choice and inflating the *unsolved* column set at the wrong
-  low-fid-order positions → spurious positive boundary orders →
-  over-expanded boundary integrand → 162-vs-1 J-target divergence).
-  The other three fixes are MMA-faithfulness cleanups:
-  `analyze_block` Gather predicate `subset_or_superset` → `same_set`
-  (per MMA's `samesetQ`); missing
-  `Reverse[Table[Complement[Sequence@@blocks[[i;;]]], …]]` SCC trim
-  added; `extend` forward-closure filter removed.
-  `construct_matrix` also switched to `acb_contains_zero` for the
-  cancellation discard so freshly-computed `(k)·dn − an` cancellations
-  don't carry forward as spurious entries.  Final result:
-  bn3_4mass_3L_eps001 matches MMA at ≥ 28-decimal-digit precision;
-  ctest 548/548 pass; existing oracle benches unaffected.  User can
-  override the new chop floor via `AMFLOW_SPARSE_CHOP_DIGITS` env
-  var.  Earlier "Stage 1-6" patches (commits `019ba18`, `4de9245`,
-  `625bf58`, `c522132`, `66db94c`) landed against a wrong hypothesis
-  ("11-variable polynomial ring blowup in `ibp::reduce` algebra")
-  remain in place as MMA-faithful cleanup but were not load-bearing
-  for bn3_4mass; see audit §D14 for full investigation trail.  Audit
-  table is now **86 🟢 / 0 🟡 / 14 🔴 (13 fixed + 1 D5 out of scope) /
-  17 ⚪**.
+- **D11** — pentabox 2L 5-leg Jordan eigenvector normalization
+  (`fmpq_mat_nullspace_exact` rescales basis vectors so last non-zero
+  entry is 1, matching Mathematica's convention).
+- **D13** — `build_boundary` projection failure on multi-mass
+  topologies; `to_complete_explicit` rank-filter dropped a
+  mass-bearing propagator. Numeric substitution restored.
+- **D14** — `bn3_4mass_3L_eps001` corner divergence closed via four
+  MMA-faithful fixes (`analyze_block` extend/Gather/Complement;
+  default `sparse_chop_digits = max(chop_pre, working_pre - 40)`).
 
-
-- **Audit divergence D13** — `build_boundary` projection failed when
-  `to_complete_explicit` rank-filtered linearly-dependent mass-bearing
-  propagators of the boundary sub-family.  The dropped propagator's
-  mass scale was absent from the sub-family's reduced context but
-  still present in the boundary's Laporta coefficient `lt.coeff`,
-  causing `project_mfrac_by_name` to throw `residual var 'mAsq' not
-  in dst`.  Fix in `src/pipeline/amfsystem.cpp::build_boundary`:
-  apply numeric substitution (`mfrac_substitute(lt_coef_in_fc,
-  numeric_q, sub_red_keep_names)`) before the projection, mirroring
-  MMA `ReduceBoundary`'s `/. Numeric` at `AMFlow.m:817`.  No
-  regression: ctest 547/547 pass, all 40 pre-existing oracles still
-  match.  Discovered + resolved 2026-05-15 by the new
-  `vtx2_2L_3mass` oracle.  Audit table is now
-  **86 🟢 / 0 🟡 / 13 🔴 (12 fixed + 1 D5 out of scope) / 17 ⚪**.
-- **Audit divergence D8** (`canonical_boundary_permutation` +
-  `canonical_taylor_permutation` re-route SparseGaussian's free
-  column): both functions in `src/ode/inf.cpp` previously sorted
-  block rows by `int_offsets` before calling `BuildTaylor` /
-  `ConstructMatrix` / `SparseGaussian`.  Upstream MMA's `DESolver`
-  uses NO row permutation in either `DetermineBlockBoundaryOrder`
-  (DESolver.m:705-728) or `CalcTaylor` (DESolver.m:752-790), so the
-  C++ sorts re-routed which master ended up holding the free
-  (unsolved) column after Gaussian elimination.  The two sorts
-  compensated for each other on small / symmetric blocks (all 545
-  pre-D8 gtests passed), so D8 only surfaced on
-  `banana_4L_mixed`'s 21-master block in region 3 with monotone
-  offsets `[0,0,1,2,2,3,3,3,3,4,4,4,4,4,5,5,5,5,6,6,7]`.  Both
-  functions now return identity (concatenate `analyze_block`
-  output without re-sorting).  `banana_4L_mixed` now matches MMA
-  at rel < 1e-30 on all 20 sampled values (was 2/20); all 545
-  gtests still pass.  Commit `c668f79`.
-- **Audit divergence D9** — three coupled Kira-pipeline alignment
-  fixes uncovered while debugging pentabox: (a) `src/ibp/kira_yaml.cpp`
-  now substitutes `cfg.numeric_values` into `scalarproduct_rules` and
-  propagator masses before writing `kinematics.yaml`, mirroring MMA's
-  `SPToSTU /. IBPRule` (Kira/interface.m:53); without it, Masters-mode
-  Kira sees symbolic SPs and over-enumerates masters (175 vs 172 for
-  pentabox top).  (b) `src/ibp/kira_run.cpp` stops forwarding
-  `-s<var>=<val>` for those numeric values now baked into the YAML,
-  matching `FilterRules[IBPRule, Prepend[MassScale, ep]]`
-  (Kira/interface.m:274); without it, Kira locks up waiting on a
-  symbol that no longer exists.  (c) `src/ibp/reduce.cpp` reuses the
-  *input* `preferred` / `jpreferred` file at Reduce-mode write time
-  instead of the sorted preheat output, mirroring upstream
-  `AnalyticReduction`.  Commit `c37f1a0`.
-- **Audit divergence D10** — precision-mismatch in
-  acb→fmpq rationalization: `acb_real_to_fmpq_local` (and three
-  parallel call-sites in `src/ode/path.cpp`,
-  `src/pipeline/amfsystem.cpp`, `src/numeric/matrix.cpp`) used
-  `rationalize_pre` directly without verifying it fits inside the
-  working precision.  When `rationalize_pre` (decimal digits)
-  exceeded `working_pre * log10(2) - 5`, the rationalization
-  captured binary-representation noise from the acb as a "real"
-  rational, leaking 10⁻²⁵ residuals into the diagonal of m_pure and
-  propagating into 10⁷-10²¹ errors on masters with all-zero BC.
-  Now caps `rationalize_digits` defensively.  Commit `650e369`.
-- **Audit divergence D11** — Jordan eigenvector normalization
-  mismatch: `fmpq_mat_nullspace_exact` (used internally by
-  `jordan_decomposition_exact`'s eigenvector search) returns FLINT's
-  integer-cleared null-space vectors — e.g. an eigenvector that
-  Mathematica would emit as `(6993/998, 1)` was returned as
-  `(6993, 998)`, a 998× scaling.  Without rescaling, downstream
-  shearing / leading-Jordan T blocks accumulated huge integer scale
-  factors that cascaded through the off-diagonal Sylvester step in
-  `to_fuchsian_global`, producing T entries up to 10³⁰⁰⁺ in the
-  pentabox 76-master sub-system and overwhelming PSMapRuleS at any
-  practical working precision (the corner value came out as
-  `7.84 × 10¹² - 3.04 × 10¹³ i` vs MMA reference
-  `2.24 - 150.51 i` on the 6-prop subsection that triggered
-  isolation).  `fmpq_mat_nullspace_exact` now rescales each
-  null-space basis vector so its last non-zero entry is 1, matching
-  Mathematica's Eigenvectors / JordanDecomposition convention.
-  Regression test
-  `JordanTest.JordanEigenvectorsNormalizedToLastEntryOne`.
-  Commit `f4f2aee`.
-- **Audit divergence D12** — interleaved 2-mass doublebox traced
-  2026-05-15 to insufficient Taylor expansion order, not a code
-  bug.  The cross-loop mass placement gives the top-sector diffeq
-  matrix a complex-conjugate pole pair (`η² + η + 12 = 0`,
-  `|η| ≈ 3.46`) which tightens the Frobenius series convergence
-  radius for the 4 top-sector masters.  At the doublebox defaults
-  `working_pre=160, x_order=200, extra_x_order=240` C++ produced a
-  sign-flipped Re and O(0.1) spurious Im; at `200, 400, 480` C++
-  matches MMA to all printed digits.  Commit `3da778a` (audit
-  rewrite + memo); regression bench
-  `tools/bench/doublebox2m_eps001_*` committed in `11ff61a`.
-  Audit table is now
-  **86 🟢 / 0 🟡 / 12 🔴 (11 fixed + 1 D5 out of scope) / 17 ⚪**.
+### Diagnosed (no code change)
+- **D12** — interleaved 2-mass doublebox needs `x_order ≥ 400,
+  extra_x_order ≥ 480` due to a complex-conjugate pole pair
+  (`η² + η + 12 = 0`) tightening the Frobenius radius for 4
+  top-sector masters; not a code bug.
 
 ### Changed
-- **D5 ComplexMode reclassified from "deferred indefinitely" to "out
-  of scope"** (maintainer decision 2026-05-13).  Complex-valued numeric
-  kinematics will not be implemented; the entry-point rejection
-  remains, but ROADMAP no longer carries a "Phase 1C" placeholder for
-  future work on this.  See [`docs/AUDIT_MMA_PARITY.md`](docs/AUDIT_MMA_PARITY.md) §D5.
+- **D5 ComplexMode** reclassified from "deferred indefinitely" to
+  **"out of scope"** (maintainer decision 2026-05-13); ROADMAP no
+  longer reserves a "Phase 1C" placeholder. Entry-point rejection
+  unchanged.
 
 ### Removed
 - ROADMAP "Phase 1C" section (D5 future-work placeholder).
-- Stale "deferred" / D3-aborts / Trivial-not-ported limitation notes
-  in `docs/FAQ.md` and `docs/USER_GUIDE.md` — D3 was fixed in v1.1.0
-  and Trivial was ported in Phase 1A; only the D5 out-of-scope note
-  remains.
-- Root-level `AUDIT.md` v1.0 snapshot (now a thin pointer to the live
-  `docs/AUDIT_MMA_PARITY.md`).
+- Stale `docs/FAQ.md` and `docs/USER_GUIDE.md` "deferred" /
+  D3-aborts / Trivial-not-ported notes (D3 fixed in v1.1.0; Trivial
+  ported in Phase 1A).
+- Root-level `AUDIT.md` stub pointer (entry-points already link
+  directly to `docs/AUDIT_MMA_PARITY.md`).
+
 
 ## [1.1.0] — 2026-05-12
 
@@ -395,11 +205,8 @@ oracles.
   upstream filters such values through `IBPRule` / `CompensateRule`
   but the C++ port treats `numeric_values` as a flat real-valued
   map.  All 12 oracle benchmarks use purely-real numerics, so this
-  surface is untested.  **Investigated post-v1.0 (2026-05-09) and
-  deferred indefinitely** — see [`docs/AUDIT_MMA_PARITY.md`](docs/AUDIT_MMA_PARITY.md)
-  D5 and [`docs/ROADMAP.md`](docs/ROADMAP.md) §"Phase 1C" for the
-  architectural trade-off (Q[i] algebra extension vs. parallel
-  acb-rational pipeline).
+  surface is untested.  **Reclassified out of scope** (see Unreleased
+  §Changed) — see [`docs/AUDIT_MMA_PARITY.md`](docs/AUDIT_MMA_PARITY.md) §D5.
 ## [1.0.0] — 2026-05-08
 
 First public release.  C++17 reimplementation of the
@@ -438,7 +245,7 @@ numerical-parity test/benchmark harness.
 
 ### Out of scope
 - `SolveIntegralsGaugeLink`, HQET / SCET / Wilson-line workflows — see
-  `AUDIT.md`.
+  [`docs/AUDIT_MMA_PARITY.md`](docs/AUDIT_MMA_PARITY.md).
 
 [1.1.0]: https://github.com/chang18/amflow-cpp/releases/tag/v1.1
 [1.0.0]: https://github.com/chang18/amflow-cpp/releases/tag/v1.0

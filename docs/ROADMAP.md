@@ -12,12 +12,15 @@ parity audit.
 ## Active practice — diversity-driven oracle expansion
 
 The audit is closed: **86 🟢 / 0 🟡 / 13 🔴 fixed / 1 🔴 out of scope
-(D5, see below) / 17 ⚪ intentional**.  Going forward the project's
-quality loop is **oracle diversification**: build new benchmarks
-along axes the existing suite under-covers, and fix anything that
-diverges from MMA inline.
+(D5, see below) / 17 ⚪ intentional**.  3 deferred-bug oracles (4L
+2-leg `sunset_bubble`) are tracked as D15 (open) and excluded from
+`run_perf_audit.sh` until SingleMass loop-choice is fixed.  Going
+forward the project's quality loop is **oracle diversification**:
+build new benchmarks along axes the existing suite under-covers,
+and fix anything that diverges from MMA inline.
 
-The 43 committed oracle triplets currently cover:
+The 228 committed oracle triplets (225 validated + 3 deferred-bug)
+currently cover:
 
 | Diversity axis | Current coverage |
 |---|---|

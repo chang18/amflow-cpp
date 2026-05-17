@@ -23,8 +23,8 @@ load-bearing rules.
 - **This codebase was developed primarily by AI coding agents** (this
   document is the onboarding contract).  The maintainer
   (<3250800970@qq.com>) directs the work but does not line-review;
-  the parity contract — the oracle benchmarks under `tools/bench/`
-  and the 547-case GoogleTest suite — is the gate every change must
+  the parity contract — the 228 oracle benchmarks under `tools/bench/`
+  and the 548-case GoogleTest suite — is the gate every change must
   pass.
 
 ## Where to start reading

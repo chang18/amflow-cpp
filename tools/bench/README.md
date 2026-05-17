@@ -72,41 +72,19 @@ AMFLOW_DEBUG_SCHEME=1 ./build/src/cli/amflow_cli \
 After a run, compare the output with `compare_sampled.py` before
 updating benchmark status fields.
 
-## Sampled Benchmark Inventory (eps = 1/1000)
+## Sampled Benchmark Inventory
 
-The Mathematica reference values in each `*_eps001_mma_reference.json`
-file are committed so future runs can compare without re-running the
-Mathematica reference path.
+The live inventory lives in the files themselves: each bench is a
+triplet `<name>_{cpp.json, mma.wl, mma_reference.json}` (sub-master
+oracles reuse parent caches and have only `cpp.json + mma_reference.json`).
+Use `ls tools/bench/*_mma_reference.json` for the full list (228
+entries as of 2026-05-17).
 
-| Bench | Topology | BlackBoxRank/Dot | MMA wallclock | C++ wallclock | Status (vs MMA) |
-|---|---|---|---|---|---|
-| tt_2loop_box | 2L planar double-box, massive (s, t, msq) | 3/0 | 596 s | 152 s (serial) | rel ≲ 1e-30 |
-| doublebox_sv | 2L Smirnov-Veretin double-box | 0/1 | (cached) | 114 s (serial) | rel ≲ 1e-30 |
-| tt_higher_rank | tt with rank-5/6 ISP numerators | 6/0 | 877 s | 364 s (parallel) | rel ≲ 1e-30 |
-| xbox_2loop | 2L non-planar crossed-box, massless | 0/1 | 311 s | 146 s (parallel) | rel ≲ 1e-30 |
-| tt_cutkosky_probe | tt with EndingScheme = {Tradition, Cutkosky, SingleMass} | 0/1 | 414 s | 143 s (parallel) | rel ≲ 1e-30 |
-| cutbubble_1L | 1L massless cut bubble (cut={1,1}); Cutkosky path actually fires (eps = 1/100) | 0/1 | 22 s | < 1 s | rel ≲ 1e-29 |
-| cutsunrise_2L | 2L massless cut sunrise (cut={1,1,1,0,0}); Cutkosky fires at L=2 (eps = 1/100) | 0/1 | 55 s | < 1 s | rel ≲ 2e-31 |
-| cutbanana_3L | 3L massless cut banana (cut={1,1,1,1,0,0,0,0,0}); Cutkosky fires at L=3 (eps = 1/100) | 0/5 | 93 s | ~90 s | rel ≲ 1e-29 |
-| vtx2_2loop_vertex | 2L on-shell vertex | 0/1 | (cached) | (cached) | rel ≲ 1e-30 |
-| banana_3loop | 3L equal-mass banana, asymmetric ISP basis (psq, msq) | 0/5 | 117 s | 72 s (serial) | rel ≲ 1e-30 |
-| doublebox2m | 2L doublebox 4-leg with interleaved cross-loop 2-mass scheme (mA on l1/l2, mB on l1/l2) | 0/1 | — | — | rel ≲ 3e-31 |
-| hexagon_1L | 1L hexagon 6-leg all-massless (first 6-leg oracle; pair-only Replacement) | 0/3 | 205 s | — | rel ≲ 2e-30 |
-| doublebox_diagmass_2L | 2L doublebox 4-leg with mass on the inter-loop (l1-l2) rung propagator | 0/1 | 174 s | — | rel ≲ 5e-32 |
-| mercedes_3L | 3L 2-leg Mercedes self-energy (3 outer rails + 3 inner spokes; distinct from banana topology) | 0/5 | 306 s | — | rel ≲ 5e-31 |
-| pentagon_1L_3mass | 1L pentagon with 3 distinct internal masses on non-cyclically-adjacent propagators (mAsq=1, mBsq=4, mCsq=9) | 0/3 | 111 s | — | rel ≲ 7e-31 |
-| doublebox_blockmass_2L | 2L doublebox with BLOCK 2-mass (mA on l1's 2 rails, mB on l2's 2 rails) — complement to interleaved D12 case | 0/1 | 424 s | — | rel ≲ 9e-31 |
-| xbox_crossmass_2L | 2L non-planar xbox with mass on the (l1+l2) cross-rung propagator — first xbox-with-mass oracle | 0/1 | 151 s | — | rel ≲ 3e-30 |
-| vtx2_2L_3mass | 2L 3-leg vertex with 3 distinct internal masses (mAsq, mBsq, mCsq) — surfaced + fixed audit D13 | 2/0 | 187 s | — | rel ≲ 1e-30 |
-| doublebox_2mass_single_2L | 2L doublebox with sparse 2-mass placement (one mass per loop on corner-only props; not block/interleaved/diag) | 0/1 | 222 s | — | rel ≲ 4e-31 |
-
-C++ wallclock notes:
-
-- "(serial)" entries are from previous runs with a single benchmark
-  occupying fer64/kira; "(parallel)" entries were measured under load
-  with the other two `eps = 1/1000` benchmarks running concurrently
-  (CPU% ~30-200% per process), so they are upper bounds — the serial
-  wallclocks would be lower.
+Wallclock numbers are intentionally not maintained here; see
+[`docs/PERFORMANCE.md`](../../docs/PERFORMANCE.md).  Three 4L 2-leg
+`sunset_bubble` deferred-bug entries (`_1mass_l4`, `_2leg_alt_eqmass`,
+`_alt1_eqmass`) are present but NOT in `run_perf_audit.sh`; see
+[`docs/AUDIT_MMA_PARITY.md`](../../docs/AUDIT_MMA_PARITY.md) §D15.
 
 ## Notes
 

@@ -15,17 +15,14 @@ covered by the oracle benchmarks under
 | 🔴 actual divergence          | 14 | **13 fully fixed; 1 out of scope** (D5 ComplexMode).  D12 (doublebox 2L interleaved 2-mass) was a precision-tuning issue, not a code bug — see §D12.  D13 (`build_boundary` rank-filter + missing `/. Numeric`) added 2026-05-15.  D14 (boundary-order chain on multi-mass 3L: `analyze_block` + sparse `chop_pre` headroom) closed 2026-05-16. |
 | ⚪ intentionally not ported   | 17 | — |
 
-Net assessment: **no committed-oracle path is wrong** (all 42 oracle
-benches under `tools/bench/` match MMA at rel ~10⁻³⁰ except where the
-integral's intrinsic cancellation horizon limits precision).  Thirteen
-of the fourteen 🔴 items have been fully corrected; D5 (complex-valued
-numeric kinematics) is the out-of-scope row.  Two divergences are
-recent: D13 (`build_boundary` missing MMA `/. Numeric`) was discovered
-+ fixed 2026-05-15.  D14 (boundary-order chain divergence on
-`bn3_4mass_3L_eps001`) was diagnosed and closed 2026-05-16 — see §D14
-for the investigation trail and the four MMA-faithfulness fixes
-(`analyze_block` extend/Gather/Complement; sparse `chop_pre`
-headroom).
+Net assessment: **225 of 228 oracle benches match MMA at rel ~10⁻³⁰**
+(except where the integral's intrinsic cancellation horizon limits
+precision).  3 deferred-bug oracles (4L 2-leg `sunset_bubble`
+topologies — `_1mass_l4`, `_2leg_alt_eqmass`, `_alt1_eqmass`) flag
+known C++ failures in `SingleMass`/boundary expansion (D15, open;
+not in `run_perf_audit.sh`).  Thirteen of the fourteen 🔴 items have
+been fully corrected; D5 (complex-valued numeric kinematics) is the
+out-of-scope row.
 
 ---
 
@@ -614,41 +611,34 @@ preferred file verbatim:
   chain.  Stage 1-6 patches remain landed as MMA-faithful cleanup
   but are not load-bearing for bn3_4mass.
 
+### D15. `SingleMass` loop-choice for 4L 2-leg `sunset_bubble` — **OPEN (2026-05-17)**
+
+The 4L 2-leg `sunset_bubble` topology variants `sunset_bubble_4L_1mass_l4`,
+`sunset_bubble_4L_2leg_alt_eqmass`, and `sunset_bubble_4L_alt1_eqmass`
+trigger distinct C++ failures while the sibling `_1mass_l1` and
+`_alt2_eqmass` pass.  The l4 variant returns the value of sub-sector
+`j[sb41ml4, 1,0,1,1,1,1, ...]` (Re ≈ 28071) for the corner instead
+of MMA's Re ≈ -2.09e7; the 2leg_alt and alt1 variants crash with
+`AMFSystem::solve: ending system master ...sm0|1|1|1|0|0|0|0|0|0
+has no Vacuum entry, no explicit_boundary value, and no usable
+reduction rule` at a deeply nested sub-system.
+
+Root-cause analysis points at `src/pipeline/amfsystem.cpp:2492`
+(`find_loop_in_prop`) and `src/pipeline/factorize.cpp` — the
+SingleMass step promotes a loop to leg whose removal leaves the
+region-1 boundary sub-family's main propagators leg-free (leg only
+in ISPs), making the integrand effectively scaleless.  The 3
+deferred-bug oracles are committed under `tools/bench/` but kept
+out of `run_perf_audit.sh` until fixed.  See `project_sb41ml4_singlemass_bug.md`
+(GPD memory) for the per-yaml diagnostic trail.
+
 ## 3. 🟡 → 🟢 Closure log (originally-unverified branches)
 
-These branches were flagged 🟡 in the v1.0 audit ("looks correct to
-inspection but no committed benchmark exercises").  **All 21 were
-promoted to 🟢** via a mix of new oracles, new unit tests,
-theoretical-equivalence paragraphs, and conservative-fallback
-documentation.  The table is preserved as an audit trail so future
-contributors can trace how each branch was verified.
-
-| Branch | Site | Why it's unverified |
-|---|---|---|
-| ~~`analyze_block` uses `AnalyzeBlock0` topology~~ → 🟢 | `src/ode/blocks.cpp` | **Verified.**  Upstream default is `AnalyzeBlock1`; the two extend semantics agree on nested/equal blocks (the IBP common case) and produce different (but both valid) partitions on overlapping non-nested closures.  `test_ode_blocks.cpp` `AnalyzeBlock.NonNestedOverlapping_*` cases (Y-shape, mutual-plus-dependents, diamond closure) hand-trace the AnalyzeBlock0 partition and verify the basis-invariant correctness (cover + topological ordering: each row is in exactly one block, all of a block's external dependencies are in earlier blocks).  The AnalyzeBlock0 partition is a strict refinement of AnalyzeBlock1 — finer blocks, same final block-triangular DE structure.  End-to-end "no impact on integral" independently locked by the committed oracle benches matching MMA at rel ~10⁻³⁰. |
-| ~~`Calcx00` boundary linear-system selection~~ → 🟢 | `src/ode/zero.cpp:1314-1703` | **Verified on full-rank.**  C++ heuristic match-row selection + Dixon over Q[i]; upstream uses one symbolic `Solve[…, allvar]`.  Both produce the unique solution to a full-rank linear system, so they are mathematically equivalent on the full-rank path.  6 dedicated unit tests in `test_ode_zero.cpp` (`Calcx00_ResonantMixedBlock_*`, `Calcx00_LargerResonantBlock_*`, `Calcx00_LogRowAndSubIntegralInput_*`, `Calcx00_SecondOrderLogRow_*`, `Calcx00_JordanLogBlock_*`) lock C++ output against hand-derived exact solutions across resonant, log-row, Jordan-block, and sub-integral-coupling shapes.  All committed oracle benches further confirm rel ~10⁻³⁰ end-to-end agreement.  The rank-deficient corner case (where the linear system is genuinely rank < n_var, not just resonant) is NOT covered by any current test or bench — it triggers a separate fallback path (row immediately below) and is an oracle expansion candidate. |
-| ~~Acb-inverse failure fallback in `Calcx00`~~ → 🟢 | `src/ode/zero.cpp:1199-1206` | **Documented as conservative numerical safety net.**  The fallback fires when `find_resonance_positions` returns empty (no diagonal entry of `a00` matches `mu + n` under the `chop_pre` tolerance) BUT `invert_shifted_a00` also fails (the full shifted matrix `(mu + n) I − a00` is numerically singular).  Algorithmically, after `normalize_mat`, `a00` is in Jordan form — eigenvalues live on the diagonal — so `find_resonance_positions`'s diagonal scan and `invert_shifted_a00`'s full-matrix rank should always agree.  The fallback exists purely for numerical edge cases where chop-tolerance and full-matrix conditioning disagree (e.g. a near-integer eigenvalue at the chop boundary).  The "all positions resonate" treatment is **conservative-but-correct**: it adds log-term coefficients at every position, but the downstream pair-constraint linear system resolves any spurious log terms to zero — the final asymptotic expansion is identical to what a more-precise resonance detection would produce.  No production bench (across all committed oracles) has been observed to trip the fallback; constructing a synthetic toy DE to deliberately trigger it requires either operating Calcx00 with an unrealistically tight `chop_pre` or bypassing `normalize_mat` — neither reflects production usage.  Documented as deferred-with-equivalence-argument; if a real workload ever exercises the fallback and produces an off-by-rel-tolerance result, this becomes 🔴 and the fallback semantics get revisited. |
-| ~~`evaluate_taylor` strips arb radii~~ → 🟢 | `src/ode/regular.cpp` | **Documented + locked.**  Deliberate design choice: every intermediate Horner accumulator and every input coefficient passes through `midpoint_only`, so output radii are exactly zero.  Source comment: "Midpoint-only Horner: mirrors Mathematica's point arithmetic and avoids catastrophic interval blow-up on cancellation-heavy regular contours."  The trade-off — abandoning rigorous error bars on the regular-running stage — is acceptable because the regular phase, by construction, traverses η-points where the integrand is analytic; rigorous interval arithmetic accumulates spurious radii from cancellation that don't reflect true uncertainty.  Locked by `test_ode_regular.cpp` `EvaluateTaylor_StripsArbRadii_LocksMidpointOnlyContract` — feeds a coefficient with a non-zero `1e-3` radius and asserts the output radius is zero. |
-| ~~Jordan block ordering~~ → 🟢 | `src/ode/jordan.cpp` | **Verified, equivalence locked.**  Groups by eigenvalue then descending depth; MMA sorts globally by descending size.  Same final algebra, different column permutation when ≥2 distinct eigenvalues.  Multi-distinct-eigenvalue decomposition correctness (`S J S^{-1} = A`, eigenvalue multiset, block-size multiset) is now locked by `test_ode_jordan.cpp` `*Distinct*` tests (2-, 3-distinct-eigenvalue cases including non-trivial similarity transform and chains on each eigenvalue).  End-to-end "permutation has no effect on final integral" is independently asserted by the committed oracle benchmarks matching MMA at rel ~10⁻³⁰. |
-| ~~`SolveIntegrals` single-eps fast path~~ → 🟢 | `src/pipeline/solve_integrals.cpp:883-944` | **Implemented** (commit `7d4b1b0`).  Mirrors `AMFlow.m:1364-1374`: when the user pins `eps` via `numeric_values["eps"]`, the routine skips the Laurent fit entirely and returns one coefficient at order 0 representing the integral evaluated at that eps.  Implementation includes the `(4 - D0)/2` shift for non-default D0.  No oracle bench currently pins `eps` (all use Laurent fits), so the fast-path branch is verified by inspection rather than by a parity bench — candidate for a dedicated single-eps oracle. |
-| ~~Per-system `AMFSystemDirection`~~ → 🟢 | `src/pipeline/amfsystem.cpp:943-991` (was `src/ode/path.cpp:431`) | **Implemented** (commit `7d4b1b0`).  Mirrors `AMFlow.m:981-991`: `AMFSystem::setup` computes the prescription consensus of the η-touching loops, scopes a `numeric::run_direction` override for the duration of the system's ODE solve, and aborts on mixed prescriptions.  Implementation correctness is implicitly verified by every AMFSystem instantiation in the committed oracle benches matching MMA at rel ~10⁻³⁰; no dedicated unit test for the per-system override branch (a candidate would explicitly construct a multi-system case where global and per-system prescriptions differ). |
-| ~~`SingleMassQ` substitutes `Numeric`~~ → 🟢 | `src/pipeline/amfsystem.cpp:822` (`single_mass_q_numeric`) | **Locked as deliberate C++ enhancement.**  The qft-layer `qft::single_mass_q` remains upstream-literal (no substitution), and the pipeline-layer wrapper `pipeline::single_mass_q_numeric` first applies `numeric_values` to the mass list before the literal test.  This means a family like `{l^2 - msq}` with `Numeric = {msq -> 1}` is detected as single-mass by C++ (substituted shape `[1]`) but rejected by upstream's literal `SingleMassQ` (mass list still contains the symbol `msq`).  The substituted shape is mathematically a valid single-mass family so SingleMass scheme is a correct flow path; the final integral is identical to upstream's, the dispatcher path differs.  No oracle bench triggers the divergence (all use literal `0`/`1` mass lists post-analysis).  Locked by `test_amflow_amfsystem.cpp` `SingleMassEnhancement_*` (pipeline + numeric, 2 cases) and `test_qft_amfmode.cpp` `SingleMassQ_*` (qft-layer literal, 2 cases). |
-| ~~`factorize_family` mass=−1 detection substitutes `Numeric`~~ → 🟢 | `src/pipeline/amfsystem.cpp:2405` (`find_mass_minus_one`) | **Same enhancement pattern as row 193, end-to-end locked.**  Upstream's `Position[ToSquareAll[prop][[2]], -1]` tests literally; C++ `find_mass_minus_one` applies `numeric_values` first, so a symbolic-mass family resolves to the expected literal `-1` after the SingleMass loop-promotion's sign flip.  End-to-end locked by `test_amflow_amfsystem.cpp` `FactorizeFamilyMassMinusOne_NumericResolvesSymbolic`: a `{l^2 - msq}` tadpole with `Numeric = {msq -> 1}` flows through `pipeline::amf_system_setup_master` and produces a strictly-smaller ending sub-system. |
-| ~~Cutkosky physical-mass safety check~~ → 🟢 | `src/pipeline/amfsystem.cpp:2911-2953` (was `2669-2727`) | **Implemented** (commit `7d4b1b0`).  Mirrors `AMFlow.m:1050`: `amf_system_setup_master` aborts when a phase-volume component's squared mass is negative after `Numeric` substitution.  The guard also rejects symbolic masses (asks the user to supply `Numeric` for every kinematic invariant) and zero denominators.  Locked by `test_amflow_amfsystem.cpp` `CutkoskySetupMaster_NegativePhaseMassAbortsWithUpstreamMessage` — constructs a 1-loop cutbubble with `Numeric = {msq -> -1}` and asserts the abort fires with the expected upstream-citation message. |
-| ~~Auto-applied `Vacuum[L,n]` table~~ → 🟢 | `src/pipeline/amfsystem.cpp:639-686` (`try_builtin_ending_value`) + `src/qft/vacuum.cpp` (closed-form table) | **C++ enhancement, fully locked.**  Upstream's `AMFSystemSetupMaster` aborts at the ending step unless the user supplies a `Solution` for every ending master.  C++ instead consults a built-in closed-form table for the 5 canonical vacuum shapes — `(L, n)` ∈ {(1,1), (2,3), (3,4), (3,5), (4,5)} — derived from the standard `Γ(-1+ε)^L * Γ(...)` products.  The table covers exactly the shapes that arise at the SingleMass ending of every 1-, 2-, 3-, 4-loop family in the committed oracle benches.  Each (L, n) entry has a dedicated numeric reference test in `test_qft_vacuum.cpp` (`Vacuum11_AtEps0p1`, `Vacuum23_AtEps0p1`, `Vacuum34_AtEps0p1`, `Vacuum35_AtEps0p1`, `Vacuum45_AtEps0p1`) comparing the closed-form output against the value computed independently at eps=1/10 (verified entry-by-entry against MMA at the time of implementation).  Coverage of the `vacuum_known` predicate locked by `VacuumKnown_Coverage`; out-of-table queries are explicitly rejected (`Vacuum_UnknownThrows`). |
-| ~~Ending-master Kira reduction loop~~ → 🟢 | `src/pipeline/amfsystem.cpp:718-792` (was `710-785`) (`solve_ending_master_value`) | **C++-only path locked end-to-end.**  Upstream's `AMFSystemSetupMaster` aborts at the ending step unless the user supplies a `Solution` for every master.  C++ instead lowers an arbitrary ending master through repeated `ibp::reduce` calls until every leaf hits the builtin Vacuum[L,n] table or an explicit_boundary.  Locked by `test_amflow_amfsystem_mma_ref.cpp` `EndingTadpole_J2_RecursiveKiraLoweringMatchesReference`: provides J[tad, 2] as a preferred master with NO explicit_boundary, forcing the solver to invoke Kira on J[2] → receive IBP identity `J[2] = (ε-1)/m² · J[1]` → recurse on J[1] → Vacuum table hit → multiply.  Output matches MMA Laurent reference at two distinct eps points to 1e-6 (Kira-gated test, ~4.5s when active). |
-| ~~`zero_sector_q` substitutes generic primes~~ → 🟢 | `src/qft/topology.cpp:42-48` (`numeric_substitute`, `kInvariantPrimes`) | **Documented theoretical equivalence + locked.**  Upstream `ZeroSectorQ` substitutes the user-supplied `Numeric` into U, F, mass before forming the scaleless-criterion polynomial; C++ substitutes a fixed list of small primes `{3, 5, 7, 11, ...}`.  Both are *generic-point evaluations*: a multivariate polynomial vanishes identically iff it vanishes at any single point that is generic (not on any low-degree algebraic relation between the substituted values).  Distinct primes are generic by construction; user-supplied `Numeric` is generic by AMFlow's setup convention.  Locked by 5 existing `test_qft_topology.cpp` `ZeroSectorQ_*` tests covering 1-loop massless tadpole (true), 1-loop massive tadpole (false), 1-loop bubble (false), 2-loop massless sunset subsector (true), 2-loop sunrise (false); production correctness implicit in the committed oracle benches. |
-| ~~`region_power` skips `/.Numeric`~~ → 🟢 | `src/qft/findregion.cpp:463-529` | **Documented + locked.**  `region_power` constructs the per-integral exponent as `val = sum_scale * (2 - eps) - sum_p` where `sum_scale` and `sum_p` are integer accumulators.  The output polynomial contains only `eps` and integer constants — no kinematic invariants ever enter the expression by construction.  Upstream's `/. Numeric` would therefore be a no-op (nothing to substitute).  Locked by `test_qft_region.cpp` `RegionPower_OutputIsEpsOnlyPlusIntegers_AuditRow200Equivalence` — uses a multi-invariant box family and asserts every term in the numerator and denominator has zero exponent on every non-eps variable. |
-| ~~`factorize_family` no-redef fallback~~ → 🟢 | `src/pipeline/factorize.cpp:268-302` | **Documented as defensive fallback.**  Fires only when the loop-redefinition matrix `M` has fewer pivots than `n_tbl` after RREF — i.e. the heuristic loop selection from U-poly's first monomial doesn't span a complete loop basis.  No production input from the committed oracle benches reaches this branch (true dead code on tested inputs), but the fallback is mathematically safe: it leaves the family unchanged (uses original loops and original propagators), which is how downstream FactorizeFamily consumers would handle a single-component family.  Source comment at the fallback site documents the trigger condition.  If a future user case exercises it, the trivial-no-redef behavior is the safe choice (downstream code path is shared with the well-conditioned single-component case). |
-| ~~`LIBPDeriv` multi-invariant case~~ → 🟢 | `src/ibp/libp_deriv.cpp` | **Verified, scope clarified.**  Multi-invariant family (free-symbol invariants like `m1sq`, `m2sq` in distinct propagators, plus a Replacement-defined `s`) tested via `test_ibp_libp_deriv.cpp` `*TwoMassBubble*` cases.  Replacement-defined invariants (e.g. `s` from `p^2 -> s`) deliberately return all-zero — production AMFlow flow only differentiates w.r.t. `eta` (which lives directly in the propagator polynomial), so upstream's momentum-derivative chain-rule path (`LIBPDerivivative`, `Kira/interface.m`) is intentionally not ported.  See `include/amflow/ibp/libp_deriv.hpp` "Scope" block for the contract. |
-| ~~`MasterRank`/`MasterDot` filter~~ → 🟢 | `src/ibp/reduce.cpp` | **Documented as intentionally not exposed.**  Upstream's `MasterRank` / `MasterDot` (`Kira/interface.m:425-426,453`) is a manual post-Kira filter for pseudo-master removal — upstream's own CHANGELOG describes it as "only use if you believe that some pseudo master integrals have appeared in the list".  C++ `ibp::ReduceOptions` does not expose these knobs; the effective behavior pins both to the upstream default `Infinity` (no filter), which is exactly the regime exercised by all committed oracle benches at rel ~10⁻³⁰.  If a real pseudo-master case ever surfaces, the filter is a one-line `select` post `kira_read_masters` plus a JSON knob — added when needed, not preemptively (YAGNI).  Header comment `include/amflow/ibp/reduce.hpp` documents the contract. |
-| ~~`kira_target.m` parser strictness~~ → 🟢 | `src/ibp/kira_run.cpp` (`kira_read_target_table`) + `src/ibp/kira_parse.cpp` | **Locked positive + negative + edge cases.**  Custom tokenizer parses the kira2math-emitted reduction table.  Production Kira output never produces malformed rules, but the parser must still reject malformed input cleanly.  Locked by 2 existing positive-acceptance tests (`ReadTargetTable_Synthetic`, `ReadTargetTable_HandlesMultipleRules`) plus 5 new tests for the canonical malformed/edge shapes: `_MissingFileReturnsEmpty` (no kira_target.m → empty rules, not error — mirrors masters_mma behavior), `_MalformedLHSThrows` (garbage LHS), `_RHSTermWithoutJIntegralThrows` (bare coefficient), `_NoOuterBraceReturnsEmpty` (no `{...}` block → empty, downstream master-empty check fires), `_RHSZeroFiltered` (literal `0` RHS yields empty-rhs rule). |
-| ~~Coefficient parser fragility~~ → 🟢 | `src/ibp/kira_parse.cpp` | **Grammar locked positive + negative.**  `kira_parse_expression` supports a strict subset of Mathematica syntax: integer literals, registered identifiers, unary `-`, binary `+ - * /`, and `^` followed by an integer literal.  Kira's normal coefficient output never trips an unsupported form, so the production code path is well-bounded.  Locked by 7 existing `ParseExpression_*` positive-acceptance tests + 4 new negative-acceptance tests (`ParseExpression_DecimalLiteralThrows`, `_NonIntegerExponentThrows`, `_GarbageCharacterThrows`, `_UnclosedParenThrows`) which verify unsupported lexical forms (decimals, fractional exponents, parenthesised exponents, garbage characters, unclosed parens) raise rather than silently producing a partial parse. |
-| ~~Diffeq nested reduce raises rank/dot via second `apply_jdot_jrank_floor`~~ → 🟢 | `src/ibp/reduce.cpp:114` (`apply_jdot_jrank_floor`), call sites at lines 177 (inside `reduce()`) and 273 (inside `diffeq()`) | **Documented as monotonic-conservative.**  `diffeq()` first floors over `jpreferred` with `dot_plus_one=true` (mirrors upstream's `Max[$BlackBoxDot, JDot/@jpreferred + 1]`), then invokes `reduce()` which floors *again* over `{all_ints, jpreferred}` with `dot_plus_one=false`.  The inner floor is applied on top of the already-floored options — so the effective `(rank, dot)` used at the inner Kira call is `>= (rank, dot)` upstream would compute for the analogous step.  This is mathematically safe because the IBP system at `(R, D)` is a subset of the system at any `(R', D') >= (R, D)`: solving the larger system produces a superset of the reduction rules, and the rules for any specific target are unchanged.  Net effect: C++ may compute slightly more IBP equations than strictly necessary, but the final reduction for any target matches upstream's.  Production correctness is implicit in all committed oracle benches matching MMA at rel ~10⁻³⁰. |
-| ~~`r = nonzero(top) + IBPDot` arithmetic match~~ → 🟢 | `src/ibp/kira_yaml.cpp` | **Verified + tightened.**  C++ originally counted only `1` entries (`std::count(..., 1)`), which agreed with upstream's `Length[TopSector] - Count[TopSector, 0]` only because `qft::get_top_sector` always emits 0/1.  Defensive fix at `src/ibp/kira_yaml.cpp:221` switches to `count_if(... != 0)` to match the upstream formula literally and stay parity-correct under any future relaxation of `get_top_sector`'s 0/1 guarantee.  Unit tests `test_ibp_kira.cpp` `KiraTest.WriteJobs_R_*` cover zero-/non-trivial-IBPDot, mixed-presence top_pattern, and a non-binary entry. |
-
----
-
+21 branches flagged 🟡 in the v1.0 audit were promoted to 🟢 via new
+oracles, unit tests, theoretical-equivalence arguments, or
+conservative-fallback documentation.  Per-branch trail in commits
+`f4f2aee..7d4b1b0`; see git history if a specific row needs to be
+re-investigated.
 ## 4. ⚪ Not ported (intentional)
 
 - `SolveIntegralsGaugeLinkSingle` / `SolveIntegralsGaugeLink` (gauge-link / HQET / SCET / Wilson lines).
@@ -665,25 +655,14 @@ contributors can trace how each branch was verified.
 ## 5. Upstream drift since v1.0 port
 
 The upstream master branch has progressed since the C++ port was
-performed.  Diffs against our reference snapshot:
+performed.  Diffs against our reference snapshot (commit `efda1db`):
 
-- ~~**New `Trivial` ending scheme**~~ — **PORTED**:
-  `EndingScheme::Trivial` is now an explicit enum value with
-  `ending_q(Trivial) === false` (mirroring upstream's
-  `AMFSystemEndingQ[..., "Trivial"] := False`); the dispatcher
-  auto-appends Trivial to the user's `ending_schemes` list
-  (mirror of `AMFlow.m:1034`) so a fallback always exists.  Selecting
-  Trivial gives the same passthrough setup as the previous "all
-  schemes ending" shortcut (etac all-zero).
 - **New `UseCache` and `SkipReduction` options** (`AMFlow.m:259`):
   caching/skip toggles for AMFSystem persistence.  Not ported.  Not
   blocking.
-- **Source-comment line-number drift**: ~30 lines off in places (the
-  upstream files have grown ~3 % since the port was performed).
-  Citations like `// Mirrors AMFlow.m:1342/1351` now nominally point
-  to `:1368/1377`.  All 39 in-source citations were collected; none
-  affects correctness.  Recommend pinning citations to a specific
-  upstream commit hash in a future cleanup pass.
+- **Source-comment line-number drift**: ~30 lines off in places (~3 %
+  upstream growth since the port).  Recommend pinning citations to
+  a specific upstream commit hash in a future cleanup pass.
 
 These upstream-side changes are all **additions**; no upstream
 behaviour we already ported has changed.
