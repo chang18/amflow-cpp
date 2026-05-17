@@ -1,0 +1,8 @@
+integralfamilies:
+  - name: "bhabha2pb2m"
+    loop_momenta: [l2]
+    top_level_sectors: [1]
+    propagators:
+      - [ "-1 + l2^2", 0 ]
+      - [ "(l1 + l2)^2", 0 ]
+    cut_propagators: []

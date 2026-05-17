@@ -1,0 +1,12 @@
+{{j[bhabha2pb2m, 1, 1, 0, 0, 0, 0, 0, 0, 0], j[bhabha2pb2m, 1, 0, 0, 1, 0, 0, 
+   0, 0, 0], j[bhabha2pb2m, 1, 1, 1, 0, 0, 0, 0, 0, 0], 
+  j[bhabha2pb2m, 1, 1, 0, 1, 0, 0, 0, 0, 0], j[bhabha2pb2m, 1, 1, 1, 1, 0, 0, 
+   0, 0, 0]}, {eta}, {{{(1 - eps)/eta, 0, 0, 0, 0}, {0, 0, 0, 0, 0}, 
+   {(-1 + eps)/((-8 + eta)*eta), 0, (1 - 2*eps)/(-8 + eta), 0, 0}, 
+   {(16 - 16*eps - eta + eps*eta)/(eta*(256 - 36*eta + eta^2)), 
+    (-2*(-1 + eps))/(256 - 36*eta + eta^2), 0, 
+    (-18 + 36*eps + eta - 2*eps*eta)/(256 - 36*eta + eta^2), 0}, 
+   {(-16 + 16*eps - eta + eps*eta)/(eta*(-2048 + 544*eta - 44*eta^2 + 
+       eta^3)), (-18 + 18*eps + eta - eps*eta)/(-2048 + 544*eta - 44*eta^2 + 
+      eta^3), 0, (-34*(-1 + 2*eps))/(-2048 + 544*eta - 44*eta^2 + eta^3), 
+    (-2*eps)/(-8 + eta)}}}}

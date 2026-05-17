@@ -1,0 +1,10 @@
+bhabha2pb2m[0,0]*(d-a1-2*a0)
+bhabha2pb2m[1,0]*(-2*a0)
+bhabha2pb2m[-1,1]*(-a1)
+bhabha2pb2m[0,1]*(-2*a1)
+
+bhabha2pb2m[0,0]*(-a1+a0)
+bhabha2pb2m[1,-1]*(-a0)
+bhabha2pb2m[-1,1]*(a1)
+bhabha2pb2m[0,1]*(2*a1)
+
