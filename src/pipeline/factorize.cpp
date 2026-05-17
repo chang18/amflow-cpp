@@ -147,16 +147,47 @@ factorize_family(const qft::FamilyConfig& fc,
                 if (!d.coeff_of(j, 2).is_zero()) { chosen = j; break; }
             }
             if (chosen < 0) continue;
+            // Mirror upstream `ToSquare` (`AMFlow.m:437-444`): the per-row
+            // entry MMA produces is `Coefficient[mom, Loop[j]]` where
+            // `mom = Sqrt[alpha]*l_chosen + beta_j/(2*Sqrt[alpha])` and
+            // `alpha = Coefficient[d, l_chosen, 2]`,
+            // `beta_j = Coefficient[d, l_chosen, 1]` (a polynomial in
+            // other loops/legs).  Under the AMFlow propagator convention
+            // alpha == 1 (no metric factor); we assert that and then take
+            // `Coefficient[mom, l_j] = (coef of l_chosen*l_j in d) / 2`.
+            std::vector<unsigned long> z(
+                (std::size_t)fc.ctx->n_vars(), 0);
+            {
+                Mpoly chosen_sq = d.coeff_of(chosen, 2);
+                fmpz_t alpha;
+                fmpz_init(alpha);
+                fmpz_mpoly_get_coeff_fmpz_ui(alpha, chosen_sq.raw(),
+                                              z.data(),
+                                              fc.ctx->raw());
+                if (!fmpz_is_one(alpha)) {
+                    fmpz_clear(alpha);
+                    throw std::runtime_error(
+                        "factorize_family: chosen loop's squared "
+                        "coefficient is not 1; AMFlow propagator "
+                        "convention violated (alpha != 1 in ToSquare).");
+                }
+                fmpz_clear(alpha);
+            }
             fmpq_set_si(mat_flat[(std::size_t)(ti * L + chosen)], 1, 1);
             for (long j = 0; j < L; ++j) {
                 if (j == chosen) continue;
-                Mpoly co1 = d.coeff_of(j, 1);
-                if (co1.is_zero()) continue;
-                std::vector<unsigned long> z(
-                    (std::size_t)fc.ctx->n_vars(), 0);
+                // Coefficient of the bilinear monomial l_chosen * l_j in d.
+                // (Previous logic took `coeff_of(j, 1)` and then its
+                // constant term — which silently dropped the contribution
+                // from cross-loop bilinears like `-2*l_chosen*l_j` in
+                // `(l_chosen - l_j)^2` props.)
+                Mpoly cross = d.coeff_of(
+                    std::vector<long>{chosen, j},
+                    std::vector<unsigned long>{1, 1});
+                if (cross.is_zero()) continue;
                 fmpz_t c;
                 fmpz_init(c);
-                fmpz_mpoly_get_coeff_fmpz_ui(c, co1.raw(), z.data(),
+                fmpz_mpoly_get_coeff_fmpz_ui(c, cross.raw(), z.data(),
                                               fc.ctx->raw());
                 fmpq_t qval, two;
                 fmpq_init(qval); fmpq_init(two);
