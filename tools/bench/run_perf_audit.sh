@@ -177,8 +177,11 @@ BENCHES=(
   tools/bench/banana_4L_2mass_alt_psq4_eps001_black_box_amflow_cpp.json
   tools/bench/sunset_bubble_4L_2leg_eqmass_eps001_black_box_amflow_cpp.json
   tools/bench/sunset_bubble_4L_1mass_l1_eps001_black_box_amflow_cpp.json
+  tools/bench/sunset_bubble_4L_1mass_l4_eps001_black_box_amflow_cpp.json
   tools/bench/sunset_bubble_4L_1mass_top_eps001_black_box_amflow_cpp.json
   tools/bench/sunset_bubble_4L_2mass_bub_core_eps001_black_box_amflow_cpp.json
+  tools/bench/sunset_bubble_4L_2leg_alt_eqmass_eps001_black_box_amflow_cpp.json
+  tools/bench/sunset_bubble_4L_alt1_eqmass_eps001_black_box_amflow_cpp.json
   tools/bench/cutbanana_4L_1mass_eps001_black_box_amflow_cpp.json
   tools/bench/cutbanana_4L_2mass_eps001_black_box_amflow_cpp.json
   tools/bench/banana_4loop_sub1_eps001_black_box_amflow_cpp.json

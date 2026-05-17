@@ -47,9 +47,9 @@ This C++17 implementation was developed primarily by **AI coding
 agents** under the direction of the maintainer, with every behavioural
 change gated by numerical-parity verification against the upstream
 Mathematica reference.  The 228 oracle benchmarks under `tools/bench/`
-(1L=52, 2L=53, 3L=64, 4L=59 incl. 3 deferred-bug entries) and the
-548-case GoogleTest suite are the contract that the AI-led
-implementation has to honour for any change to land.
+(1L=52, 2L=53, 3L=64, 4L=59) and the 549-case GoogleTest suite are
+the contract that the AI-led implementation has to honour for any
+change to land.
 
 Maintainer / contact: **3250800970@qq.com** (please open a GitHub
 issue first when possible; use email for inquiries that don't fit a
@@ -83,10 +83,10 @@ Public headers under `include/amflow/<domain>/`; implementation under
 
 | Area | State |
 |---|---|
-| Core ODE solver (port of upstream `DESolver.m`) | Implemented; 225/228 oracle cases match MMA reference at `rel ~1e-30` (3 deferred-bug entries are 4L 2-leg `sunset_bubble` topologies under investigation; rel ~1e-10 on the pentabox 2L corner where the integral's intrinsic cancellation horizon dominates) |
+| Core ODE solver (port of upstream `DESolver.m`) | Implemented; 228/228 oracle cases match MMA reference at `rel ~1e-30` (rel ~1e-10 on the pentabox 2L corner where the integral's intrinsic cancellation horizon dominates) |
 | AMFlow + Kira pipeline (upstream `AMFlow.m` core algorithms) | Implemented for the covered workflows |
 | Top-level entries (`amflow`, `black_box_amflow`, `solve_integrals`) | Implemented; exposed via `amflow_cli` JSON modes |
-| Line-level MMA parity audit | 86 🟢 verified, 0 🟡 unverified, 14 🔴 (13 fixed, 1 D5 out of scope); no silent-wrong-result paths remain. See [`docs/AUDIT_MMA_PARITY.md`](docs/AUDIT_MMA_PARITY.md) |
+| Line-level MMA parity audit | 86 🟢 verified, 0 🟡 unverified, 15 🔴 (14 fixed, 1 D5 out of scope); no silent-wrong-result paths remain. See [`docs/AUDIT_MMA_PARITY.md`](docs/AUDIT_MMA_PARITY.md) |
 | Wall-clock vs MMA | Benchmarking deferred until performed on a dedicated machine; see [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md) |
 | `SolveIntegralsGaugeLink`, HQET / SCET / Wilson lines | Out of scope (intentional) |
 | Complex-valued numeric kinematics (audit D5) | Out of scope (not supported); JSON dispatcher rejects `{"re":..,"im":..}` form. See [`docs/FAQ.md`](docs/FAQ.md) "What's *not* implemented?" |

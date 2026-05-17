@@ -81,10 +81,7 @@ Use `ls tools/bench/*_mma_reference.json` for the full list (228
 entries as of 2026-05-17).
 
 Wallclock numbers are intentionally not maintained here; see
-[`docs/PERFORMANCE.md`](../../docs/PERFORMANCE.md).  Three 4L 2-leg
-`sunset_bubble` deferred-bug entries (`_1mass_l4`, `_2leg_alt_eqmass`,
-`_alt1_eqmass`) are present but NOT in `run_perf_audit.sh`; see
-[`docs/AUDIT_MMA_PARITY.md`](../../docs/AUDIT_MMA_PARITY.md) §D15.
+[`docs/PERFORMANCE.md`](../../docs/PERFORMANCE.md).
 
 ## Notes
 

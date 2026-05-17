@@ -1,7 +1,10 @@
 (* ::Package:: *)
 
 (*
-  4L 2-leg: bubble decoration on l2 instead of l1.
+  4L 2-leg sunset_bubble eqmass — identical propagator set to
+  sunset_bubble_4L_2leg_alt_eqmass; kept as a family-name regression
+  guard (different `Family` symbol exercises the
+  family-name → cache directory + reduction key path).
 *)
 
 current = If[$FrontEnd === Null, $InputFileName, NotebookFileName[]] // DirectoryName;

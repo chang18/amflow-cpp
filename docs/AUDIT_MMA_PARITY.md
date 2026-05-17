@@ -12,17 +12,14 @@ covered by the oracle benchmarks under
 |---|---|---|
 | 🟢 verified                  | 86 | — |
 | 🟡 unverified (oracle gap)    |  0 | All 21 originally-🟡 audit rows are now closed (see §3 below for per-row closure paths).  Future audit growth comes from oracle-diversity benches under [`tools/bench/`](../tools/bench/), each landing as 🟢 by construction. |
-| 🔴 actual divergence          | 14 | **13 fully fixed; 1 out of scope** (D5 ComplexMode).  D12 (doublebox 2L interleaved 2-mass) was a precision-tuning issue, not a code bug — see §D12.  D13 (`build_boundary` rank-filter + missing `/. Numeric`) added 2026-05-15.  D14 (boundary-order chain on multi-mass 3L: `analyze_block` + sparse `chop_pre` headroom) closed 2026-05-16. |
+| 🔴 actual divergence          | 15 | **14 fully fixed; 1 out of scope** (D5 ComplexMode).  D12 (doublebox 2L interleaved 2-mass) was a precision-tuning issue, not a code bug — see §D12.  D13 (`build_boundary` rank-filter + missing `/. Numeric`) added 2026-05-15.  D14 (boundary-order chain on multi-mass 3L: `analyze_block` + sparse `chop_pre` headroom) closed 2026-05-16.  D15 (`factorize_family` cross-loop bilinear coefficient in SingleMass redef) closed 2026-05-17. |
 | ⚪ intentionally not ported   | 17 | — |
 
-Net assessment: **225 of 228 oracle benches match MMA at rel ~10⁻³⁰**
+Net assessment: **228 of 228 oracle benches match MMA at rel ~10⁻³⁰**
 (except where the integral's intrinsic cancellation horizon limits
-precision).  3 deferred-bug oracles (4L 2-leg `sunset_bubble`
-topologies — `_1mass_l4`, `_2leg_alt_eqmass`, `_alt1_eqmass`) flag
-known C++ failures in `SingleMass`/boundary expansion (D15, open;
-not in `run_perf_audit.sh`).  Thirteen of the fourteen 🔴 items have
-been fully corrected; D5 (complex-valued numeric kinematics) is the
-out-of-scope row.
+precision).  Fourteen of the fifteen 🔴 items have been fully
+corrected; D5 (complex-valued numeric kinematics) is the out-of-scope
+row.
 
 ---
 
@@ -611,26 +608,64 @@ preferred file verbatim:
   chain.  Stage 1-6 patches remain landed as MMA-faithful cleanup
   but are not load-bearing for bn3_4mass.
 
-### D15. `SingleMass` loop-choice for 4L 2-leg `sunset_bubble` — **OPEN (2026-05-17)**
+### D15. `factorize_family` cross-loop bilinear coefficient in SingleMass redef — **CLOSED (2026-05-17)**
 
-The 4L 2-leg `sunset_bubble` topology variants `sunset_bubble_4L_1mass_l4`,
-`sunset_bubble_4L_2leg_alt_eqmass`, and `sunset_bubble_4L_alt1_eqmass`
-trigger distinct C++ failures while the sibling `_1mass_l1` and
-`_alt2_eqmass` pass.  The l4 variant returns the value of sub-sector
-`j[sb41ml4, 1,0,1,1,1,1, ...]` (Re ≈ 28071) for the corner instead
-of MMA's Re ≈ -2.09e7; the 2leg_alt and alt1 variants crash with
-`AMFSystem::solve: ending system master ...sm0|1|1|1|0|0|0|0|0|0
-has no Vacuum entry, no explicit_boundary value, and no usable
-reduction rule` at a deeply nested sub-system.
-
-Root-cause analysis points at `src/pipeline/amfsystem.cpp:2492`
-(`find_loop_in_prop`) and `src/pipeline/factorize.cpp` — the
-SingleMass step promotes a loop to leg whose removal leaves the
-region-1 boundary sub-family's main propagators leg-free (leg only
-in ISPs), making the integrand effectively scaleless.  The 3
-deferred-bug oracles are committed under `tools/bench/` but kept
-out of `run_perf_audit.sh` until fixed.  See `project_sb41ml4_singlemass_bug.md`
-(GPD memory) for the per-yaml diagnostic trail.
+- **Symptom**: 4L 2-leg `sunset_bubble` topology variants
+  `sunset_bubble_4L_1mass_l4`, `sunset_bubble_4L_2leg_alt_eqmass`, and
+  `sunset_bubble_4L_alt1_eqmass` failed distinctly while the sibling
+  `_1mass_l1` and `_alt2_eqmass` passed.  The l4 variant returned the
+  value of sub-sector `j[sb41ml4, 1,0,1,1,1,1, ...]` (Re ≈ 28071) for
+  the corner instead of MMA's Re ≈ -2.09e7.  The 2leg_alt and alt1
+  variants crashed with `AMFSystem::solve: ending system master
+  ...sm0|1|1|1|0|0|0|0|0|0 has no Vacuum entry, no explicit_boundary
+  value, and no usable reduction rule` at a deeply nested sub-system.
+- **Root cause**: `src/pipeline/factorize.cpp:142-170` (`factorize_family`
+  loop-redefinition matrix construction).  C++ wrote per-row entries
+  via `d.coeff_of(j, 1)` (a polynomial in other loops/legs) and then
+  took its constant term — which silently dropped the cross-loop
+  bilinear contribution.  For a mass propagator like `(l_chosen - l_j)^2 - 1`,
+  `coeff_of(l_j, 1) = -2 * l_chosen` and its constant term is 0; MMA
+  `Coefficient[mom, l_j] = -1` after the `ToSquare` completing-square.
+  The wrong matrix produced a `GL(L, Z)` automorphism that did not
+  canonicalize the mass propagator to single-loop² form (e.g. left
+  `(l_chosen − l_j)^2 - 1` instead of `l_x^2 - 1`).  Downstream,
+  `single_mass_setup_master`'s `find_loop_in_prop` then picked the
+  first loop with quadratic exponent (l_chosen, not the mass-bearing
+  loop) and promoted it to leg, scaleless-ing the resulting sub-family.
+  The sibling `_1mass_l1` and `_alt2_eqmass` did not trip the bug
+  because their region-1 boundary mass propagator is already single
+  loop² (`l1^2 - 1`), so the buggy and correct redef matrices agreed
+  modulo a harmless cyclic loop permutation.
+- **Fix**: mirror upstream `ToSquare` (`AMFlow.m:437-444`) — extract the
+  bilinear `l_chosen * l_j` coefficient via `d.coeff_of({chosen, j},
+  {1, 1})` and take its constant term.  Add a defensive assert that
+  `coeff_of(d, l_chosen, 2) == 1` (AMFlow propagator convention; would
+  fire if a future change relaxed leading-loop² normalization in
+  `branch_momenta`).
+- **Validation**:
+  - ctest 549/549 pass (+1 new regression test
+    `FactorizeTest.CrossLoopMassProp_RedefIsSingleLoopSquared`
+    constructed from the minimal sb41ml4 SingleMass input).
+  - All 225 previously-passing oracles remain matched (no regression).
+  - `sunset_bubble_4L_1mass_l4_eps001`: corner now `rel = 3.10e-31`
+    (was: silent-wrong sub-sector value).
+  - `sunset_bubble_4L_2leg_alt_eqmass_eps001`: corner now `rel = 1.68e-30`
+    (was: crash at deep SingleMass).
+  - `sunset_bubble_4L_alt1_eqmass_eps001`: corner now `rel = 1.90e-30`
+    (was: crash, identical propagator list to alt — same root cause).
+  - All three deferred-bug oracles added to `run_perf_audit.sh`
+    rotation; total 228 of 228 oracles green.
+- **Why existing 547 gtests didn't catch it**: the three pre-existing
+  factorize unit tests (`OneLoopBubble_Identity`,
+  `SortBy_PicksMonomialContainingMassOne`, `TwoLoopSunrise_OneComponent`)
+  use only standard single-loop² propagators (`l^2 - msq`, `l1^2 - 1`,
+  `(l1+l2-p)^2 - m3sq`).  Under those inputs `coeff_of(j, 1)` is
+  identically zero on non-chosen loops, so the constant-term path and
+  the correct cross-term path return the same value.  The bug only
+  surfaces when a `(l_a - l_b)^2`-shape propagator with mass=-1 enters
+  `tobeloop` — which happens on the region-1 boundary of 4L 2-leg
+  `sunset_bubble` topologies after the boundary-region eta transform
+  but is absent from the smaller-loop oracle benches.
 
 ## 3. 🟡 → 🟢 Closure log (originally-unverified branches)
 
