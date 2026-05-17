@@ -181,6 +181,36 @@ BENCHES=(
   tools/bench/sunset_bubble_4L_2mass_bub_core_eps001_black_box_amflow_cpp.json
   tools/bench/cutbanana_4L_1mass_eps001_black_box_amflow_cpp.json
   tools/bench/cutbanana_4L_2mass_eps001_black_box_amflow_cpp.json
+  tools/bench/banana_4loop_sub1_eps001_black_box_amflow_cpp.json
+  tools/bench/banana_4loop_sub2_eps001_black_box_amflow_cpp.json
+  tools/bench/banana_4loop_sub3_eps001_black_box_amflow_cpp.json
+  tools/bench/banana_4loop_sub4_eps001_black_box_amflow_cpp.json
+  tools/bench/banana_4loop_sub5_eps001_black_box_amflow_cpp.json
+  tools/bench/banana_4loop_sub6_eps001_black_box_amflow_cpp.json
+  tools/bench/banana_4L_1mass_sub1_eps001_black_box_amflow_cpp.json
+  tools/bench/banana_4L_1mass_sub2_eps001_black_box_amflow_cpp.json
+  tools/bench/banana_4L_1mass_sub3_eps001_black_box_amflow_cpp.json
+  tools/bench/banana_4L_1mass_sub4_eps001_black_box_amflow_cpp.json
+  tools/bench/banana_4L_1mass_sub5_eps001_black_box_amflow_cpp.json
+  tools/bench/banana_4L_1mass_sub6_eps001_black_box_amflow_cpp.json
+  tools/bench/banana_4L_2mass_sub1_eps001_black_box_amflow_cpp.json
+  tools/bench/banana_4L_2mass_sub2_eps001_black_box_amflow_cpp.json
+  tools/bench/banana_4L_2mass_sub3_eps001_black_box_amflow_cpp.json
+  tools/bench/banana_4L_2mass_sub4_eps001_black_box_amflow_cpp.json
+  tools/bench/banana_4L_2mass_sub5_eps001_black_box_amflow_cpp.json
+  tools/bench/banana_4L_2mass_sub6_eps001_black_box_amflow_cpp.json
+  tools/bench/banana_4L_mixed_sub1_eps001_black_box_amflow_cpp.json
+  tools/bench/banana_4L_mixed_sub2_eps001_black_box_amflow_cpp.json
+  tools/bench/banana_4L_mixed_sub3_eps001_black_box_amflow_cpp.json
+  tools/bench/banana_4L_mixed_sub4_eps001_black_box_amflow_cpp.json
+  tools/bench/banana_4L_mixed_sub5_eps001_black_box_amflow_cpp.json
+  tools/bench/banana_4L_mixed_sub6_eps001_black_box_amflow_cpp.json
+  tools/bench/cutbanana_4L_sub1_eps001_black_box_amflow_cpp.json
+  tools/bench/cutbanana_4L_sub2_eps001_black_box_amflow_cpp.json
+  tools/bench/cutbanana_4L_sub3_eps001_black_box_amflow_cpp.json
+  tools/bench/sunset_bubble_4L_alt2_eqmass_eps001_black_box_amflow_cpp.json
+  tools/bench/sunset_2L_1mass_eps001_black_box_amflow_cpp.json
+  tools/bench/vtx2_2L_1mass_eps01_black_box_amflow_cpp.json
 )
 
 for input in "${BENCHES[@]}"; do
