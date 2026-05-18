@@ -1,0 +1,11 @@
+mercedes[0,0]*(-a1-2*a0+d)
+mercedes[1,0]*(-2*eta*a0)
+mercedes[-1,1]*(-a1)
+mercedes[0,1]*(-a1-a1*eta)
+
+mercedes[0,0]*(a1-a0)
+mercedes[1,-1]*(a0)
+mercedes[1,0]*(-eta*a0+a0)
+mercedes[-1,1]*(-a1)
+mercedes[0,1]*(-a1-a1*eta)
+

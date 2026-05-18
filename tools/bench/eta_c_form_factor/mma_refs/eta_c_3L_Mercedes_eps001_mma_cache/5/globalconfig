@@ -1,0 +1,4 @@
+{"Family" -> mercedes, "Loop" -> {l2, l3}, "Leg" -> {l1}, 
+ "Conservation" -> {}, "Replacement" -> {l1^2 -> -1}, 
+ "Propagator" -> {l3^2, (-l1 + l2)^2, (l2 - l3)^2, (-l1 + l3)^2, l2^2}, 
+ "Numeric" -> {}}

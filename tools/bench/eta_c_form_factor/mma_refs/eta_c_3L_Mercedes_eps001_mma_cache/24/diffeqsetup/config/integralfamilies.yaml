@@ -1,0 +1,8 @@
+integralfamilies:
+  - name: "mercedes"
+    loop_momenta: [l3]
+    top_level_sectors: [3]
+    propagators:
+      - [ "-eta + l3^2", 0 ]
+      - [ "l1^2 - 2*l1*l3 + l3^2", 0 ]
+    cut_propagators: []
