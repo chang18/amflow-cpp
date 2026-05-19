@@ -22,8 +22,12 @@ id
 *_out.json
 
 # Heavy Mathematica caches (regenerable; see tools/bench/README.md and
-# tools/math_ref/run_amflow_kira.wl for instructions).
+# tools/math_ref/run_amflow_kira.wl for instructions). Only the
+# scripts (*_black_box_amflow_{cpp.json,mma.wl}) and the final
+# *_mma_reference.json summary should be committed; never the
+# Kira/Fermat/Mathematica intermediate cache trees.
 tools/bench/mma_refs/
+tools/bench/*/mma_refs/
 tools/math_ref/cache/
 
 # Upstream Mathematica AMFlow — populate via clone or symlink locally;
