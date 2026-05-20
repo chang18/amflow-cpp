@@ -96,5 +96,31 @@
         "im": "-461.6060079537452419225339898896561839266601698478956202650863"
       }
     }
-  ]
+  ],
+  "cpp_verification_snapshot": {
+    "amflow_cli_acb_ball": {
+      "j[sb41ml1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0]": {
+        "re": {
+          "center": "-125696667.648696298774800886118",
+          "radius": "3.51e-22"
+        },
+        "im": {
+          "center": "0.0250256796973614839367852865262",
+          "radius": "2.09e-32"
+        }
+      }
+    },
+    "agreement_vs_mma_reference": {
+      "j[sb41ml1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0]": {
+        "integral": "j[sb41ml1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0]",
+        "re_absolute_diff": "3.506E-22",
+        "im_absolute_diff": "2.084E-32",
+        "re_relative_diff": "2.789E-30",
+        "im_relative_diff": "8.327E-31",
+        "re_within_cpp_ball": true,
+        "im_within_cpp_ball": true
+      }
+    },
+    "cpp_amflow_cli_time_seconds": 197.0
+  }
 }

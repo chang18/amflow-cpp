@@ -86,5 +86,31 @@
   "cpp_sampled_status": {
     "result": "derived from sub-master extraction (no C++ run yet)"
   },
-  "derived_from": "/home/chang/workspace/agent/trials/amflowRefactor/tools/bench/banana_4L_1mass_eps001_mma_reference.json"
+  "derived_from": "/home/chang/workspace/agent/trials/amflowRefactor/tools/bench/banana_4L_1mass_eps001_mma_reference.json",
+  "cpp_verification_snapshot": {
+    "amflow_cli_acb_ball": {
+      "j[bn41m, 2, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0]": {
+        "re": {
+          "center": "69894.7824439796588083794216691",
+          "radius": "3.70e-26"
+        },
+        "im": {
+          "center": "-3.22557413780617812690946905761e-69",
+          "radius": "3.08e-99"
+        }
+      }
+    },
+    "agreement_vs_mma_reference": {
+      "j[bn41m, 2, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0]": {
+        "integral": "j[bn41m, 2, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0]",
+        "re_absolute_diff": "3.698E-26",
+        "im_absolute_diff": "3.072E-99",
+        "re_relative_diff": "5.290E-31",
+        "im_relative_diff": "9.525E-31",
+        "re_within_cpp_ball": true,
+        "im_within_cpp_ball": true
+      }
+    },
+    "cpp_amflow_cli_time_seconds": 99.0
+  }
 }

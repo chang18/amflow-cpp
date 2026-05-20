@@ -547,31 +547,6 @@ build_family_numeric_q(const ibp::ReduceOptions& bb) {
     return out;
 }
 
-std::vector<std::pair<std::string, std::string>>
-extract_replacement_strings_with_numeric(
-    const qft::FamilyConfig& fc,
-    const std::map<std::string, FmpqHolder>& numeric_q) {
-    std::vector<std::pair<std::string, std::string>> out;
-    for (const auto& [key, val] : fc.reduced_replacement) {
-        out.emplace_back(key, mfrac_str(apply_numeric(val, numeric_q)));
-    }
-    return out;
-}
-
-qft::FamilyConfig build_numeric_replacement_family(
-    const qft::FamilyConfig& fc,
-    const std::map<std::string, FmpqHolder>& numeric_q) {
-    return qft::FamilyConfig::build(
-        fc.family,
-        fc.loops,
-        fc.legs,
-        extract_conservation_strings(fc),
-        extract_replacement_strings_with_numeric(fc, numeric_q),
-        extract_propagator_strings(fc),
-        fc.cut,
-        fc.prescription);
-}
-
 std::map<std::string, FmpqHolder>
 build_numeric_q_for_eps(const ibp::ReduceOptions& bb,
                         const numeric::AcbValue& eps,
@@ -2885,13 +2860,31 @@ amf_system_setup_master(const qft::FamilyConfig& fc,
     if (preferred.empty()) return {};
 
     auto numeric_q = build_family_numeric_q(opts.bb);
-    std::unique_ptr<qft::FamilyConfig> numeric_fc;
-    const qft::FamilyConfig* fc_use = &fc;
-    if (!numeric_q.empty()) {
-        numeric_fc = std::make_unique<qft::FamilyConfig>(
-            build_numeric_replacement_family(fc, numeric_q));
-        fc_use = numeric_fc.get();
-    }
+    // NOTE (η-placement fix, 2026-05-20): we no longer build a
+    // `numeric_q`-substituted family for use in amf-scheme decisions.
+    // Mirroring MMA AMFlow.m's design — `AMFSystemEndingQ`,
+    // `AMFPosition`, `AnalyzeTopSector` all operate on symbolic
+    // `ReducedPropagator` (no `/.Numeric` substitution; see
+    // `AnalyzeTopology` AMFlow.m:503-510 calling `EvaluateUF` without
+    // `/.Numeric`) — every callsite below uses the original symbolic
+    // `fc`.  The previous design substituted `numeric_values` into the
+    // `replacement` map (e.g. `p1^2 -> ssq` ↦ `p1^2 -> 0` under
+    // `ssq=0`), which silently flipped `info.vacQ` from false to true
+    // for diagrams with external-momentum-bearing F-poly terms, forcing
+    // `amf_candidate_component` into its Branch-mode fallback and
+    // bypassing the user-configured mode cascade.  Concrete bug:
+    // photon_4L_SE_TwoBubbles mass1 — MMA picks D1 (massive) via Mass
+    // mode; C++ used to pick D3 (massless) via Branch fallback, costing
+    // a 26,000× IBP mandatory-list inflation in the downstream Kira
+    // step.  Numeric substitution still flows downstream via
+    // `opts.bb.numeric_values`: Kira's yaml writer
+    // (`src/ibp/kira_yaml.cpp:113-145` `NumericSubs`) applies it
+    // independently when emitting yaml; Cutkosky's mass-positivity
+    // check below applies it via `apply_numeric(..., numeric_q)`;
+    // SingleMass's enhanced predicates (`single_mass_q_numeric` and
+    // `find_mass_minus_one`) call `apply_numeric` explicitly per mass
+    // entry; `single_mass_ending_q_impl` rebuilds `numeric_q`
+    // internally from `opts.bb`.
 
     // Mirrors AMFSystemSetupMaster (AMFlow.m:1010 + 1034): auto-append
     // the Trivial scheme as a final fallback, then pick the first
@@ -2908,7 +2901,7 @@ amf_system_setup_master(const qft::FamilyConfig& fc,
 
     EndingScheme scheme = EndingScheme::Trivial;  // safe default
     for (auto s : schemes_with_trivial) {
-        if (!ending_q(*fc_use, preferred, s, opts)) { scheme = s; break; }
+        if (!ending_q(fc, preferred, s, opts)) { scheme = s; break; }
     }
 
     std::vector<std::unique_ptr<AMFSystem>> out;
@@ -2921,15 +2914,15 @@ amf_system_setup_master(const qft::FamilyConfig& fc,
         // explicit boundary conditions provided by the caller.
         AMFLOW_TRACE("AMFLOW_DEBUG_SCHEME") {
             std::cerr << "[scheme] Trivial fired: family="
-                      << fc_use->family << std::endl;
+                      << fc.family << std::endl;
         }
-        std::vector<int> zero_etac(fc_use->propagators_after_conservation.size(), 0);
+        std::vector<int> zero_etac(fc.propagators_after_conservation.size(), 0);
         qft::FamilyConfig fc_copy = qft::FamilyConfig::build(
-            fc_use->family, fc_use->loops, fc_use->legs,
-            extract_conservation_strings(*fc_use),
-            extract_replacement_strings(*fc_use),
-            extract_propagator_strings(*fc_use),
-            fc_use->cut, fc_use->prescription);
+            fc.family, fc.loops, fc.legs,
+            extract_conservation_strings(fc),
+            extract_replacement_strings(fc),
+            extract_propagator_strings(fc),
+            fc.cut, fc.prescription);
         auto sys = std::make_unique<AMFSystem>(
             std::move(fc_copy), preferred, std::move(zero_etac),
             scheme, opts);
@@ -2941,7 +2934,7 @@ amf_system_setup_master(const qft::FamilyConfig& fc,
         AMFLOW_TRACE("AMFLOW_DEBUG_SCHEME") {
             auto top = qft::get_top_position(preferred);
             std::cerr << "[scheme] SingleMass fired: family="
-                      << fc_use->family
+                      << fc.family
                       << " top_position={";
             for (std::size_t i = 0; i < top.size(); ++i) {
                 if (i) std::cerr << ',';
@@ -2949,12 +2942,12 @@ amf_system_setup_master(const qft::FamilyConfig& fc,
             }
             std::cerr << "}" << std::endl;
         }
-        return single_mass_setup_master(*fc_use, preferred, opts);
+        return single_mass_setup_master(fc, preferred, opts);
     }
 
     if (scheme == EndingScheme::Cutkosky) {
         auto top = qft::get_top_position(preferred);
-        auto info = qft::analyze_top_sector(*fc_use, top);
+        auto info = qft::analyze_top_sector(fc, top);
         long phase_loop_num = -1;
         const qft::TopSectorComponentInfo* phase_comp = nullptr;
         for (const auto& comp : info) {
@@ -3020,7 +3013,7 @@ amf_system_setup_master(const qft::FamilyConfig& fc,
 
         AMFLOW_TRACE("AMFLOW_DEBUG_SCHEME") {
             std::cerr << "[scheme] Cutkosky fired: family="
-                      << fc_use->family
+                      << fc.family
                       << " phase_loop_num=" << phase_loop_num
                       << " top_position={";
             for (std::size_t i = 0; i < top.size(); ++i) {
@@ -3031,10 +3024,10 @@ amf_system_setup_master(const qft::FamilyConfig& fc,
         }
 
         qft::FamilyConfig fc_cutless = qft::FamilyConfig::build(
-            fc_use->family, fc_use->loops, fc_use->legs,
-            extract_conservation_strings(*fc_use),
-            extract_replacement_strings(*fc_use),
-            extract_propagator_strings(*fc_use),
+            fc.family, fc.loops, fc.legs,
+            extract_conservation_strings(fc),
+            extract_replacement_strings(fc),
+            extract_propagator_strings(fc),
             /*cut=*/{}, /*prescription=*/{});
 
         auto pos = qft::amf_position(fc_cutless, top, opts.amf_modes);
@@ -3064,15 +3057,15 @@ amf_system_setup_master(const qft::FamilyConfig& fc,
     }
 
     auto top = qft::get_top_position(preferred);
-    auto pos = qft::amf_position(*fc_use, top, opts.amf_modes);
+    auto pos = qft::amf_position(fc, top, opts.amf_modes);
     if (pos.empty()) {
         // This shouldn't happen since ending_q(Tradition) returned false.
         throw std::runtime_error(
             "amf_system_setup_master: no eta-injection position found");
     }
-    auto etac = qft::amf_eta_c(*fc_use, pos);
+    auto etac = qft::amf_eta_c(fc, pos);
     AMFLOW_TRACE("AMFLOW_DEBUG_SCHEME") {
-        std::cerr << "[scheme] Tradition fired: family=" << fc_use->family
+        std::cerr << "[scheme] Tradition fired: family=" << fc.family
                   << " top={";
         for (std::size_t i = 0; i < top.size(); ++i) {
             if (i) std::cerr << ',';
@@ -3095,10 +3088,10 @@ amf_system_setup_master(const qft::FamilyConfig& fc,
         std::cerr << "    top-sector props (after conservation):" << std::endl;
         for (std::size_t k = 0; k < top.size(); ++k) {
             std::cerr << "      [" << top[k] << "] "
-                      << fc_use->propagators_after_conservation[top[k]].to_string()
+                      << fc.propagators_after_conservation[top[k]].to_string()
                       << std::endl;
         }
-        auto comps = qft::analyze_top_sector(*fc_use, top);
+        auto comps = qft::analyze_top_sector(fc, top);
         std::cerr << "    components (" << comps.size() << "):" << std::endl;
         for (std::size_t ci = 0; ci < comps.size(); ++ci) {
             const auto& comp = comps[ci];
@@ -3117,11 +3110,11 @@ amf_system_setup_master(const qft::FamilyConfig& fc,
         }
     }
     qft::FamilyConfig fc_copy = qft::FamilyConfig::build(
-        fc_use->family, fc_use->loops, fc_use->legs,
-        extract_conservation_strings(*fc_use),
-        extract_replacement_strings(*fc_use),
-        extract_propagator_strings(*fc_use),
-        fc_use->cut, fc_use->prescription);
+        fc.family, fc.loops, fc.legs,
+        extract_conservation_strings(fc),
+        extract_replacement_strings(fc),
+        extract_propagator_strings(fc),
+        fc.cut, fc.prescription);
     auto sys = std::make_unique<AMFSystem>(
         std::move(fc_copy), preferred, std::move(etac), scheme, opts);
     out.push_back(std::move(sys));

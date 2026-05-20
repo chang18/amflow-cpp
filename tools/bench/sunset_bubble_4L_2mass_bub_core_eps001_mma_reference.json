@@ -139,5 +139,31 @@
         "im": "1.240911092668918970546567416097637378747820448655327237169042378126182e-66"
       }
     }
-  ]
+  ],
+  "cpp_verification_snapshot": {
+    "amflow_cli_acb_ball": {
+      "j[sb42mbc, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0]": {
+        "re": {
+          "center": "833608483826.056563804894757420",
+          "radius": "3.31e-19"
+        },
+        "im": {
+          "center": "7.19674091501746298883685023108e-63",
+          "radius": "1.54e-93"
+        }
+      }
+    },
+    "agreement_vs_mma_reference": {
+      "j[sb42mbc, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0]": {
+        "integral": "j[sb42mbc, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0]",
+        "re_absolute_diff": "3.305E-19",
+        "im_absolute_diff": "1.534E-93",
+        "re_relative_diff": "3.965E-31",
+        "im_relative_diff": "2.132E-31",
+        "re_within_cpp_ball": true,
+        "im_within_cpp_ball": true
+      }
+    },
+    "cpp_amflow_cli_time_seconds": 288.0
+  }
 }

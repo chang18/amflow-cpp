@@ -65,5 +65,31 @@
   "cpp_sampled_status": {
     "result": "derived from sub-master extraction (no C++ run yet)"
   },
-  "derived_from": "/home/chang/workspace/agent/trials/amflowRefactor/tools/bench/cutbanana_4L_eps001_mma_reference.json"
+  "derived_from": "/home/chang/workspace/agent/trials/amflowRefactor/tools/bench/cutbanana_4L_eps001_mma_reference.json",
+  "cpp_verification_snapshot": {
+    "amflow_cli_acb_ball": {
+      "j[cutbanana4, 1, 1, 1, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0]": {
+        "re": {
+          "center": "1.60344161936180393127529658757e-6",
+          "radius": "2.25e-37"
+        },
+        "im": {
+          "center": "0",
+          "radius": "0"
+        }
+      }
+    },
+    "agreement_vs_mma_reference": {
+      "j[cutbanana4, 1, 1, 1, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0]": {
+        "integral": "j[cutbanana4, 1, 1, 1, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0]",
+        "re_absolute_diff": "2.244E-37",
+        "im_absolute_diff": "0.000E+3",
+        "re_relative_diff": "1.399E-31",
+        "im_relative_diff": "0.000E+3",
+        "re_within_cpp_ball": true,
+        "im_within_cpp_ball": true
+      }
+    },
+    "cpp_amflow_cli_time_seconds": 102.0
+  }
 }

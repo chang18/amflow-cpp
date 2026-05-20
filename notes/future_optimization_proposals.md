@@ -86,178 +86,119 @@ opportunity unrelated to that false alarm:
 
 ---
 
-## 2026-05-19 — C++ `system_0_diffeq/masters_preheat` is ~2.66× slower than MMA's analogous step
+## 2026-05-20 — C++ uses `select_mandatory_recursively` in `IBPSystem` stage where MMA uses `select_mandatory_list`
 
-**Status**: root cause identified (η-injection strategy divergence
-from MMA reference). NOT a numerical correctness bug. IS an algorithm
-implementation faithfulness gap that should be corrected to align with
-MMA, per project principle "MMA = correctness oracle, legacy = design
-reference". Fix not yet applied, awaiting user decision.
+**Status**: confirmed MMA-faithfulness gap. Not a correctness bug
+(numerical output matches oracle 30+ digits post η-placement fix), but
+an algorithmic-implementation gap that inflates Kira intermediate work
+by orders of magnitude on heavy 4L benchmarks.
 
-**Origin**: During the same `photon_4L_SE_TwoBubbles mass1` batch that
-seeded the previous entry, after MMA mass1 completed in `==TIME==
-8872.571245s` (≈2h28m), C++ mass1 was still running. Drilling into
-sub-stage times in C++'s `kira.log` files vs MMA's reported step times
-revealed a real wallclock gap on the diffeq-preheat step (NOT on the
-earlier full-family reduce steps):
+**Origin**: While verifying the η-placement fix on
+`photon_4L_SE_TwoBubbles_mass1` (2026-05-20), I diffed C++ vs MMA
+`jobs.yaml` and Kira logs at the **initial** `reduce/masters_preheat`
+stage (i.e. the first Kira call inside `BlackBoxReduce`, which MMA calls
+`IBPSystem`). MMA's `jobs.yaml` at the same stage uses
+`select_mandatory_list: [pseTB1, target]`, while C++ writes
+`select_mandatory_recursively: {sectors:[2047], r:16, s:0, d:5}`.
 
-| Phase | C++ measured (`kira.log` Total time) | MMA reported (`IBPSystem` line) | Ratio |
-|---|---|---|---|
-| 1. Initial `reduce/masters_preheat` | 1856.6 s | 1857 s | 1.00× |
-| 2. `reduce/target_reduce` | 1864.8 s | 1853 s | 1.01× |
-| 3. **`amf/system_0_diffeq/masters_preheat`** | **4932.8 s** | **1857 s** | **2.66×** |
+The actual MMA reference behaviour (from `Kira/interface.m:177-189`) is:
 
-Phases 1–2 are essentially identical (within seconds), so it is NOT a
-general "C++ overhead per Kira call" issue. The slowdown is specific to
-the system_X_diffeq stage.
+```mathematica
+target = Which[
+  $ReductionMode === "Masters",
+    "select_mandatory_recursively: {topologies:[`fam`], sectors:[`top`], r:`r`, s:`s`, d:`d`}",
+  True,
+    "select_mandatory_list: [`fam`, target]"
+];
+```
 
-**This contradicts the prior audit conclusion** that "C++ and MMA hand
-Kira identical yaml at the diffeq stage". The audit (run earlier the
-same day) did not diff the system_0_diffeq yaml specifically — it diffed
-the initial-stage yaml. Either:
+So MMA **also** uses `select_mandatory_recursively` for the `Masters`
+(= IBPSystem) call. The `select_mandatory_list` in MMA's cached
+`jobs.yaml` is from the **subsequent** `AnalyticReduction` call that
+overwrites the same directory's `jobs.yaml`. **Not a C++ vs MMA
+divergence at this stage.**
 
-(a) the audit's identical-yaml claim was correct, and the slowdown is
-    purely runtime/host-load (but the timing pattern doesn't fit:
-    parallel competition was similar in both stages); OR
-(b) the C++ amflow_cli writes a meaningfully different yaml/jobs.yaml
-    at the system_X_diffeq stage than at the initial reduce stage —
-    and that difference is what causes 2.66× slowdown.
+**But** mass1 Kira logs reveal a real, separate gap:
 
-**What's needed**: a subagent dive specifically into the system_0_diffeq
-phase yaml on both sides, comparing:
-- `tmp/amflow_photon_4L_SE_TwoBubbles_mass1_p0_eps001_cpp/part_0/amf/system_0_diffeq/masters_preheat/{integralfamilies.yaml, kinematics.yaml, jobs.yaml, preferred, config/*}`
-- `tools/bench/photon_self_energy/mma_refs/photon_4L_SE_TwoBubbles_mass1_p0_eps001_mma_cache/1/diffeqsetup/{...same files...}`
-- The C++ source code path that constructs these (`src/ibp/kira_yaml.cpp`
-  with the call sites from `src/pipeline/amfsystem.cpp`).
-- The MMA AMFlow code path that constructs these (`reference/amflow-master/AMFlow.m::BlackBoxDiffeq` →
-  `Kira.m::IBPSystem`).
-
-**Specific hypotheses to test**:
-1. C++ asks Kira to compute over a larger sector set / larger rmax/dmax
-   than MMA at this stage.
-2. C++ doesn't pass `preferred_masters` (or passes a different list),
-   causing Kira to re-discover masters from scratch.
-3. C++ writes a `select_mandatory_recursively` job where MMA writes
-   `select_mandatory_list` (or vice versa), changing Kira's algorithmic
-   path.
-4. C++ omits some option (e.g. `integral_ordering`, symmetry reuse from
-   the previous stage's `sectormappings/`) that MMA uses to cut work.
-
-**Don't conflate with previous entry**: the sectormappings-caching
-opportunity (preceding entry) is a separate optimization across multiple
-system_X runs. This entry is about a single system_0 run being 2.66×
-slower in C++ than MMA on what is supposedly the same Kira job.
-
-**Estimated impact if rooted out**: each `system_X_diffeq` stage in a 4L
-14-slot family costs ~30 min in MMA vs ~80 min in C++. Across 5–10
-systems per family, eliminating the 2.66× gap could save 4–8 hours per
-4L mass-staged test. Most of the C++ vs MMA wallclock gap currently
-observed in 4L benchmarks is concentrated in this stage.
-
-**Root cause found (subagent audit, 2026-05-19, high confidence on yaml
-diff, medium on exact source line)**:
-
-**Important clarification — how to characterize this**:
-
-This is **a strategy divergence between C++ and the MMA reference
-implementation**, NOT a numerical correctness bug. Two distinct levels:
-
-- **Numerical correctness** (the eps-expanded integral value at η=0):
-  η-placement on different propagators all yield the same value via
-  η-flow. C++ will still produce **numerically correct** output when it
-  finishes — just takes 2.66× longer at this stage.
-- **Algorithmic faithfulness to MMA**: MMA's `AMFPosition` deliberately
-  places η on the propagator that minimizes Kira's intermediate work
-  (the Branch-mode tie-breaker is part of MMA's algorithm design, not a
-  performance afterthought). C++ deviates from this strategy and picks
-  a worse propagator. Per the project's principle "MMA = correctness
-  oracle, legacy = design reference", **this is an implementation
-  faithfulness gap and should be brought into alignment with MMA**.
-
-So this is NOT a "perf nice-to-have to defer until dedicated-host
-benchmarking". It is "C++ implements a different algorithm than the
-MMA reference; align to MMA". The fact that the numerical answer is
-the same is reassuring (it means the gap can be closed without
-worrying about regression on existing oracle tests) — but it does not
-demote the priority.
-
-C++ and MMA's `amf_position` choose **different propagators** for the η
-insertion in this single-mass-with-symbolic-msq case:
-
-| Side | η placement | mandatory list | masters | wallclock |
-|---|---|---|---|---|
-| MMA | prop 0 (l₁², combines with the existing m²) | 18 | 16 | 1,857 s |
-| C++ | prop 2 (l₂², a previously massless propagator) | 477,748 | 154 | 4,932.8 s |
-
-Putting η on a previously-massless propagator breaks zero-sector
-identification and inflates the IBP system 10× in masters, 26,000× in
-mandatory-list, leading to the 2.66× wallclock penalty.
-
-**Where both differ in source**:
-
-| Step | C++ | MMA |
+| Stage | C++ post-fix | MMA (HANDOFF) |
 |---|---|---|
-| Compute η position | `qft::amf_position(*fc_use, top, opts.amf_modes)` at `src/pipeline/amfsystem.cpp:3067` | `AMFEtaC@AMFPosition[GetTopPosition[preferred], $AMFMode]` at `reference/amflow-master/AMFlow.m:1041` |
-| Branch-mode fallback (where both modes converge here, since `single_mass_q` returns false for symbolic msq) | `src/qft/amfmode.cpp:239-283` (Branch mode), with `same_branch_with` at `:178-199` | `reference/amflow-master/AMFlow.m:585-592` (`findbranch[v_]`) |
-| Tie-break sort comparator | `src/qft/amfmode.cpp:262-268`: stable_sort with strict `<` on branch size; ties broken by insertion order in `info.var` | MMA's `Sort[branches, Length@#1 <= Length@#2 &]` with MMA's monomial-iteration order |
-| Insertion order origin | `src/qft/topology.cpp:342-397` `make_component`, building `ci.var = feynman_vars_in(u0_factor, first_x, n_x)`; depends on fmpz_mpoly's grlex monomial iteration | MMA's default monomial ordering on the same polynomial |
+| `reduce/masters_preheat` mandatory list | — | — |
+| `amf/system_0_diffeq/masters_preheat` mandatory list | **336,760** | **18** |
+| `amf/system_0_diffeq/masters_preheat` masters count | **18** | **16** |
+| `amf/system_0_diffeq/masters_preheat` wallclock | 1902 s | 1857 s |
 
-The C++ `info.var` ordering (FLINT grlex) and MMA's ordering yield
-different insertion orders into `branches[]`, so when several branches
-tie on size, C++ picks a different one than MMA. The picked branch
-determines which propagator gets η — and putting η on a massless prop
-is much worse for Kira.
+The masters count and wallclock are now MMA-equivalent (η-placement
+fix). But the mandatory-list size at `system_0_diffeq/masters_preheat`
+is still ~19,000× MMA's. Wallclock parity is achieved because Kira's
+solver is fast even with a bloated mandatory list, but the algorithm
+asks Kira for vastly more equations than necessary.
 
-**There is ONE algorithm to align to (MMA's), not "two strategies"**:
+**Hypothesis (root cause to investigate)**: at the `system_X_diffeq`
+stage, the **rank/dot** that C++ passes to Kira via `(r, s, d)` may be
+larger than what MMA passes. MMA's `BlackBoxDiffeq` (`AMFlow.m:1261-1273`):
 
-MMA's `findbranch` (`reference/amflow-master/AMFlow.m:585-592`)
-implements a single algorithm. The fix is to faithfully reproduce
-that algorithm in C++, not to invent a heuristic that "happens to
-match on this case". Two candidate fix routes:
+```mathematica
+rank = Max[$BlackBoxRank, JRank/@jpreferred];
+dot  = Max[$BlackBoxDot, JDot/@jpreferred + 1];
+IBPSystem[top, rank, dot, jpreferred, ...];
+```
 
-**Route A — faithful reproduction (correct alignment, harder)**:
-Read MMA `findbranch[v_]` line-by-line, identify exactly what it
-does (sort key, tie-break, iteration order over branches), then
-make C++'s `same_branch_with` and the Branch-mode sort at
-`src/qft/amfmode.cpp:178-199, 239-283` produce the same `pos` for
-every input. This may require matching MMA's monomial iteration
-order on the U polynomial (`src/qft/topology.cpp:342-397`
-`make_component` `ci.var = feynman_vars_in(u0_factor, first_x, n_x)`
-vs MMA's equivalent), since that's what feeds branch construction.
-This is "true alignment with reference".
+— note the **`+1` on dot** is intentional, and `jpreferred` for the
+diffeq step is the η-injected master set, not the user-input preferred.
+C++ may be computing these parameters differently, expanding the
+`sectors/r/s/d` envelope Kira enumerates.
 
-**Route B — secondary heuristic (NOT alignment, only workaround)**:
-Add a tie-breaker like "prefer branch containing a massive
-propagator" in `src/qft/amfmode.cpp:262-268`. This would happen to
-pick the same propagator as MMA on the observed case, but is **not
-a faithful reproduction of MMA's algorithm** — there's no such
-explicit "prefer-mass" rule in MMA's source. It would diverge from
-MMA on cases where MMA's monomial-ordering tie-break happens to
-NOT pick the mass-bearing branch. So Route B should be considered
-only as a stopgap if Route A is too costly.
+**Where the divergence likely lives**:
+- `src/pipeline/amfsystem.cpp::AMFSystem::build_diffeq` — the per-system
+  `ibp::ReduceOptions` construction where `ibp_rank`/`ibp_dot` are set
+  before handing off to `ibp::reduce`.
+- `src/ibp/kira_yaml.cpp:285-340` (the `reduce_sectors` / `r/s/d`
+  envelope writer) — but this is just emitting the values it's handed.
 
-Route A is the correct work for "implementation faithfulness". Route
-B is a band-aid that may cause its own future divergences.
+**Open questions for the user**:
 
-**Required preparatory step**: read MMA's `findbranch[v_]` source
-end-to-end. The audit so far has cited the file:line but has not
-unpacked the exact algorithm logic. That's the precondition for any
-real fix.
+1. Diff C++ and MMA `system_X_diffeq/masters_preheat/jobs.yaml`'s
+   `(r, s, d)` values for the same benchmark. If different, locate
+   the C++ source line that computes them and align to MMA's
+   `Max[..., JDot+1]` formula.
+2. If C++ already mirrors MMA's formula, check whether `jpreferred`
+   (η-injected master list) is enumerated differently — e.g. C++ may
+   include masters that MMA's `IBPSystem` filters out via
+   `$MasterRank` / `$MasterDot` (interface.m:453).
+3. Confirm impact: even though mass1 wallclock now matches MMA
+   (2h27 ≈ MMA 2h28), the 19,000× mandatory-list bloat suggests
+   Kira's internal selection is doing redundant work that doesn't
+   show up in the dominant Fermat-bound numeric reconstruction
+   phase. For heavier benchmarks (mass2, future 5L+), this bloat
+   may dominate.
 
-A `AMFLOW_DEBUG_SCHEME=1` runtime trace re-run (see
-`src/pipeline/amfsystem.cpp:3074-3092` — the trace already emits the
-`pos={...}` decision) can confirm `pos = {2}` vs `pos = {0}` before
-any fix is attempted.
+**Estimated impact if rooted out**:
+- mass1: minor (wallclock already at MMA parity, ~1:1).
+- mass2 and similar heavy multi-mass: potential 10-20% wallclock
+  reduction if the Kira selection phase becomes a meaningful fraction
+  of total time (currently dominated by Fermat reconstruction).
+- 5L+ projection: likely much larger (mandatory list grows faster
+  than masters count with loop order, so this gap widens with scale).
 
-**Test that would regress on the fix**: `AMFCandidateComponent_*` family
-in the existing test suite. Note: since η-placement choice is
-position-agnostic on correctness (different η placements all converge
-to the same integral value via η-flow), no existing correctness test
-should regress — only speed/intermediate-size tests would change.
+**Not actionable until**:
+- (a) user evaluates and confirms scope; AND
+- (b) post mass2/3L/4L full regression sweep, when we know which
+  benchmarks have headroom for this optimization; AND
+- (c) dedicated benchmark host is available (per
+  `docs/PERFORMANCE.md`).
 
-**Workaround for users until fix lands**: pre-substitute `msq` in the
-input cpp.json so `single_mass_q` succeeds and the Single-mass mode
-fires (which DOES match MMA correctly). The benchmarks currently set
-`numeric_values: {msq: "1"}` only at the `blackbox` level, leaving the
-propagator-list version of `msq` symbolic at the time `amf_position` is
-called.
+**Diagnostic data point (mass1 2026-05-20, post η-fix)**:
+```
+/tmp/amflow_photon_4L_SE_TwoBubbles_mass1_p0_eps001_cpp/
+  part_0/amf/system_0_diffeq/masters_preheat/kira.log:
+    length of mandatory list: 336760
+    Number of master integrals: 18
+    Total time: 1902 s
+```
+vs MMA cached HANDOFF-era figures:
+```
+mandatory list ≈ 18
+masters ≈ 16
+Total time ≈ 1857 s
+```
+

@@ -15,7 +15,11 @@
     "TestXOrder": 5,
     "BlackBoxRank": 0,
     "BlackBoxDot": 5,
-    "EndingScheme": ["Tradition", "Cutkosky", "SingleMass"]
+    "EndingScheme": [
+      "Tradition",
+      "Cutkosky",
+      "SingleMass"
+    ]
   },
   "mma_black_box_amflow_time_seconds": 148.562658,
   "mma_wallclock_time_seconds": 149,
@@ -69,5 +73,31 @@
       "im": "0"
     },
     "note": "All 4 sampled values pass at rel ≤ 2.2 × 10⁻³⁰ (well within project tolerance).  C++ wallclock 141 s vs MMA 149 s — within 6%.  MMA log shows 5-level subsystem recursion (system 1 = 4-loop top, system 5 = ending vacuum) mirrored by the C++ AMFSystemSolution chain.  Compare via tools/bench/compare_sampled.py."
+  },
+  "cpp_verification_snapshot": {
+    "amflow_cli_acb_ball": {
+      "j[cutbanana4, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0]": {
+        "re": {
+          "center": "5.48560252946220982304241049460e-9",
+          "radius": "4.64e-39"
+        },
+        "im": {
+          "center": "0",
+          "radius": "0"
+        }
+      }
+    },
+    "agreement_vs_mma_reference": {
+      "j[cutbanana4, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0]": {
+        "integral": "j[cutbanana4, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0]",
+        "re_absolute_diff": "4.638E-39",
+        "im_absolute_diff": "0.000E+3",
+        "re_relative_diff": "8.455E-31",
+        "im_relative_diff": "0.000E+3",
+        "re_within_cpp_ball": true,
+        "im_within_cpp_ball": true
+      }
+    },
+    "cpp_amflow_cli_time_seconds": 101.0
   }
 }

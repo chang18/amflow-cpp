@@ -1,6 +1,6 @@
 {
   "family": "sb41ml4",
-  "source": "4L 2-leg sunset_bubble: mass on l4 \u2014 investigation oracle for C++ bug.",
+  "source": "4L 2-leg sunset_bubble: mass on l4 — investigation oracle for C++ bug.",
   "eps": "1/1000",
   "numeric": {
     "psq": "1",
@@ -117,5 +117,31 @@
         "im": "-1.918266224411681911727676434353114913388245099834186565199480046488297e-66"
       }
     }
-  ]
+  ],
+  "cpp_verification_snapshot": {
+    "amflow_cli_acb_ball": {
+      "j[sb41ml4, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0]": {
+        "re": {
+          "center": "-20921261.2135557054168459450280",
+          "radius": "6.49e-24"
+        },
+        "im": {
+          "center": "264.569387173549037858300289389",
+          "radius": "5.30e-29"
+        }
+      }
+    },
+    "agreement_vs_mma_reference": {
+      "j[sb41ml4, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0]": {
+        "integral": "j[sb41ml4, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0]",
+        "re_absolute_diff": "6.483E-24",
+        "im_absolute_diff": "5.295E-29",
+        "re_relative_diff": "3.099E-31",
+        "im_relative_diff": "2.001E-31",
+        "re_within_cpp_ball": true,
+        "im_within_cpp_ball": true
+      }
+    },
+    "cpp_amflow_cli_time_seconds": 185.0
+  }
 }
