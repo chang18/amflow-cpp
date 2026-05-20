@@ -1,3 +1,0 @@
-{"Family" -> mercedes, "Loop" -> {l3}, "Leg" -> {l1}, "Conservation" -> {}, 
- "Replacement" -> {l1^2 -> -1}, "Propagator" -> {-1 + l3^2, (l1 + l3)^2}, 
- "Numeric" -> {}}

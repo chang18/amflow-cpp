@@ -14,14 +14,9 @@ giving line-resolved navigation inside each MMA file.
 
 ## Active work items
 
-- [`HANDOFF_eta_placement.md`](HANDOFF_eta_placement.md) — single-page
-  handoff for fixing the C++ η-placement divergence from MMA
-  `findbranch`. The 4-loop photon TwoBubbles benchmark is blocked on
-  this. Read first if picking up that fix.
 - [`future_optimization_proposals.md`](future_optimization_proposals.md)
-  — full analysis of (a) the η-placement strategy divergence (root
-  cause + code locations + proposed fix routes), and (b) a secondary
-  `sectormappings/` caching opportunity unrelated to that.
+  — unverified-but-actionable performance / MMA-faithfulness gaps,
+  recorded for future evaluation.
 
 ## Conventions
 

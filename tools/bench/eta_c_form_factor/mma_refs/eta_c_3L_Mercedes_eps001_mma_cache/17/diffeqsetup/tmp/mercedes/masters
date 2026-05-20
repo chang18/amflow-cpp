@@ -1,7 +1,0 @@
-mercedes[1,1,1,1,0] # 15
-mercedes[1,1,0,1,0] # 11
-mercedes[1,1,0,0,1] # 19
-mercedes[0,1,1,0,2] # 22
-mercedes[1,0,0,1,2] # 25
-mercedes[2,0,0,1,1] # 25
-mercedes[1,1,1,0,1] # 23

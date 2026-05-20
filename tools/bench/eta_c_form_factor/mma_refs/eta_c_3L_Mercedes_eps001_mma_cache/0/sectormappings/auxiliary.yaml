@@ -1,3 +1,0 @@
-auxiliary:
- - name: "mercedes"
-   permutation: [0,2,4,3,1,5,7,6,8,9,10,11]

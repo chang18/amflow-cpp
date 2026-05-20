@@ -1,4 +1,0 @@
-{{{1 - eps, -eps}, {"Family" -> mercedes, "Loop" -> {l3}, "Leg" -> {l2}, 
-   "Conservation" -> {}, "Replacement" -> {l2^2 -> -1}, 
-   "Propagator" -> {-1 + l3^2, (l2 + l3)^2}, "Numeric" -> {}}, 
-  {j[mercedes, 1, 0]}, {{{1}}, {}}}}

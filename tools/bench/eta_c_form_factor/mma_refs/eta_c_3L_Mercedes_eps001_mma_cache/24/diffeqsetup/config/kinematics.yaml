@@ -1,8 +1,0 @@
-kinematics:
-  incoming_momenta: [l1, mercedesAuxLeg]
-  outgoing_momenta: []
-  momentum_conservation: [mercedesAuxLeg, -l1]
-  kinematic_invariants:
-    - [eta, 2]
-  scalarproduct_rules:
-    - [[l1,l1], -1]

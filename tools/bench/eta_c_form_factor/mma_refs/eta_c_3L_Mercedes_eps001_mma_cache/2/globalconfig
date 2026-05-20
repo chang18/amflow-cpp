@@ -1,6 +1,0 @@
-{"Family" -> mercedes, "Loop" -> {l1, l2, l3}, "Leg" -> {p1, p2, p3}, 
- "Conservation" -> {p3 -> -p1 - p2}, "Replacement" -> 
-  {p1^2 -> ssq, p2^2 -> 0, (p1 + p2)^2 -> 0}, 
- "Propagator" -> {(l1 + p1)^2, l2^2, (l2 + p2)^2, l3^2, (l3 - p1 - p2)^2, 
-   (l1 - l2 + p1)^2, (l2 - l3 + p2)^2, (l1 - l3 + p1 + p2)^2, l1^2, 
-   (l1 + l2)^2, (l1 + l3)^2, (l2 + l3)^2}, "Numeric" -> {ssq -> 1}}
