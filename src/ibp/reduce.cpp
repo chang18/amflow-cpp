@@ -109,33 +109,23 @@ apply_jdot_jrank_floor(const ReduceOptions& opts,
     return out;
 }
 
-void sort_integrals_like_amflow(std::vector<qft::JIntegral>& masters) {
-    std::stable_sort(masters.begin(), masters.end());
-
-    struct SectorGroup {
-        std::vector<int>                  pattern;
-        std::vector<qft::JIntegral>       members;
-    };
-    std::vector<SectorGroup> groups;
-    for (auto& m : masters) {
-        auto pat = m.sector_pattern();
-        auto git = std::find_if(groups.begin(), groups.end(),
-                                [&](const SectorGroup& g) {
-                                    return g.pattern == pat;
-                                });
-        if (git == groups.end()) {
-            groups.push_back({std::move(pat), {std::move(m)}});
-        } else {
-            git->members.push_back(std::move(m));
-        }
-    }
-    for (auto& g : groups) std::reverse(g.members.begin(), g.members.end());
-    std::reverse(groups.begin(), groups.end());
-
-    masters.clear();
-    for (auto& g : groups) {
-        for (auto& m : g.members) masters.push_back(std::move(m));
-    }
+// Kira's raw-output master list is already in MMA-compatible "ascending by
+// sector then dot" order on both C++ and MMA when preferred is empty
+// (verified on sunset_bubble_4L 2026-05-21: C++ root reduce
+// `results/sb4eq/masters` matches MMA `results/masters_mma` line-by-line).
+// MMA itself does NOT sort the Kira output before passing it as preferred
+// to the next Kira call (Kira/interface.m:164-170 `Preferred[preferred, dir]`
+// writes the list unchanged).  Calling this function as a `stable_sort +
+// group_reverse` (its previous body) produced a NET REVERSAL of Kira's
+// natural order, which then fed the next Kira call a wrong-direction
+// preferred file -- driving Kira's IBP enumeration onto a 24×-wider path
+// (sunset_bubble_4L system_0 mandatory list 3360 vs MMA 136).
+//
+// Kept as a no-op (rather than removed) so the call sites and intent
+// markers stay visible in the codebase; if a future case actually shows
+// Kira producing a non-MMA-compatible raw order, this is where to fix it.
+void sort_integrals_like_amflow(std::vector<qft::JIntegral>& /*masters*/) {
+    // intentionally empty; preserve Kira's natural output order
 }
 
 }  // namespace
