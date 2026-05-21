@@ -8,47 +8,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
-- **Oracle suite expanded from 42 → 228 triplets** (2026-05-13 to
-  2026-05-17). Coverage now: 1L=52, 2L=53, 3L=64, 4L=59. Sub-master
-  reuse of parent MMA caches enables cheap 4L diversity. Per-commit
-  detail is in `git log -- tools/bench/`.
-- **Deferred-bug oracle scaffold** (3 entries, NOT in
-  `run_perf_audit.sh`): `sunset_bubble_4L_1mass_l4` returns
-  sub-sector value silently; `sunset_bubble_4L_{2leg_alt,alt1}_eqmass`
-  crash with "no Vacuum entry". All three are 4L 2-leg
-  `sunset_bubble` variants and likely share a SingleMass loop-choice
-  root cause (D15, open).
+- Oracle suite at 228 triplets across L = 1, 2, 3, 4
+  (1L=52, 2L=53, 3L=64, 4L=59).  Sub-master reuse of parent MMA
+  caches enables cheap 4L diversity.
+- Kira yaml emission aligned with MMA `interface.m:126`
+  (`[Propagator, 0]` form, closed-form rank-1 propagator
+  reconstruction, raw caller-order preferred list).
+- Opt-in `AMFLOW_STAGE_TIMING` env var: emits `[kira_time]` per
+  Kira call and `[total_time]` at amflow_cli exit, lets external
+  tools split wallclock into Kira-subprocess vs amflow-internal
+  time.
 
 ### Fixed
-- **D11** — pentabox 2L 5-leg Jordan eigenvector normalization
-  (`fmpq_mat_nullspace_exact` rescales basis vectors so last non-zero
-  entry is 1, matching Mathematica's convention).
-- **D13** — `build_boundary` projection failure on multi-mass
-  topologies; `to_complete_explicit` rank-filter dropped a
-  mass-bearing propagator. Numeric substitution restored.
-- **D14** — `bn3_4mass_3L_eps001` corner divergence closed via four
-  MMA-faithful fixes (`analyze_block` extend/Gather/Complement;
-  default `sparse_chop_digits = max(chop_pre, working_pre - 40)`).
-
-### Diagnosed (no code change)
-- **D12** — interleaved 2-mass doublebox needs `x_order ≥ 400,
-  extra_x_order ≥ 480` due to a complex-conjugate pole pair
-  (`η² + η + 12 = 0`) tightening the Frobenius radius for 4
-  top-sector masters; not a code bug.
+- Pentabox 2L 5-leg Jordan eigenvector normalization:
+  `fmpq_mat_nullspace_exact` rescales basis vectors so the last
+  non-zero entry is 1, matching Mathematica's convention.
+- `build_boundary` projection on multi-mass topologies:
+  `to_complete_explicit` rank-filter no longer drops mass-bearing
+  propagators; numeric substitution restored.
+- Multi-mass 3L corner-master divergence: `analyze_block`
+  extend / Gather / Complement now match MMA; default
+  `sparse_chop_digits = max(chop_pre, working_pre - 40)` keeps acb
+  noise budget below legitimate values.
 
 ### Changed
-- **D5 ComplexMode** reclassified from "deferred indefinitely" to
-  **"out of scope"** (maintainer decision 2026-05-13); ROADMAP no
-  longer reserves a "Phase 1C" placeholder. Entry-point rejection
-  unchanged.
-
-### Removed
-- ROADMAP "Phase 1C" section (D5 future-work placeholder).
-- Stale `docs/FAQ.md` and `docs/USER_GUIDE.md` "deferred" /
-  D3-aborts / Trivial-not-ported notes (D3 fixed in v1.1.0; Trivial
-  ported in Phase 1A).
-- Root-level `AUDIT.md` stub pointer (entry-points already link
-  directly to `docs/AUDIT_MMA_PARITY.md`).
+- Complex-valued numeric kinematics is out-of-scope (previously
+  "deferred"); JSON dispatcher rejection is unchanged.
 
 
 ## [1.1.0] — 2026-05-12

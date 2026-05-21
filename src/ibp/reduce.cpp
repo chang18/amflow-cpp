@@ -27,44 +27,32 @@ using algebra::MpolyContext;
 namespace fs = std::filesystem;
 
 ReductionContext make_reduction_context(const qft::FamilyConfig& /*fc*/) {
-    // D14 fix (2026-05-16): narrow reduction context to only the
-    // variables Kira's output actually uses — `eta` and `d`.
+    // Narrow the reduction MpolyContext to `{eta, d}` — the only
+    // variables Kira's output rationals carry symbolically (numeric
+    // kinematics are baked into the yaml by `kira_yaml.cpp`'s
+    // `NumericSubs`).  Declaring the full `fc.ctx` here drags 9+
+    // unused symbols through every FLINT multivariate-GCD inside
+    // `fmpz_mpoly_q_canonicalise`, ballooning memory on multi-mass
+    // families.
     //
-    // Background.  The previous implementation declared an MpolyContext
-    // with every variable of `fc.ctx` (typically `{l1, ..., lN, p1, ...,
-    // mAsq, mBsq, ..., psq, s, t, eta}`) plus `d`.  But Kira's output
-    // rationals only carry `{eta, d}` symbolically (`numeric_values`
-    // are baked into the yaml by `kira_yaml.cpp`'s `NumericSubs`).  The
-    // 9-or-so unused variables in the wide context bloated FLINT's
-    // multivariate-GCD inside `fmpz_mpoly_q_canonicalise`, producing the
-    // 20x memory blowup on `bn3_4mass_3L_eps001` (D14 audit row).
-    //
-    // The fixed shape `{eta, d}` mirrors MMA's behaviour: in upstream
-    // AMFlow's `DifferentialEquation` (`Kira/interface.m:505`) the
-    // diffeq tensor lives in symbolic Mathematica expressions where
-    // unused symbols never enter the algebra; the equivalent here is
-    // declaring only the symbols that *do* enter.
-    //
-    // Variables which are in `fc.ctx` but NOT in `red_ctx` (e.g. loop
+    // This mirrors MMA: upstream `DifferentialEquation`
+    // (`Kira/interface.m:505`) stores the diffeq tensor as symbolic
+    // Mathematica expressions where unused symbols never enter the
+    // algebra.  Variables in `fc.ctx` but not in `red_ctx` (loop
     // momenta, kinematic invariants, masses) must be substituted to
-    // their numeric values before any Mfrac is lifted into red_ctx —
-    // see `substitute_fc_vars` in the anonymous namespace below.
+    // numeric values before any Mfrac is lifted — see
+    // `substitute_fc_vars`.
     std::vector<std::string> names = {"eta", "d"};
     auto rctx = std::make_shared<MpolyContext>(std::move(names));
 
     ReductionContext out;
     out.ctx = rctx;
     out.d_var = 1;
-    // lift_gens is intentionally left empty: it is not consumed by any
-    // caller post-D14 (verified with `grep -rn red_ctx\.lift_gens`).
     return out;
 }
 
 namespace {
 
-// D14 (2026-05-16) numeric-substitution helpers are now in
-// `include/amflow/algebra/numeric_subst.hpp`.  Local aliases keep the
-// existing call sites in this file readable.
 using algebra::substitute_fc_vars;
 using algebra::mfrac_to_ctx_lenient;
 
@@ -109,23 +97,13 @@ apply_jdot_jrank_floor(const ReduceOptions& opts,
     return out;
 }
 
-// Kira's raw-output master list is already in MMA-compatible "ascending by
-// sector then dot" order on both C++ and MMA when preferred is empty
-// (verified on sunset_bubble_4L 2026-05-21: C++ root reduce
-// `results/sb4eq/masters` matches MMA `results/masters_mma` line-by-line).
-// MMA itself does NOT sort the Kira output before passing it as preferred
-// to the next Kira call (Kira/interface.m:164-170 `Preferred[preferred, dir]`
-// writes the list unchanged).  Calling this function as a `stable_sort +
-// group_reverse` (its previous body) produced a NET REVERSAL of Kira's
-// natural order, which then fed the next Kira call a wrong-direction
-// preferred file -- driving Kira's IBP enumeration onto a 24×-wider path
-// (sunset_bubble_4L system_0 mandatory list 3360 vs MMA 136).
-//
-// Kept as a no-op (rather than removed) so the call sites and intent
-// markers stay visible in the codebase; if a future case actually shows
-// Kira producing a non-MMA-compatible raw order, this is where to fix it.
+// Kira's raw master list is already in MMA-compatible ascending-by-
+// sector order; MMA's `Preferred[preferred, dir]`
+// (`Kira/interface.m:164-170`) passes it on unchanged.  This function
+// is intentionally a no-op — kept as a hook so call sites stay
+// visible if a future Kira release produces a non-MMA-compatible raw
+// order.
 void sort_integrals_like_amflow(std::vector<qft::JIntegral>& /*masters*/) {
-    // intentionally empty; preserve Kira's natural output order
 }
 
 }  // namespace
@@ -168,8 +146,6 @@ reduce(const qft::FamilyConfig& fc,
     // lists — and bridge them with the SubsetQ check below mirroring
     // upstream's
     // `If[!SubsetQ[masters, str], Abort["inconsistent masters from Kira"]]`.
-    // See `docs/AUDIT_MMA_PARITY.md` §D7 for the full root-cause
-    // analysis and the L=4 banana oracle that exposed the bug.
     const std::string masters_dir = opts.work_dir + "/masters_preheat";
     const std::string reduce_dir  = opts.work_dir + "/target_reduce";
 
@@ -208,10 +184,9 @@ reduce(const qft::FamilyConfig& fc,
     //
     // **Preferred file**: mirror MMA `AnalyticReduction`, which reuses
     // the preferred file IBPSystem wrote (the *input* `preferred`).
-    // Do NOT write the sorted preheat output as preferred here; that
-    // changes Kira's elimination order and reduction rule structure.
-    // See `ibp::diffeq` for the failure mode observed on pentabox 2L
-    // when the sorted preheat is used instead of the input.
+    // Do NOT write the sorted preheat output as preferred here; it
+    // changes Kira's elimination order and breaks the resulting
+    // reduction rule structure.
     fs::remove_all(reduce_dir);
     fs::create_directories(reduce_dir);
     kira_write_config(cfg, reduce_dir);
@@ -332,9 +307,8 @@ diffeq(const qft::FamilyConfig& fc,
     // the rationale).  Preheat is the sector-wide master enumeration;
     // the second call reduces the libp_deriv-derived integral list
     // against those masters.  Both Kira runs use `opts_eff`'s
-    // `(rank, dot)` (we intentionally do NOT re-floor over `all_ints`
-    // for the inner call — that re-flooring was the L=4-banana
-    // master-count mismatch bug fixed in audit row D7).
+    // `(rank, dot)`; re-flooring over `all_ints` for the inner call
+    // would break master-count agreement with upstream.
     const std::string masters_dir = opts.work_dir + "/masters_preheat";
     const std::string reduce_dir  = opts.work_dir + "/target_reduce";
 
@@ -363,29 +337,22 @@ diffeq(const qft::FamilyConfig& fc,
     std::set<std::string> preheat_master_keys;
     for (const auto& m : masters) preheat_master_keys.insert(int_key(m));
 
-    // Compute libp_deriv on each preheat master per requested
-    // variable.  Mirrors upstream `der = ComputeDerivative[masters, #]&/@vars`.
+    // Compute libp_deriv per master per requested variable.  Mirrors
+    // upstream `der = ComputeDerivative[masters, #]&/@vars`.
     //
-    // D14 (2026-05-16): apply numeric substitution AND reproject to the
-    // narrow red_ctx ({eta, d}) immediately after libp_deriv returns,
-    // BEFORE `simplify_terms` runs.  Critical for memory: even after
-    // numeric substitution, the Mfrac is STILL stored on the wide fc.ctx
-    // polynomial ring (10+ variables for multi-mass 3L families) —
-    // FLINT does not "know" the substituted variables have collapsed to
-    // constants and still runs multivariate GCD on the full ctx during
-    // every subsequent `simplify_terms +=` and matrix-assembly product.
-    // Reprojecting to {eta, d} shrinks the storage layout, which is the
-    // real source of the 20× memory blowup observed on
-    // `bn3_4mass_3L_eps001` (audit §D14).
-    // D14 Stage 5 (2026-05-16): hoist `libp_denoms_deriv` out of the
-    // per-master loop.  `dd` only depends on (fc, var), not on the
-    // master integral, so computing it once per `var` saves
-    // `masters.size()` ✕ duplicate work (21x for bn3_4mass).
-    //
-    // The per-master `libp_deriv` is then inlined here using the shared
-    // `dd`, mirroring `src/ibp/libp_deriv.cpp::libp_deriv`'s body.  We
-    // pre-build `neg_ak_cache[ak]` once per unique `ak` value to also
-    // amortise the `Mfrac::from_si` allocations.
+    // Two memory/perf optimisations applied here:
+    //   (a) reproject each per-term Mfrac to the narrow red_ctx
+    //       ({eta, d}) immediately after libp_deriv returns and BEFORE
+    //       `simplify_terms` runs.  Numeric substitution alone is not
+    //       enough — without reprojection the Mfrac stays on `fc.ctx`
+    //       (10+ variables for multi-mass 3L families) and FLINT runs
+    //       full-ctx multivariate-GCD on every subsequent operation.
+    //   (b) hoist `libp_denoms_deriv` out of the per-master loop: `dd`
+    //       depends only on (fc, var), so compute it once per `var`
+    //       instead of `masters.size()` times.  Per-master `libp_deriv`
+    //       is then inlined using the shared `dd`, mirroring
+    //       `src/ibp/libp_deriv.cpp::libp_deriv`'s body, and
+    //       `neg_ak_cache[ak]` amortises `Mfrac::from_si` allocations.
     long N_props = (long)fc.propagators_after_conservation.size();
     std::vector<std::vector<std::vector<DerivTerm>>> der(vars.size());
     for (std::size_t v = 0; v < vars.size(); ++v) {
@@ -460,15 +427,12 @@ diffeq(const qft::FamilyConfig& fc,
                 }
             }
         }
-        // D14 Stage 6 (2026-05-16): do NOT add `masters` to `all_ints`.
-        // MMA's `DifferentialEquation` (Kira/interface.m:500) only sends
+        // Do not add `masters` to `all_ints`.  MMA's
+        // `DifferentialEquation` (`Kira/interface.m:500`) only sends
         // `Cases[der, j[...], Infinity] // DeleteDuplicates` to
-        // `AnalyticReduction`.  The pre-Stage-6 code added every preheat
-        // master to the Reduce target list — extra work for Kira and a
-        // major source of its memory inflation on multi-mass 3L
-        // topologies like bn3_4mass (Kira RSS observed at 22.9 GB
-        // pre-fix when reducing 37 targets vs MMA's 20).  Identity rules
-        // for master integrals that are themselves masters get filled
+        // `AnalyticReduction`.  Adding preheat masters here inflates
+        // the Reduce target list and Kira's memory footprint without
+        // gain — identity rules for masters-of-themselves are filled
         // in by the loop below (after raw_rules is parsed).
     }
 
@@ -566,22 +530,13 @@ diffeq(const qft::FamilyConfig& fc,
         }
     }
 
-    // D14 Stage 4 (Fix B, 2026-05-16): batched lcm-sum per matrix
-    // entry instead of pairwise += accumulation.
-    //
-    // The previous implementation looped
-    //   `out.diffeq[v][row][col] += product`
-    // over many products per (row, col), triggering K FLINT
-    // canonicalisations (each allocating ~3x operand-size temporaries).
-    // MMA at `Kira/interface.m:505` (`Together[der/.j->red]`) instead
-    // does a single batched canonicalisation per matrix entry: collect
-    // all (num_i, den_i) pairs, compute `L = lcm(den_1, ..., den_K)`
-    // once, scale each numerator by `L / den_i`, sum, and canonicalise
-    // once into `(N_total / L)`.
-    //
-    // For bn3_4mass-style multi-distinct-mass 3L topologies this is
-    // the difference between K~200 canonicalisations and 1.  See
-    // audit `docs/AUDIT_MMA_PARITY.md` §D14.
+    // Batched lcm-sum per matrix entry, mirroring MMA's
+    // `Together[der/.j->red]` at `Kira/interface.m:505`.  Pairwise
+    // `out.diffeq[v][row][col] += product` would canonicalise each
+    // addition (every step ~3× operand-size temporaries inside FLINT);
+    // collecting all (num_i, den_i) pairs first, computing
+    // `L = lcm(den_i)` once, scaling, summing, then canonicalising
+    // once cuts that to a single canonicalisation per entry.
     auto batched_sum = [](std::vector<Mfrac>& terms,
                           const std::shared_ptr<MpolyContext>& ctx) -> Mfrac {
         if (terms.empty()) return Mfrac::zero(ctx);

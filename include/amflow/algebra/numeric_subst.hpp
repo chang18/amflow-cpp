@@ -2,14 +2,12 @@
 // amflow::algebra::numeric_subst — substitution helpers that bake
 // user-supplied `numeric_values` rationals into Mfracs symbolically.
 //
-// These helpers were introduced for the D14 fix (audit
-// `docs/AUDIT_MMA_PARITY.md` §D14): C++ AMFlow operates the IBP path
-// on a wide polynomial-ring context (all family variables) where MMA
-// operates on a much narrower effective context.  Multivariate-GCD
-// inside `fmpz_mpoly_q_canonicalise` scales super-linearly with
-// variable count, so applying numeric substitution + reprojection to
-// a narrow context early in the pipeline keeps polynomial sizes
-// bounded.
+// Why: C++ AMFlow holds the IBP path on a wide polynomial-ring
+// context (all family variables) where MMA operates on a much
+// narrower effective context.  Multivariate-GCD inside
+// `fmpz_mpoly_q_canonicalise` scales super-linearly with variable
+// count, so applying numeric substitution + reprojection to a narrow
+// context early in the pipeline keeps polynomial sizes bounded.
 //
 // Mirrors MMA's `/. Numeric` pattern at `Kira/interface.m:54` (Kira
 // yaml-writing), `Kira/interface.m:406` (`ComputeDerivative` Together

@@ -389,14 +389,14 @@ simplify_terms(std::vector<DerivTerm> terms) {
 }
 
 // ===========================================================================
-// D14 (2026-05-16) narrow-context overloads.
+// Narrow-context overloads.
 //
-// These mirror `libp_denoms_deriv` / `libp_deriv` above but substitute
-// the user-supplied `numeric_values` into intermediates and reproject
+// Mirror `libp_denoms_deriv` / `libp_deriv` above but substitute the
+// user-supplied `numeric_values` into intermediates and reproject
 // everything to a caller-provided narrow polynomial-ring context
-// (`target_ctx`).  This avoids the FLINT multivariate-GCD overhead
-// that dominates the wide-fc.ctx path on multi-distinct-mass 3L+
-// topologies (audit §D14 — 27 GB blowup on `bn3_4mass_3L_eps001`).
+// (`target_ctx`).  Avoids the FLINT multivariate-GCD overhead that
+// dominates the wide-fc.ctx path on multi-distinct-mass 3L+
+// topologies (memory footprint can balloon by 10×+ otherwise).
 //
 // The wide-ctx version is preserved for tests and any caller that
 // genuinely needs symbolic dependence on family variables.

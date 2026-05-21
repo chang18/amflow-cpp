@@ -121,13 +121,10 @@ ctest --test-dir build --output-on-failure -j 4
   afterwards.** Running `cmake --build build --target amflow_cli`
   rebuilds the CLI but leaves `amflow_tests` stale; `ctest` will then
   exercise the **old** test binary against the **new** library and
-  silently report green when the actual behaviour has changed.  This
-  is a real loss-of-trust footgun — on 2026-05-16 it let three
-  D14-related unit-test regressions ship to CI undetected (commits
-  3671c0b + b8761b4 → CI failure → fixup commit `121890a`).  Either
-  rebuild without `--target` (default builds everything including
-  `amflow_tests`), or remember to also pass `--target amflow_tests`
-  before running `ctest`.  When in doubt, run the bare
+  silently report green when the actual behaviour has changed.
+  Either rebuild without `--target` (default builds everything
+  including `amflow_tests`), or pass `--target amflow_tests` before
+  running `ctest`.  When in doubt, run the bare
   `cmake --build build -j32`.
 - Bench commands: see [`tools/bench/README.md`](tools/bench/README.md).
   Each committed sampled bench has a triplet:

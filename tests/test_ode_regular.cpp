@@ -141,7 +141,7 @@ TEST_F(RegularTest, EvaluateTaylor_HornerScheme) {
     EXPECT_TRUE(acb_close_to_double(v[0], 1.0 + 2*4 + 3*16, 0.0));
 }
 
-// --- Audit row 189 (`evaluate_taylor` strips arb radii), 🟡 → 🟢 ----
+// --- `evaluate_taylor` strips arb radii ----
 //
 // `evaluate_taylor` (`src/ode/regular.cpp`) deliberately calls
 // `midpoint_only` on every intermediate Horner accumulator and on

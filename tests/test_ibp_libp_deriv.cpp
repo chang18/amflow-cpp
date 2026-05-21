@@ -132,7 +132,7 @@ TEST(LibpDerivTest, ComputeDerivative_LinearCombo) {
     EXPECT_EQ(out[3].coef.to_string(), "2");
 }
 
-// --- Multi-invariant cases (audit divergence row 201, 🟡 → 🟢) -----
+// --- Multi-invariant cases -----
 //
 // The existing tests above all use the single-mass bubble family
 // `{l^2 - msq, (l-p)^2 - msq}` — one mass parameter `msq` plus one
@@ -163,7 +163,7 @@ TEST(LibpDerivTest, ComputeDerivative_LinearCombo) {
 // is precomputed for each `LIBPInvariants[topo]`; the C++ port
 // does not implement that path because the production AMFlow flow
 // only differentiates w.r.t. `eta` (added directly to propagators
-// pre-replacement).  See audit divergence row 201 in
+// pre-replacement).  See
 // `docs/AUDIT_MMA_PARITY.md`.
 
 namespace {
@@ -222,7 +222,7 @@ TEST(LibpDerivTest, LibpDeriv_J11_TwoMassBubble_Wrt_s_StaysZero) {
     // all-zero (matches upstream's naive D path; differs from
     // upstream's momentum-derivative chain-rule path, which the
     // C++ port deliberately does not implement — see scope note
-    // above and `docs/AUDIT_MMA_PARITY.md` row 201).  Locks the
+    // above).  Locks the
     // documented behavior: NO terms produced for s-derivatives.
     auto fc = make_two_mass_bubble();
     qft::JIntegral j("bub2m", {1, 1});

@@ -91,7 +91,7 @@ TEST(FactorizeTest, TwoLoopSunrise_OneComponent) {
     EXPECT_EQ(fams[0].patterns[0].size(), 3u);
 }
 
-// Regression for D15: cross-loop bilinear mass=-1 propagator
+// cross-loop bilinear mass=-1 propagator
 // (`(l1-l2)^2 - 1`) inside a 4-loop vacuum top sector.  Mirrors the
 // SingleMass input that arises on the region-1 boundary of
 // `sunset_bubble_4L_1mass_l4`.  After factorize_family applies its

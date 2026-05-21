@@ -64,9 +64,8 @@ For complete field-level reference see
 > **Out of scope** — **complex-valued numeric kinematics** are not
 > supported.  Supply only real values in
 > `amf_options.blackbox.numeric_values`; the dispatcher rejects the
-> object form `{"re":..,"im":..}` with a clear error.  (Audit
-> divergence D5.)  Full inventory of upstream divergences and
-> intentionally-not-ported items in
+> object form `{"re":..,"im":..}` with a clear error.  Intentional
+> non-goals are listed in
 > [`docs/AUDIT_MMA_PARITY.md`](AUDIT_MMA_PARITY.md); user-facing
 > non-goals in [`docs/FAQ.md`](FAQ.md) "What's *not* implemented?".
 

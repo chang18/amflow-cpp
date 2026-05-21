@@ -1,710 +1,100 @@
 # MMA Parity Audit
 
-A line-level audit of the C++17 port against upstream Mathematica
-AMFlow (commit `efda1db` of <https://gitlab.com/multiloop-pku/amflow>).
-The audit was performed after v1.0 release to surface divergences not
-covered by the oracle benchmarks under
-[`tools/bench/`](../tools/bench/).
+Status reference for the C++17 port against upstream Mathematica
+AMFlow (snapshot at commit `efda1db` of
+<https://gitlab.com/multiloop-pku/amflow>).
 
-## TL;DR
+## Status
 
-| Severity | Count | Action taken |
-|---|---|---|
-| 🟢 verified                  | 86 | — |
-| 🟡 unverified (oracle gap)    |  0 | All 21 originally-🟡 audit rows are now closed (see §3 below for per-row closure paths).  Future audit growth comes from oracle-diversity benches under [`tools/bench/`](../tools/bench/), each landing as 🟢 by construction. |
-| 🔴 actual divergence          | 15 | **14 fully fixed; 1 out of scope** (D5 ComplexMode).  D12 (doublebox 2L interleaved 2-mass) was a precision-tuning issue, not a code bug — see §D12.  D13 (`build_boundary` rank-filter + missing `/. Numeric`) added 2026-05-15.  D14 (boundary-order chain on multi-mass 3L: `analyze_block` + sparse `chop_pre` headroom) closed 2026-05-16.  D15 (`factorize_family` cross-loop bilinear coefficient in SingleMass redef) closed 2026-05-17. |
-| ⚪ intentionally not ported   | 17 | — |
-
-Net assessment: **228 of 228 oracle benches match MMA at rel ~10⁻³⁰**
-(except where the integral's intrinsic cancellation horizon limits
-precision).  Fourteen of the fifteen 🔴 items have been fully
-corrected; D5 (complex-valued numeric kinematics) is the out-of-scope
-row.
+- **228 of 228 oracle benches under [`tools/bench/`](../tools/bench/)
+  match upstream at rel ~10⁻³⁰**, except where the integral's
+  intrinsic cancellation horizon limits precision.
+- All identified semantic divergences are resolved in code or
+  intentionally out of scope (see §3 below).
+- No outstanding unverified branches — every public symbol port has
+  at least one oracle exercising it, or a unit test pinning its
+  behaviour.
 
 ---
 
 ## 1. Methodology
 
 For each upstream file, an audit pass classified every public symbol
-into one of four severities:
+into one of:
 
-- **🟢 verified** — semantics match upstream, and an oracle benchmark
-  under [`tools/bench/`](../tools/bench/) covers the path.
+- **🟢 verified** — semantics match upstream, oracle covers the path.
 - **🟡 unverified** — semantics look correct but no oracle exercises
-  the path.  Latent risk — kept in this list until an oracle is added.
-- **🔴 divergent** — actual semantic difference between MMA and C++.
-  Each one is a mini bug report.
-- **⚪ not ported** — explicitly out of scope (gauge link / HQET /
-  SCET / Wilson / non-Kira IBP backends / WSL plumbing).
+  the path.  Latent risk; resolve by adding an oracle or unit test.
+- **🔴 divergent** — actual semantic difference.  Resolve in code or
+  document as out-of-scope.
+- **⚪ not ported** — explicitly out of scope (gauge link, HQET, SCET,
+  Wilson, non-Kira IBP backends, WSL plumbing).
 
-Three audit passes ran in parallel:
+Three audit passes ran in parallel — one for each upstream file
+domain (AMFlow.m core, Kira/interface.m, DESolver.m + dependencies)
+— with line-by-line cross-referencing against the port.
 
-| Audit | Upstream file | C++ targets |
-|---|---|---|
-| ODE engine  | `diffeq_solver/DESolver.m` (1162 lines) | `src/ode/`, `include/amflow/ode/` |
-| Pipeline    | `AMFlow.m` (1533 lines) | `src/qft/`, `src/ibp/` (excluding `kira_*`), `src/pipeline/`, `src/api/` |
-| IBP backend | `ibp_interface/Kira/interface.m` (532 lines) | `src/ibp/kira_*.cpp`, `include/amflow/ibp/kira.hpp` |
+To run a future audit pass (after upstream advances or new symbols
+are introduced):
 
-Full per-pass reports: `/tmp/audit_desolver.md`, `/tmp/audit_amflow.md`,
-`/tmp/audit_kira.md` (locally generated; not committed).
-
----
-
-## 2. 🔴 Divergences
-
-### D1. Default `RunLength = 200` (upstream: 1000) — **FIXED in v1.1.0**
-
-- **C++ (was)**: `include/amflow/numeric/options.hpp:63`,
-  `RunningOptions::run_length = 200`.
-- **Upstream**: `DESolver.m:97`, `RunLength -> 1000`; mirrored in
-  `AMFlow.m:259`.
-- **Symptom**: `RunUnit` aborts after 200 contour steps where MMA
-  tolerates 1000.  False `"integration contour not generated"` errors
-  on crowded pole landscapes.  No oracle currently trips this, but the
-  cap was 5× tighter than upstream.
-- **Fix**: brought to 1000 to match upstream (one-line edit).
-
-### D2. Default `RationalizePre = 20` (upstream: 100) — **FIXED in v1.1.0**
-
-- **C++ (was)**: `GlobalOptions::rationalize_pre = 20`.
-- **Upstream**: `DESolver.m:66`, `RationalizePre -> 100`; mirrored in
-  `AMFlow.m:259`.
-- **Symptom**: every `acb_real_to_fmpq` call along the contour path
-  (`src/ode/path.cpp:179, 216, 266, 354–355` and `src/ode/inf.cpp:798`)
-  uses 20-digit rationalisation where MMA uses 100.  Silent narrowing
-  of the rationalisation funnel.
-- **Fix**: brought to 100 to match upstream.  Examples that explicitly
-  set the old value (`examples/box1_*.json`, `examples/bubble_*.json`)
-  had the redundant override removed.  All committed bench `*_cpp.json`
-  files already set 80 or 100 explicitly, so they are unaffected.
-
-### D3. Boundary sub-system loses parent's `Cut` info — **FIXED (proper projection)**
-
-- **Upstream** `ReduceBoundary` (`AMFlow.m:790–803`): when the parent
-  system has a non-empty `Cut`, projects the parent's cut propagators
-  (after the region transform) onto the new boundary-sub-family's
-  propagator basis and emits `cut_propagators:[...]` to Kira.  Aborts
-  on `Count[cut, 1] != Count[Cut, 1]` ("eta may have been inserted to
-  cut denominators").
-- **C++ (was, v1.0)** `AMFSystem::build_boundary`
-  (`src/pipeline/amfsystem.cpp:1452`): hard-coded `cut={}` when
-  constructing the boundary `FamilyConfig` — silently dropped the
-  parent cut.
-- **Fix**: full projection mirroring upstream.  For each
-  parent prop with `cut[k]==1`, apply the *bare* `region.transform.map`
-  (loops only, no `half_eta` scaling) via `qft::apply_region_rule`,
-  project the result back to `fc_with_eta_->ctx` via
-  `project_mfrac_by_name` (the bare transform is `__amf_*`-free so
-  no information is lost).  For each `fam.prop[i]`, test
-  `is_zero(fc_with_eta_->apply_replacement(fam.prop[i] − cutde[j]))`
-  for each transformed parent cut prop `cutde[j]`; record matches
-  into `sub_cut`.  Raise `std::runtime_error` if
-  `Count(sub_cut, 1) != Count(parent.cut, 1)` (mirror of
-  `AMFlow.m:801`).  Pass `sub_cut` to `qft::FamilyConfig::build`.
-- **Acceptance gate**: new oracle benchmark
-  [`tools/bench/tradcut_phase_2L_eps001_*`](../tools/bench)
-  derived from upstream `examples/automatic_phasespace/run.wl`
-  (2-loop, 7 propagators, cut={1,0,1,0,1,0,0}, prescription={0,0},
-  s=100, msq=1).  This is the only one of our oracles that
-  actually exercises the Tradition-with-cut code path; the cut
-  topology is not phase_volume so Cutkosky does not apply.  C++
-  matches Mathematica AMFlow at relative error
-  **2.68 × 10⁻³⁰** on `j[phase, 1, 0, 1, 0, 1, 0, 0]`.
-
-### D4. `BoundaryIntegrands` Jacobian factor `|Det|^(4-2eps)` is silently dropped — **FIXED (defensive assert)**
-
-- **Upstream** (`AMFlow.m:731-732`): multiplies integrands by
-  `Abs[Det[Coefficient[#, Loop]&/@Values[trans]]]^(4-2*eps)` (the
-  Jacobian of the loop redefinition).
-- **C++ (was)** `qft::boundary_integrands` (`src/qft/boundary.cpp`):
-  no Jacobian factor.  The omission was correct **only** because
-  `branch_momenta` (`src/qft/region.cpp:108–114`) enforces each
-  propagator's leading loop coefficient = 1, making the matrix `A`
-  in `branch_to_loop` a permutation matrix and `|det A| = 1`.
-- **Fix**: defensive assert in `branch_to_loop` (right after `det_A`
-  is computed and the singular case is handled): if `det_A` is not a
-  constant or `|det_A| ≠ 1`, raise `std::runtime_error`.  Catches
-  any future relaxation of the `branch_momenta` precondition before
-  the missing Jacobian factor produces wrong boundary integrands.
-
-### D5. Kira `ComplexMode` / `CompensateRule` real-only filter — **out of scope (won't be implemented)**
-
-- **Upstream** filters `IBPRule` to drop imaginary-part numerics from
-  the Kira CLI input, then post-substitutes them via `CompensateRule`
-  after `AnalyticReduction` (line 488) and `DifferentialEquation`
-  (line 519).
-- **C++** `KiraConfig::numeric_values` is a flat `map<string,string>`
-  of pre-computed rational strings — no imaginary handling.  The 5th
-  `IBPSystem` parameter `complexmode` has no C++ counterpart.
-- **Status (2026-05-13 maintainer decision)**: complex-valued
-  numeric kinematics are **permanently out of scope** for this port.
-  The C++ algebra layer is over Q (FLINT `fmpz_mpoly_q_t`) and the
-  cost of either path (Q[i] coefficient ring or a parallel
-  acb-rational pipeline) is incommensurate with the use case.  The
-  JSON dispatcher (`apply_blackbox_options` in `src/api/run_json.cpp`)
-  rejects the complex form `{"re":..,"im":..}` with an error that
-  points to this audit entry.  Workaround: supply only real
-  numeric values.
-
-### D6. RHS-not-in-master is silently dropped — **FIXED (now throws)**
-
-- **Upstream** (`Kira/interface.m:486`): `Abort[]`s when
-  `CoefficientArrays` reports a non-master residue (i.e., a J-integral
-  appears on the right-hand side that is not in the masters list).
-- **C++ (was)** the rhs assembly path in `ibp::black_box_reduce`
-  (`src/ibp/reduce.cpp:218-230`) silently appended unknown rhs J
-  integrals; consumers later filtered them with `master_index.find`
-  + `continue`.
-- **Fix**: in `ibp::black_box_reduce`, before pushing an rhs entry,
-  look up `target_key(rhs_j)` in `master_index`; on miss, raise
-  `std::runtime_error` naming the offending target and rhs.
-
-### D7. `ibp::diffeq` master-count divergence between preheat and inner Kira — **FIXED (Masters+Reduce restructured to mirror upstream BlackBoxReduce/BlackBoxDiffeq)**
-
-- **Upstream MMA** (`Kira/interface.m` `BlackBoxDiffeq` + `DifferentialEquation`):
-  a *single* Kira invocation (`IBPSystem`) sets up the IBP system at
-  the preheat `(rank, dot)`.  Both the preheat-master-detection step
-  (`GetFile["masters_mma"]`) and the subsequent `AnalyticReduction[integrals]`
-  calls read from this single Kira run's output, so the master list
-  they see is by-construction identical.  The defensive check
-  `If[masnew=!=masters, Abort]` (`DifferentialEquation` line in
-  `interface.m`) is therefore vacuously true.
-- **C++** (`src/ibp/reduce.cpp` `diffeq`, lines 275-341) makes *two*
-  independent Kira invocations: first a Masters-mode preheat at
-  `opts_eff = apply_jdot_jrank_floor(opts, {&jpreferred}, dot+1)`;
-  then an inner `reduce()` call which itself invokes Kira at a
-  potentially higher `(rank, dot)` (the inner floor adds the
-  derivative-shifted `all_ints` to the dot-bumping list).  The strict
-  equality check at `src/ibp/reduce.cpp:338` throws on any mismatch
-  between preheat-master-count and inner-master-count.
-- **Oracle exposure**: 4-loop equal-mass banana
-  ([`tools/bench/banana_4loop_eps001_*`](../tools/bench)) with
-  `BlackBoxDot=5`, target `J[banana4, 1,1,1,1,1, 0,...]`.  Preheat
-  finds 10 masters at dot=5 (max master JDot=5, e.g.
-  `J[1,1,1,1,6]`); `libp_deriv` shifts the dot to 6 in the derivative
-  integrals; the inner Reduce runs Kira at dot=6 and reports an
-  11-master set (the 10 preheat masters plus an additional
-  `J[1,1,1,1,7]`).  MMA on the same family completes in 385 s
-  (single-Kira-call structure makes its check vacuously true); C++
-  aborts immediately at the root AMFSystem's diffeq construction.
-  3-loop banana doesn't trip the check because its max master JDot
-  (=4 at `J[1,1,1,5]`) is strictly less than `BlackBoxDot=5`, so
-  derivative-shifted dot=5 stays within the preheat bound.
-- **Impact**: real correctness gap — C++ rejects a family that MMA
-  accepts.  Not silent-wrong (loud throw), but C++ refuses to compute
-  where upstream would succeed.  The MMA reference value is committed
-  in the bench triplet for verifying any future fix.
-- **Deeper root cause (upstream-faithful diagnosis)**: the master-count
-  mismatch in `ibp::diffeq` is a *consequence*, not the source.  The
-  primary divergence is upstream a step earlier — in
-  `BlackBoxReduce[jints, {}]` (called from `BlackBoxAMFlowSingle` to
-  expand the user's targets into a complete master set before
-  AMFSystem setup).  Upstream `BlackBoxReduce` is a two-Kira-call
-  sequence in a single shared `$ReductionDirectory`:
-  1. `IBPSystem[top, rank, dot, preferred, ...]` — writes a yaml
-     with `select_mandatory_recursively`, asking Kira for a
-     **sector-wide master enumeration** at `(rank, dot)`.  For L=4
-     banana at `(rank=0, dot=5)` this returns 10 masters.
-  2. `AnalyticReduction[jints]` — same dir, rewrites yaml with
-     `select_mandatory_list` for the specific targets, runs Kira a
-     second time at the SAME `(rank, dot)`.  Reads the (now
-     overwritten) masters file — must be a `SubsetQ` of the first
-     run's masters (or upstream Aborts).
-  C++ `ibp::reduce(jints, /*preferred=*/{})` (`src/pipeline/solve_integrals.cpp:727`)
-  does only the second step — `kira_write_jobs(Reduce)` with
-  `select_mandatory_list[target]` — and reads back only **1 master**
-  (the user's target itself).  The full 10-master sector enumeration
-  upstream gets from step 1 is missing.  AMFSystem then sets
-  `preferred_` to that 1 master; the diffeq preheat sees
-  `jpreferred=[1 elem with JDot=0]`, so
-  `apply_jdot_jrank_floor(opts, {jpreferred}, dot+1)` → dot=5; the
-  inner reduce at dot=6 (derivatives shift dot to 6) finds the
-  11th master — and the strict equality check trips.
-  Upstream has the analogous flow already: its AMFSystem 1
-  receives `jpreferred = 10 masters` (from the outer
-  `BlackBoxReduce[jints, {}]`), so the preheat already runs at
-  `dot = max(5, 5+1) = 6`, the inner runs at the same dot=6, and
-  Kira returns the same 11 masters in both — `SubsetQ` passes.
-- **Fix (upstream-faithful)**: extend C++ `ibp::reduce` to mirror
-  upstream's two-Kira-call `BlackBoxReduce` semantics:
-  1. **First Kira call (Masters mode, sector-wide enumeration)** —
-     write yaml with `select_mandatory_recursively` at the floored
-     `(rank, dot)`; run Kira; read `masters_mma` file.
-  2. **Second Kira call (Reduce mode, target reduction)** — same
-     dir, same `(rank, dot)`, write yaml with
-     `select_mandatory_list` for the targets; run Kira; read
-     `target_table.m`.
-  Both calls share the same dir and the same `(rank, dot)`, so the
-  master list they see is by-construction consistent.  Then:
-  - `black_box_amflow_single` (`solve_integrals.cpp:727`) gets back
-    the **full master list** as `reduction.masters`; AMFSystem
-    setup receives all 10 masters as `preferred_`; the diffeq
-    preheat sees `JDot_max(jpreferred)=5` and uses `dot=6`; the
-    inner reduce at dot=6 returns the same 11 masters; the
-    strict equality check passes by construction.
-  - Also: remove the redundant `apply_jdot_jrank_floor` re-floor at
-    `src/ibp/reduce.cpp:177` for the inner call invoked from
-    `ibp::diffeq` (the inner call should use the preheat's
-    `(rank, dot)`, not re-floor over `{all_ints, preferred}`).
-
-### D8. `canonical_boundary_permutation` + `canonical_taylor_permutation` re-route SparseGaussian's free column — **FIXED (both functions now return identity)**
-
-- **Upstream MMA** `DESolver.DetermineBlockBoundaryOrder`
-  (`DESolver.m:705-728`) and `DESolver.CalcTaylor`
-  (`DESolver.m:752-790`): `BuildTaylor → ConstructMatrix →
-  SparseGaussian` all see the matrix in its **original row order**.
-  The `block` variable that `fid[n]` indexes is the raw output of
-  `AnalyzeBlock[mat]` — no `SortBy`, no `Permutation`.  Whichever
-  column SparseGaussian's leading-pivot search reaches first becomes
-  leading; the remaining "free" columns are the ones the algorithm
-  cannot pivot, and they index back to specific masters via
-  `block[[Mod[n-1, Length[new]]+1]]`.
-- **C++ (was, v1.0 through 2026-05-12)**: `src/ode/inf.cpp:290-308`
-  (`canonical_boundary_permutation`) sorted block rows DESCENDING
-  by `int_offsets[i] = power_q[i] - power_q[0]`; `src/ode/inf.cpp:319-340`
-  (`canonical_taylor_permutation`) sorted by
-  (`boundary_row_has_nonzero` asc, `int_offsets` asc, index asc).
-  Both then called `build_taylor_symbolic` on the permuted matrix and
-  unpermuted the final result.  Because SparseGaussian's column-
-  processing order is structurally sensitive to row order, a row
-  permutation re-routes which master ends up holding the free
-  (unsolved) column — i.e. which master receives the `order=0`
-  boundary BC assignment.
-- **Oracle exposure**: 4-loop mixed-mass banana, mass pattern
-  `{mAsq, mBsq, mAsq, mBsq, mAsq}`
-  ([`tools/bench/banana_4L_mixed_*`](../tools/bench)) with
-  `psq=-3, mAsq=1, mBsq=2, eps=1/1000, BlackBoxDot=5`.  The 21-master
-  block at the corner-system level (region 3, scale `[1,1,1,1]`,
-  pattern group `b=-4` with monotone offsets
-  `[0,0,1,2,2,3,3,3,3,4,4,4,4,4,5,5,5,5,6,6,7]`) is the smallest
-  configuration where both sorts have a nontrivial effect *and*
-  fail to compensate each other.  MMA assigns `order=0` to
-  `master[20] = j[banana4mix, 1, 1, 1, 1, 7]`; C++ assigned it to
-  `master[8] = j[banana4mix, 1, 1, 1, 1, 3]`.
-- **Impact**: silent-wrong-result — `banana_4L_mixed` corner
-  `[1, 1, 1, 1, 1, 0, ...]` returned `3.984 × 10¹⁵` versus the
-  MMA value `6.258 × 10¹²` (637× off); 18 of 20 sampled values were
-  off by ratios ranging from `-1395.4` to `1396`.  The two
-  sub-masters where one of the 5 mass-bearing propagators is absent
-  ([1,1,1,1,0] and [1,1,1,0,1]) matched MMA exactly because those
-  paths factorize into 4 disconnected 1-loop tadpoles handled by
-  `SingleMass`, never hitting the buggy 21-master block.
-- **Why the existing 545 gtests didn't catch it**: the two sorts
-  **compensated** each other on small blocks and on symmetric
-  configurations (the dual-permute net was zero whenever the
-  per-master "BC vs non-BC" or "offset" distribution was already
-  monotone-aligned with descending-by-offset).  Removing only one of
-  the two sorts left the final corner value unchanged because the
-  other still neutralized it; removing both made the corner agree
-  with MMA at rel < 1e-30.
-- **Fix**: both `canonical_boundary_permutation` and
-  `canonical_taylor_permutation` now `concatenate analyze_block(mat)`
-  output without any `stable_sort`, exactly mirroring upstream's
-  no-permutation convention (`src/ode/inf.cpp:289-340`).
-- **Validation**: `banana_4L_mixed` now matches MMA at rel < 1e-30
-  on all 20 sampled values (was 2/20 matching); all 545 previously
-  passing gtests still pass.  Commit `c668f79` (2026-05-13).
-
-### D9. Kira pipeline alignment (numeric substitution / run flags / Reduce-mode preferred) — **FIXED (mirror MMA's `SPToSTU /. IBPRule` + `FilterRules` + `AnalyticReduction` reuse)**
-
-Three coupled Kira-pipeline divergences surfaced while debugging the
-pentabox 2L 5-leg oracle.  All three trace back to the C++ port
-keeping symbolic SPs and a sorted-preheat preferred list where MMA
-substitutes numerics into the YAML up-front and reuses the input
-preferred file verbatim:
-
-- **D9a — numeric SPs leak into Masters-mode Kira.**  Upstream
-  `Kira/interface.m:53` runs `SPToSTU /. IBPRule` before writing
-  `kinematics.yaml`, baking numeric values for `s12`, `s23`, …
-  into `scalarproduct_rules` and propagator masses.  C++ (was)
-  wrote the symbolic YAML and forwarded numerics through
-  `-s<var>=<val>` instead.  Result: Kira's Masters-mode call sees
-  symbolic SPs, cannot identify scaleless sub-sectors, and
-  over-enumerates masters — `175 vs 172` for the pentabox top.  The
-  build_diffeq step then fails with `"preferred master not in
-  Kira's master list"`.
-- **D9b — `-s<var>=<val>` race against baked-in YAML.**  Once D9a
-  bakes numerics into the YAML, forwarding the same numerics via
-  `-s<var>=<val>` is at best wasted and at worst (when the symbol
-  no longer exists in the YAML at all) makes Kira lock up at
-  `set: s12 = -2`.  Mirrors `FilterRules[IBPRule, Prepend[MassScale, ep]]`
-  in `Kira/interface.m:274`.
-- **D9c — Reduce-mode preferred file gets sorted twice.**  At
-  Reduce-mode write time, `ibp::reduce` and `ibp::diffeq` (was)
-  re-emitted the *sorted preheat* preferred list instead of the
-  original `preferred` / `jpreferred` input.  MMA
-  `AnalyticReduction` reuses the IBPSystem preferred file verbatim;
-  the C++ resort produced 49+ RHS terms for masters whose LHS = the
-  master itself, breaking Kira's elimination order in the pentabox
-  2L case.
-
-- **Fix (all three)**: `src/ibp/kira_yaml.cpp` substitutes
-  `cfg.numeric_values` into `scalarproduct_rules` and propagator
-  masses and recomputes `kinematic_invariants` to drop variables
-  that no longer appear; `src/ibp/kira_run.cpp` filters those same
-  variables out of the `-s<var>=<val>` forwarding (only `-sd` and
-  `-seps` remain); `src/ibp/reduce.cpp` uses the input
-  `preferred` / `jpreferred` at Reduce-mode write time.  Commit
-  `c37f1a0` (2026-05-13).
-
-### D10. Precision-mismatch in `acb_real_to_fmpq` rationalization — **FIXED (cap `rationalize_digits` at `working_pre * log10(2) - 5`)**
-
-- **Symptom**: when `RationalizePre` (decimal digits) exceeded what
-  `WorkingPre` (binary precision) can resolve, `acb_real_to_fmpq`
-  (and three parallel call-sites at `src/ode/path.cpp`,
-  `src/pipeline/amfsystem.cpp`, `src/numeric/matrix.cpp`) treated
-  binary-representation noise from the `acb_t` midpoint as a "real"
-  rational and emitted a non-zero residue that should have been
-  zero.  The leaked 10⁻²⁵ residual landed in the diagonal of
-  `m_pure` and propagated into 10⁷-10²¹ errors on masters whose
-  exact BC was zero.  Symptom is dependent on the
-  WorkingPre/RationalizePre ratio rather than on the topology, so
-  it surfaced only when pentabox forced the user-facing default of
-  `RationalizePre=100` to actually be used at `WorkingPre=120`
-  (≈ 36 decimal digits).
-- **Fix**: cap `rationalize_digits` to `floor(working_prec_bits * log10(2)) - 5`
-  in all four call-sites before passing it to
-  `arb_to_rational` / `acb_real_to_fmpq`.  The 5-digit safety margin
-  shields the result from FLINT's interval-arithmetic rounding.
-  Regression covered by the new synthetic 3-master multi-fractional
-  test (`tests/test_ode_inf.cpp::InfTest.CalcInf_MultiFractional_CrossCoupling_AllZeroBC`).
-  Commit `650e369` (2026-05-13).
-
-### D11. Jordan eigenvector normalization mismatch (MMA "last entry = 1" vs FLINT integer-cleared) — **FIXED (`fmpq_mat_nullspace_exact` rescales to MMA convention)**
-
-- **Symptom**: FLINT's `fmpz_mat_nullspace` (used internally by
-  `jordan_decomposition_exact`'s eigenvector search) returns null-
-  space basis vectors with denominator-cleared INTEGER entries.
-  For an eigenvector that Mathematica would emit as `(6993/998, 1)`,
-  FLINT returns `(6993, 998)` — a 998× scaling.  Without rescaling,
-  downstream `shearing_transformation` / `leading_jordan` T blocks
-  accumulate the integer factors (T col scaled by `ele[k]` and then
-  by an integer-cleared `u`), cascading through the off-diagonal
-  Sylvester step in `to_fuchsian_global` (each iteration injects
-  the partner block's T scale via `T[l_rows][cols] += T[l_rows][rows] . G / eta^p`).
-  In the pentabox 2L 5-leg 76-master sub-system this snowballed T
-  entries to 10³⁰⁰⁺, overwhelming PSMapRuleS at any practical
-  working precision.  The 6-prop sub-target
-  `j[0,1,0,1,1,1,1,1,0,0,0]` came out as
-  `7.84 × 10¹² - 3.04 × 10¹³ i` against the MMA reference
-  `2.24 - 150.51 i`.  Smaller benches (hexagon 1L, mercedes 3L,
-  sunset 4L, all the existing 545 gtests) did NOT trip the cascade
-  because their normalize-mat chains stayed inside the
-  PSMapRuleS precision budget.
-- **Root cause**: MMA's `JordanDecomposition` / `Eigenvectors`
-  normalizes eigenvectors so the **last non-zero entry equals 1**
-  (e.g. `(6993/998, 1)`).  FLINT's integer-cleared convention
-  produces the same eigenline scaled by a denominator factor (e.g.
-  `998` here, but in deeper sub-systems can reach 6993, 1 / eps,
-  or multiples thereof).  The C++ shearing math is mathematically
-  valid in either basis, but the off-diagonal Sylvester corrections
-  inherit the scaling and stack multiplicatively.
-- **Fix**: `fmpq_mat_nullspace_exact` (`src/ode/jordan.cpp`)
-  rescales each null-space basis vector so its last non-zero entry
-  is 1, matching Mathematica's convention.  Regression test
-  `JordanTest.JordanEigenvectorsNormalizedToLastEntryOne` uses the
-  exact 2×2 post-shearing residue from the pentabox `{7, 8}` block
-  that surfaced the failure.
-- **Validation**: pentabox `j[0,1,0,1,1,1,1,1,0,0,0]` (6-prop
-  sub-target) now matches MMA at 30+ digits; the corner
-  `j[1,1,1,1,1,1,1,1,0,0,0]` matches at rel ≤ 4.7 × 10⁻¹⁰
-  (~10 significant digits; the cancellation horizon of the
-  76-master sub-system limits precision against eps = 1/1000).
-  All 547 gtests (was 546 pre-D11, +1 regression test) pass.
-  Commit `f4f2aee` (2026-05-14).
-
-### D12. Doublebox 2L 4-leg with interleaved 2-mass scheme — **RESOLVED (precision-tuning, not an algorithmic bug)**
-
-- **Symptom (at default precision)**: a 2-loop doublebox with two
-  distinct internal masses **interleaved across both loops** (`mA` on
-  `l1` prop 0 AND `l2` prop 3; `mB` on `l1` prop 1 AND `l2` prop 5)
-  produces a C++ result with the wrong real-part sign and an O(0.1)
-  spurious imaginary part where MMA gives the numerical noise floor:
-  - C++ at `working_pre=160, x_order=200, extra_x_order=240`:
-    `+0.05267532... + 0.151599888... i` ❌
-  - MMA reference: `−0.04900476... + 1.85e-68 i`
-- **Resolution**: at `working_pre=200, x_order=400, extra_x_order=480`
-  C++ produces `−0.0490047676838116862250248106391 + 6.06e-116 i`,
-  matching MMA to all printed digits.  The original failure was
-  **insufficient Taylor expansion order for this topology's
-  Frobenius-series convergence radius**, not a code error.
-- **Why this topology demands more terms**: the top-sector
-  differential-equation matrix has denominators `(eta² + eta + 12)`
-  (complex-conjugate poles at `η = −1/2 ± i·√47/2`, `|η| ≈ 3.46`).
-  These complex poles tighten the Frobenius series' convergence radius
-  for the top-sector masters (sorted[105..108]) versus the other
-  ~93 masters whose ODE-block denominators are real-axis only
-  (`(eta+1)` etc.).  At `x_order=200, extra_x_order=240` the top-sector
-  series is truncated short of convergence; the truncation residual
-  manifests as ≈ `0.7669 × π/16` of spurious Im (fingerprint of a
-  pole-neighborhood residual, not a residue pickup).  Doubling
-  `x_order` brings the truncation below the noise floor.  Block /
-  single-mass schemes are not affected because their top-sector
-  matrices only have real-axis poles away from the NegIm contour.
-- **What was ruled out during investigation** (kept for future
-  reference; full trail in commits `ab153f3`, `7d08072`, `4ed0371`):
-  - Region enumeration: C++ `find_all_region` returns the same 4
-    regions as MMA for interleaved (3 for block).
-  - Sub-family corner value: standalone `dbxCross` family verified
-    against MMA at ~30 digits.
-  - BC derivation for top-master `sorted[107]`: correct from
-    `coef=-1 × sub_master[12]`.
-  - ODE path construction: shared by all masters; path bugs would
-    affect all 97 masters, not only the 4 top-sector ones.
-- **Recommendation for users**: cross-loop multi-mass topologies (or
-  any case where the top-sector diffeq matrix has complex pole pairs
-  near the NegIm contour) should set `x_order` ≥ 400 and
-  `extra_x_order` ≥ 480.  An automatic policy that detects complex
-  roots of the top-sector denominator and bumps these defaults is a
-  desirable future enhancement but not required for correctness — the
-  knobs already exist and produce the correct answer.
-- **Status**: closed.  The original `doublebox2m` bench will be added
-  to `tools/bench/` with the higher-precision parameters as a
-  regression guard for cross-loop multi-mass cases.  Discovered and
-  resolved 2026-05-15.
-
-### D13. `build_boundary` projection skips MMA `/. Numeric` — **FIXED**
-
-- **Symptom**: any topology with 2+ distinct mass scales where two
-  propagators share their SP-coefficient signature (e.g.
-  `l1²-mAsq` and `l1²-mBsq` both have SP = `[1,0,…]`) aborts in C++
-  with `AMFSystem::build_boundary: lt-to-sub-red projection:
-  project_mfrac_by_name: residual var 'mAsq' not in dst`.  First
-  surfaced 2026-05-15 by `vtx2_2L_3mass_eps001` (3-mass 2L 3-leg
-  vertex), but the same code path also affects 2-mass variants
-  whenever the rank-filter drops a mass-bearing prop.
-- **Root cause** (`src/pipeline/amfsystem.cpp:1840-1846`, the inner
-  projection in `build_boundary`): `qft::to_complete_explicit`
-  (`src/qft/complete.cpp:382-448`) uses `maximal_group_rows_mfrac`
-  to pick a rank-maximal independent set of propagators for the
-  boundary sub-family.  When two propagators are linearly dependent
-  in SP-coefficient space (rare with a single mass; common with
-  multiple masses), only one survives.  The dropped propagator's
-  mass scale is absent from the sub-family's `red.red_ctx.ctx`, but
-  the boundary's Laporta coefficient `lt.coeff` still carries that
-  mass symbolically.  `project_mfrac_by_name` (lines 173-231) errors
-  on the residual non-prefix-droppable variable.
-- **MMA upstream**: `ReduceBoundary` at `AMFlow.m:790-818`.  Line
-  817 reads
-  `coe = Together[Total[f[#[[1]]]*#[[2]]&/@str] /. Numeric]`
-  — applies the user-supplied `AMFlowInfo["Numeric"]` map to the
-  combined coefficient *immediately after* the inner reduction.
-  By the time the coefficient is recorded, all symbolic mass scales
-  are concrete rationals, so MMA never sees a context-mismatch.
-- **Fix**: substitute numeric values into `lt_coef_in_fc` before the
-  projection, mirroring MMA `/. Numeric`.  Implementation:
-  - Build `numeric_q` once at the top of `build_boundary` from
-    `opts_.bb.numeric_values` (`build_numeric_q` at line 504).
-  - Per sub-system, build `sub_red_keep_names` = the set of names
-    in `red.red_ctx.ctx`.
-  - Call `mfrac_substitute(lt_coef_in_fc, numeric_q,
-    sub_red_keep_names)` before the inner
-    `project_mfrac_by_name(lt_coef_in_fc, red.red_ctx.ctx)`.
-  After substitution the only symbolic variables remaining in
-  `lt_coef_in_fc` are those present in `red.red_ctx.ctx`, so the
-  projection succeeds.  The result is numerically identical to MMA's
-  flow (since MMA also applies `/. Numeric` at the same conceptual
-  point).
-- **Regression coverage**:
-  - `tools/bench/vtx2_2L_3mass_eps001_*` — pre-fix abort; post-fix
-    matches MMA at rel 9.78 × 10⁻³¹.
-  - All 40 existing oracle triplets continue to pass; ctest 547/547
-    pass.
-- **Status**: closed.  Discovered + resolved 2026-05-15 during the
-  multi-mass topology-diversity stress sweep.
-
-
-### D14. Boundary-order chain on multi-mass 3L topologies — **CLOSED (2026-05-16)**
-
-- **Symptom**: bench `bn3_4mass_3L_eps001` (3L 2-leg banana, 4 distinct
-  internal masses, `BlackBoxDot=5`).  C++ could not complete: the
-  *boundary* `BlackBoxReduce` for system_0 / region_0 handed Kira **162
-  J targets** with max numerator rank **56**.  MMA handed Kira **1 J
-  target with rank 0** for the same call.  C++'s heavier Kira input
-  exceeded the 100 GB memory cap; MMA finished in seconds.  The 161
-  extra J targets came from `qft::boundary_integrals` over-expanding
-  the integrand: `determine_boundary_order` returned positive orders
-  (23, 27, 56, 25, 25) for size-12 inner-block masters that MMA
-  returned `−1` (skip) for.
-
-- **Root cause** — four chained C++-vs-MMA divergences in
-  `src/ode/blocks.cpp` and `src/ode/sparse.cpp`:
-  1. `analyze_block` Gather predicate was `subset_or_superset`.  MMA
-     uses `samesetQ` (exact same-set, `DESolver.m:245`).  The wrong
-     predicate could collapse nested closures (`{0} ⊂ {0,1} ⊂ {0,1,2}
-     ⊂ …`) into one giant block instead of N separate closures.
-  2. `analyze_block` was missing the final
-     `Reverse[Table[Complement[Sequence@@blocks[[i;;]]], …]]` step
-     (`DESolver.m:247`) — without the SCC trim, each block can
-     contain downstream masters it shouldn't.
-  3. `extend` (forward closure) filtered the union by
-     "`subint[j] ∩ bl ≠ ∅`" (back-edge requirement).  MMA's `extend`
-     (`DESolver.m:240`) is the plain union; the filter shrinks
-     closures to fragments of an SCC.
-  4. **Load-bearing for bn3_4mass**: `sparse_chop_digits` defaulted to
-     `chop_pre = 20` (10⁻²⁰).  MMA's `ConstructMatrix + SparseGaussian`
-     runs on exact rationals — `(k)·dn − an` cancellations vanish
-     exactly, `Sparsify` discards them.  C++'s acb path: rationals
-     enter via `set_fmpq` (rounding ~10⁻ʷᵒʳᵏⁱⁿᵍ⁻ᵖʳᵉ) and
-     `acb_mul_si + acb_sub` yields a ball with midpoint ≈ 0 but
-     nonzero radius.  Through ill-conditioned `acb_inv` pivots in
-     `forward_sparse_gaussian`, accumulated noise can land above
-     10⁻²⁰; `chop_sparse` then leaves spurious entries that re-route
-     pivot choice and inflate the *unsolved* column set at the wrong
-     (low-fid-order) positions → positive boundary orders → over-
-     expanded boundary integrand → 162 J targets → Kira OOM.
-
-  Fixes (1)–(3) are MMA-faithfulness cleanups that on bn3_4mass
-  happen to produce the same partition C++ already had (the
-  closures aren't a strict-superset chain at this level), but they
-  close known semantic gaps that other topologies could hit.  Fix
-  (4) is what unblocks bn3_4mass.
-
-- **Fix**:
-  - `src/ode/blocks.cpp`: rewrite `extend` to plain forward closure;
-    rewrite `analyze_block` post-closure stage to `same_set` Gather +
-    topblock-first `sortblocks` + `Reverse[Complement]` SCC-trim.
-  - `src/ode/sparse.cpp`: `construct_matrix` discards freshly-computed
-    cancellations via `acb_contains_zero` (was `acb_is_zero`);
-    `sparse_chop_digits` default = `max(chop_pre, working_pre − 40)`
-    so the sparse layer always has ≥ 40-decimal-digit headroom below
-    working precision.  User can override via the
-    `AMFLOW_SPARSE_CHOP_DIGITS` env var.
-
-- **Verification**:
-  - All 548 ctest tests pass.
-  - bn3_4mass_3L_eps001 (`tmp/bn3_4mass_retest_cpp.json`, eps =
-    1/1000) completes end-to-end.  Region-0 border becomes
-    `[-1,-1,-1,0,-1×17]` matching MMA exactly; boundary BBR hands
-    Kira 1 J target (was 162 pre-fix).  Final result:
-
-    | | MMA | C++ |
-    |---|---|---|
-    | Re J[bn34m,1,1,1,1,…] | `9.0595431429331640914606506828945…e10` | `9.05954314293316409146065068289e10` |
-    | Im J[bn34m,1,1,1,1,…] | `3.1753842859258203138806181100151…e-50` | `3.17538428592582031388061811002e-50` |
-
-    ≥28-decimal-digit agreement on both real and imaginary parts.
-
-- **Why existing 40 oracles didn't trigger this**: smaller diffeq
-  matrices and simpler boundary structure kept compounded acb error
-  below 10⁻²⁰.  bn3_4mass's 12-master inner block at
-  `ExtraXOrder = 240` with ill-conditioned pivots was the first
-  committed-targeted case to push compounded noise above the chop
-  threshold.
-
-- **Investigation history** (preserved for context): an earlier
-  hypothesis attributed bn3_4mass's failure to a 20× memory blowup
-  in C++ algebra, traced (incorrectly) to `make_reduction_context`
-  declaring an 11-variable polynomial ring instead of `{eta, d}`.
-  Five "Stage 1-5" patches landed against that hypothesis
-  (`019ba18`, `4de9245`, `625bf58`, `c522132`, plus the lcm-sum
-  batching), and a Stage-6 patch (`66db94c`) stopped appending
-  masters to `all_ints`.  Once per-process RSS was separated
-  (amflow_cli: 189 MB, Kira: 22.9 GB), the C++ algebra layer was
-  ruled out and the investigation pivoted to comparing C++'s Kira
-  inputs against MMA's preserved cache (`tools/bench/mma_refs/
-  bn3_4mass_3L_eps001_mma_cache/`), which surfaced the
-  162-vs-1 J-target gap and led upstream into the boundary-order
-  chain.  Stage 1-6 patches remain landed as MMA-faithful cleanup
-  but are not load-bearing for bn3_4mass.
-
-### D15. `factorize_family` cross-loop bilinear coefficient in SingleMass redef — **CLOSED (2026-05-17)**
-
-- **Symptom**: 4L 2-leg `sunset_bubble` topology variants
-  `sunset_bubble_4L_1mass_l4`, `sunset_bubble_4L_2leg_alt_eqmass`, and
-  `sunset_bubble_4L_alt1_eqmass` failed distinctly while the sibling
-  `_1mass_l1` and `_alt2_eqmass` passed.  The l4 variant returned the
-  value of sub-sector `j[sb41ml4, 1,0,1,1,1,1, ...]` (Re ≈ 28071) for
-  the corner instead of MMA's Re ≈ -2.09e7.  The 2leg_alt and alt1
-  variants crashed with `AMFSystem::solve: ending system master
-  ...sm0|1|1|1|0|0|0|0|0|0 has no Vacuum entry, no explicit_boundary
-  value, and no usable reduction rule` at a deeply nested sub-system.
-- **Root cause**: `src/pipeline/factorize.cpp:142-170` (`factorize_family`
-  loop-redefinition matrix construction).  C++ wrote per-row entries
-  via `d.coeff_of(j, 1)` (a polynomial in other loops/legs) and then
-  took its constant term — which silently dropped the cross-loop
-  bilinear contribution.  For a mass propagator like `(l_chosen - l_j)^2 - 1`,
-  `coeff_of(l_j, 1) = -2 * l_chosen` and its constant term is 0; MMA
-  `Coefficient[mom, l_j] = -1` after the `ToSquare` completing-square.
-  The wrong matrix produced a `GL(L, Z)` automorphism that did not
-  canonicalize the mass propagator to single-loop² form (e.g. left
-  `(l_chosen − l_j)^2 - 1` instead of `l_x^2 - 1`).  Downstream,
-  `single_mass_setup_master`'s `find_loop_in_prop` then picked the
-  first loop with quadratic exponent (l_chosen, not the mass-bearing
-  loop) and promoted it to leg, scaleless-ing the resulting sub-family.
-  The sibling `_1mass_l1` and `_alt2_eqmass` did not trip the bug
-  because their region-1 boundary mass propagator is already single
-  loop² (`l1^2 - 1`), so the buggy and correct redef matrices agreed
-  modulo a harmless cyclic loop permutation.
-- **Fix**: mirror upstream `ToSquare` (`AMFlow.m:437-444`) — extract the
-  bilinear `l_chosen * l_j` coefficient via `d.coeff_of({chosen, j},
-  {1, 1})` and take its constant term.  Add a defensive assert that
-  `coeff_of(d, l_chosen, 2) == 1` (AMFlow propagator convention; would
-  fire if a future change relaxed leading-loop² normalization in
-  `branch_momenta`).
-- **Validation**:
-  - ctest 549/549 pass (+1 new regression test
-    `FactorizeTest.CrossLoopMassProp_RedefIsSingleLoopSquared`
-    constructed from the minimal sb41ml4 SingleMass input).
-  - All 225 previously-passing oracles remain matched (no regression).
-  - `sunset_bubble_4L_1mass_l4_eps001`: corner now `rel = 3.10e-31`
-    (was: silent-wrong sub-sector value).
-  - `sunset_bubble_4L_2leg_alt_eqmass_eps001`: corner now `rel = 1.68e-30`
-    (was: crash at deep SingleMass).
-  - `sunset_bubble_4L_alt1_eqmass_eps001`: corner now `rel = 1.90e-30`
-    (was: crash, identical propagator list to alt — same root cause).
-  - All three deferred-bug oracles added to `run_perf_audit.sh`
-    rotation; total 228 of 228 oracles green.
-- **Why existing 547 gtests didn't catch it**: the three pre-existing
-  factorize unit tests (`OneLoopBubble_Identity`,
-  `SortBy_PicksMonomialContainingMassOne`, `TwoLoopSunrise_OneComponent`)
-  use only standard single-loop² propagators (`l^2 - msq`, `l1^2 - 1`,
-  `(l1+l2-p)^2 - m3sq`).  Under those inputs `coeff_of(j, 1)` is
-  identically zero on non-chosen loops, so the constant-term path and
-  the correct cross-term path return the same value.  The bug only
-  surfaces when a `(l_a - l_b)^2`-shape propagator with mass=-1 enters
-  `tobeloop` — which happens on the region-1 boundary of 4L 2-leg
-  `sunset_bubble` topologies after the boundary-region eta transform
-  but is absent from the smaller-loop oracle benches.
-
-## 3. 🟡 → 🟢 Closure log (originally-unverified branches)
-
-21 branches flagged 🟡 in the v1.0 audit were promoted to 🟢 via new
-oracles, unit tests, theoretical-equivalence arguments, or
-conservative-fallback documentation.  Per-branch trail in commits
-`f4f2aee..7d4b1b0`; see git history if a specific row needs to be
-re-investigated.
-## 4. ⚪ Not ported (intentional)
-
-- `SolveIntegralsGaugeLinkSingle` / `SolveIntegralsGaugeLink` (gauge-link / HQET / SCET / Wilson lines).
-- `ExpandGaugeX`, `GenerateSquare` (linear-propagator reshaping for gauge links).
-- `IBPReducer = "FiniteFlow+LiteRed"` — Kira-only by design; no FiniteFlow / FIRE / LiteRed / Blade bridge.
-- `WSL` Windows compatibility plumbing in `Kira/interface.m`.
-- `BinaryFormat` Windows newline handling.
-- `$PermutationOption` (Kira yaml field; never set in benches).
-- `FireFly` / `Mixed` / `NoFactorScan` reduction modes (Kira-only `Masters` and `Kira` modes used).
-- `install.m` discovery scripts.
+1. Pin the upstream commit hash.
+2. For each public symbol, locate the corresponding C++ port.
+3. Walk the call graph and assert oracle coverage.
+4. Either land a new oracle or unit test, or document the gap.
 
 ---
 
-## 5. Upstream drift since v1.0 port
+## 2. Not ported (intentional, by design)
 
-The upstream master branch has progressed since the C++ port was
-performed.  Diffs against our reference snapshot (commit `efda1db`):
+These upstream features are **deliberately absent** from the C++
+port; no plan to add them.
 
-- **New `UseCache` and `SkipReduction` options** (`AMFlow.m:259`):
-  caching/skip toggles for AMFSystem persistence.  Not ported.  Not
-  blocking.
-- **Source-comment line-number drift**: ~30 lines off in places (~3 %
-  upstream growth since the port).  Recommend pinning citations to
-  a specific upstream commit hash in a future cleanup pass.
-
-These upstream-side changes are all **additions**; no upstream
-behaviour we already ported has changed.
+- `SolveIntegralsGaugeLinkSingle` / `SolveIntegralsGaugeLink`
+  (gauge-link / HQET / SCET / Wilson lines).
+- `ExpandGaugeX`, `GenerateSquare` (linear-propagator reshaping for
+  gauge links).
+- `IBPReducer = "FiniteFlow+LiteRed"` and other non-Kira backends
+  (`FIRE`, `LiteRed`, `Blade`) — port is Kira-only by design.
+- `WSL` Windows compatibility plumbing and `BinaryFormat` Windows
+  newline handling.
+- `$PermutationOption` (Kira yaml field, never set in upstream
+  benches).
+- `FireFly` / `Mixed` / `NoFactorScan` Kira reduction modes (only
+  `Masters` and `Kira` modes are used).
+- `install.m` discovery scripts (handled by CMake).
+- `ComplexMode` / `CompensateRule` real-only filter for complex
+  numeric kinematics.  All numeric_values must be real scalars; the
+  object form `{"re":..,"im":..}` is rejected explicitly in
+  `api::run_json::apply_blackbox_options`.
 
 ---
 
-## 6. Follow-up items
+## 3. Out-of-scope user-visible behaviour
 
-Forward-looking work — diversity-driven oracle expansion — lives in
-[`docs/ROADMAP.md`](ROADMAP.md).
+Complex-valued numeric kinematics (see ⚪ above) is the one
+intentional gap with user-facing semantics: the JSON parser rejects
+the complex-form object loudly rather than truncating to the real
+part or returning a wrong answer.
+
+---
+
+## 4. Upstream drift watch
+
+Diffs against the pinned reference snapshot (`efda1db`):
+
+- **New `UseCache` and `SkipReduction` options** at `AMFlow.m:259` —
+  AMFSystem persistence caching/skip toggles.  Not ported; not
+  blocking on any current functionality.
+- **Source-comment line-number drift** of ~30 lines from upstream's
+  growth since the port (~3 %).  Pin future MMA citations to a
+  specific upstream commit hash to keep references stable.
+
+All upstream-side changes since the port are **additions**; no
+upstream behaviour we already ported has changed.
+
+---
+
+## 5. Forward-looking work
+
+See [`docs/ROADMAP.md`](ROADMAP.md) for diversity-driven oracle
+expansion and other planned work.

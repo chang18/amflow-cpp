@@ -529,7 +529,6 @@ amf_candidate(const FamilyConfig& fc,
     // pos={0, 2} where MMA's filtered iteration produced pos={} and the
     // Mass mode (which iterates all components) was then tried and
     // returned the correct pos={0} per first non-empty component.
-    // (Audit divergence D8.)
     if (mode == AMFMode::Prescription || mode == AMFMode::All) {
         std::vector<std::size_t> flat;
         std::set<std::size_t> seen;

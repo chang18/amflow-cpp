@@ -61,14 +61,11 @@ TEST(ApiRunJsonTest, AmflowBoundariesSizeMismatchThrows) {
     EXPECT_THROW(api::run_json(input), std::runtime_error);
 }
 
-// Mirrors audit divergence D5: the upstream `IBPRule` /
-// `CompensateRule` machinery for complex-valued numeric kinematics
-// (`Kira/interface.m:50-57`) is not ported.  The dispatcher must
-// reject the object form `{"re":..,"im":..}` in
+// Complex-valued numeric kinematics is intentionally not ported
+// (upstream `IBPRule` / `CompensateRule` at `Kira/interface.m:50-57`).
+// The dispatcher must reject the object form `{"re":..,"im":..}` in
 // `amf_options.blackbox.numeric_values` with a clear error rather
-// than silently truncating to the real part.  Locks down the
-// loud-rejection contract so a future regression cannot silently
-// re-enable a mishandled path.
+// than silently truncating to the real part.
 TEST(ApiRunJsonTest, BlackboxComplexNumericValueIsRejected) {
     json input = {
         {"mode", "black_box_amflow"},
@@ -91,7 +88,7 @@ TEST(ApiRunJsonTest, BlackboxComplexNumericValueIsRejected) {
         const std::string what(e.what());
         EXPECT_NE(what.find("complex-numeric"), std::string::npos)
             << "error should name the unsupported feature, got: " << what;
-        EXPECT_NE(what.find("D5"), std::string::npos)
-            << "error should point at audit entry D5, got: " << what;
+        EXPECT_NE(what.find("AUDIT_MMA_PARITY.md"), std::string::npos)
+            << "error should point at the parity audit doc, got: " << what;
     }
 }

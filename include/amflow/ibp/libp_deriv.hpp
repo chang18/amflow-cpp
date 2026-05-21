@@ -14,7 +14,7 @@
 //
 //   so that  D_j · J(a + e_k) = J(a + e_k - e_j).
 //
-// Scope (audit divergence row 201)
+// Scope
 // --------------------------------
 //   Variables `s_name` for which differentiation is supported:
 //
@@ -74,7 +74,7 @@ libp_deriv(const qft::FamilyConfig& fc,
            const qft::JIntegral& j,
            const std::string& s_name);
 
-// D14 (2026-05-16) overload: same as `libp_denoms_deriv(fc, s_name)`
+// Narrow-context overload: same as `libp_denoms_deriv(fc, s_name)`
 // but applies `numeric_values` substitution to every intermediate
 // Mfrac AND reprojects the result onto `target_ctx`.  Use this when
 // you have a narrow target context (e.g. `{eta, d}` from
@@ -91,7 +91,7 @@ libp_denoms_deriv(const qft::FamilyConfig& fc, const std::string& s_name,
                   const std::map<std::string, std::string>& numeric_values,
                   const std::shared_ptr<algebra::MpolyContext>& target_ctx);
 
-// D14 (2026-05-16) overload of libp_deriv mirroring the above:
+// Narrow-context overload of libp_deriv mirroring the above:
 // returns DerivTerms whose `.coef` lives on `target_ctx`.
 std::vector<DerivTerm>
 libp_deriv(const qft::FamilyConfig& fc,

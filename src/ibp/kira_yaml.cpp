@@ -57,30 +57,25 @@ std::string mfrac_to_kira(const Mfrac& f) {
     return oss.str();
 }
 
-// Try to factor `prop` into closed form `±(v·x)² + const_part`,
-// where `x` are momentum variables (loops + reduced legs).  Returns
-// nullopt when the polynomial isn't a rank-1 quadratic in momenta —
-// caller then falls back to plain expanded form.
+// Factor `prop` into closed form `±(v·x)² + const_part`, where `x` are
+// momentum variables (loops + reduced legs).  Returns nullopt when the
+// polynomial isn't a rank-1 quadratic in momenta — caller then falls
+// back to expanded form.
 //
-// MMA's `interface.m:126` emits `[Propagator, 0]` using Mathematica's
-// symbolic-expression printer, which preserves `(linear_combo)^2` form
-// because Mathematica doesn't auto-expand `Power[Plus[...], 2]`.  C++
-// stores propagators as FLINT fmpz_mpoly (expanded by construction);
-// without this reconstruction step, Kira sees the expanded monomial sum
-// and walks a generic-quadratic IBP path that produces ~25× larger
-// mandatory lists than the closed-form path MMA triggers.  This is the
-// follow-up to the `[Propagator, 0]` yaml-format fix recorded in
-// `notes/future_optimization_proposals.md` 2026-05-20.
+// Why: MMA's `Kira/interface.m:126` emits propagators via Mathematica's
+// symbolic printer, which preserves `(linear_combo)^2` because
+// `Power[Plus[...], 2]` isn't auto-expanded.  FLINT `fmpz_mpoly` is
+// expanded by construction, so we reconstruct the closed form here to
+// give Kira the same string layout MMA produces; some Kira IBP code
+// paths key off that layout.
 //
-// Math:
-//   A physical propagator `(Σ v_j x_j)² + const` has quadratic-part
-//   coefficient matrix A = ±v v^T (rank-1).  Given expanded form,
-//   extract A from term-by-term coeffs, pick a non-zero diagonal pivot
-//   A_{ii}, set sign = sgn(A_{ii}) and v_i = √|A_{ii}|, derive v_j =
-//   A_{j,i}/(sign·v_i), then verify A == sign·vv^T.  Fails (→ fallback)
-//   on: non-polynomial denominator, mixed momentum-mass coupling like
-//   `eta·l1·l2`, linear-in-momentum term, non-perfect-square pivot, or
-//   non-rank-1 A.
+// Algorithm: a physical propagator `(Σ v_j x_j)² + const` has
+// quadratic coefficient matrix A = ±v v^T (rank-1).  Given expanded
+// form, extract A from term coeffs, pick a non-zero diagonal pivot
+// A_{ii}, set sign = sgn(A_{ii}) and v_i = √|A_{ii}|, derive v_j =
+// A_{j,i}/(sign·v_i), then verify A == sign·vv^T.  Returns nullopt on:
+// non-polynomial denominator, momentum·mass mixing (`eta·l1·l2`),
+// linear-in-momentum term, non-perfect-square pivot, or non-rank-1 A.
 std::optional<std::string>
 try_render_closed_form(const Mfrac& prop,
                        const std::vector<long>& mom_var_idx,
@@ -436,29 +431,15 @@ void kira_write_config(const KiraConfig& cfg, const std::string& dir) {
     for (const auto& m : sq.masses) {
         sub_masses.push_back(subs.apply(m));
     }
-    // Propagator yaml: emit each propagator as a single complete
-    // denominator expression with mass-field=0, mirroring MMA's current
-    // `interface.m:126` (`[Propagator, 0]`).  The earlier
-    // `[Momentum, -Mass]` form (still seen in the commented-out
-    // `interface.m:125`) is mathematically equivalent but causes Kira
-    // 2.x to walk a different IBP-enumeration path, inflating
-    // mandatory-list size by ~10^4 and producing 2 spurious masters on
-    // 4L photon_4L_SE_TwoBubbles mass1 (336760 vs 18; 18 vs 16 masters).
+    // Emit each propagator as `[FullDenominator, 0]` (mass-field=0),
+    // mirroring MMA `Kira/interface.m:126`.  The earlier `[Momentum,
+    // -Mass]` form (commented out at MMA `:125`) is mathematically
+    // equivalent but triggers a different Kira IBP enumeration path.
     //
-    // Beyond the yaml-format fix, the polynomial expression is also
-    // factored back to closed form `(v·x)² + const` via
-    // `try_render_closed_form` so Kira sees `(l1 - l4)^2 - eta - 1`
-    // instead of the FLINT-stored expanded `l1² - 2·l1·l4 + l4² - eta - 1`.
-    // MMA preserves closed form natively (Mathematica's symbolic engine
-    // doesn't auto-expand `Power[Plus[...], 2]`); FLINT mpoly is
-    // expanded by construction, so we reconstruct.  Without this step
-    // Kira still mismatches MMA by ~25× on sunset_bubble_4L because its
-    // rank-1-quadratic-form symmetry detector relies on closed form to
-    // identify single squared momenta.
-    //
-    // Momentum vars for the rank-1 factoring: loops + reduced (post-
-    // conservation) legs.  Non-momentum vars (eta, mass scales,
-    // kinematic invariants) flow into `const_part` and render as-is.
+    // `try_render_closed_form` reconstructs `(v·x)² + const` from
+    // FLINT's expanded polynomial.  Momentum vars (loops + reduced
+    // legs) feed the rank-1 factoring; other vars (eta, mass scales,
+    // kinematic invariants) end up in `const_part` and render as-is.
     std::vector<long> mom_var_idx;
     std::vector<std::string> mom_var_name;
     auto push_mom = [&](const std::string& n) {
@@ -608,15 +589,12 @@ void kira_write_preferred(const std::vector<qft::JIntegral>& preferred,
     std::ofstream out(dir + "/preferred");
     if (!out) throw std::runtime_error(
         "kira_write_preferred: cannot open file");
-    // Write in caller-provided order: MMA's `Preferred[preferred, dir]`
-    // (Kira/interface.m:164-170) writes the list as-is, no sort.  Kira's
-    // IBP enumeration is sensitive to the preferred order, so any
-    // reordering here diverges from MMA's Kira-input pattern.  Upstream
-    // master list is the Kira-raw output of the prior reduce/preheat
-    // step, which is already in Kira's natural "ascending by
-    // sector/complexity" order on both C++ and MMA when preferred is
-    // empty (verified on sunset_bubble_4L).  See
-    // `sort_integrals_like_amflow` for the previous over-correction.
+    // Write in caller-provided order.  MMA's `Preferred[preferred, dir]`
+    // (`Kira/interface.m:164-170`) also writes the list as-is; Kira's
+    // IBP enumeration depends on preferred order, so any reordering
+    // here would diverge from MMA's Kira-input pattern.  The upstream
+    // master list arrives in Kira's natural ascending-by-sector order,
+    // which matches MMA when preferred starts empty.
     for (const auto& j : preferred) {
         out << jintegral_to_kira(j, fc) << "\n\n";
     }

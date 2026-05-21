@@ -95,14 +95,14 @@ TEST(KiraTest, ParseExpression_TrailingInputThrows) {
                  std::runtime_error);
 }
 
-// --- Coefficient parser grammar lock (audit row 204, 🟡 → 🟢) ---------
+// --- Coefficient parser grammar lock ---------
 //
 // `kira_parse_expression` (`src/ibp/kira_parse.cpp`) supports a
 // strict subset of Mathematica algebraic syntax — Kira's coefficient
 // output uses only integer literals, identifiers (registered in
 // the MpolyContext), unary `-`, binary `+ - * /`, and `^` followed
 // by an integer.  No decimals, no fractional/symbolic exponents.
-// Audit row 204 calls this "fragile" because the parser is not
+// This parser is not
 // fuzzed; production correctness comes from the fact that Kira's
 // normal output never trips the unsupported forms.
 //
@@ -250,7 +250,7 @@ TEST(KiraTest, WriteJobs_MastersMode) {
     fs::remove_all(dir);
 }
 
-// --- r = nonzero(top_pattern) + IBPDot arithmetic (audit row 206, 🟡 → 🟢) -
+// --- r = nonzero(top_pattern) + IBPDot arithmetic -
 //
 // Lock the formula `r = Length[TopSector] - Count[TopSector, 0] +
 // IBPDot` (Kira/interface.m yaml emit) against the C++ implementation
@@ -545,7 +545,7 @@ TEST(KiraTest, ReadTargetTable_HandlesMultipleRules) {
     EXPECT_EQ(rules[1].rhs[1].first, "d");
 }
 
-// --- kira_target.m parser strictness (audit row 203, 🟡 → 🟢) ----------
+// --- kira_target.m parser strictness ----------
 //
 // `kira_read_target_table` parses Kira's kira2math-emitted reduction
 // table.  The tokenizer is custom and was flagged by the audit as

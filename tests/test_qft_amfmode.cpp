@@ -292,7 +292,7 @@ TEST(AMFModeTest, EndingQ_OnlyTadpoleSector) {
     EXPECT_TRUE(qft::ending_q(info[0]));
 }
 
-// --- SingleMassQ literal-vs-symbolic divergence (audit row 193, 🟡 → 🟢) -
+// --- SingleMassQ literal-vs-symbolic divergence -
 //
 // Lock the contract that `qft::single_mass_q` is **upstream-literal**:
 // it tests `info.mass[k]` for being literal `0` or literal `1`
@@ -303,7 +303,7 @@ TEST(AMFModeTest, EndingQ_OnlyTadpoleSector) {
 // `Numeric = {msq -> 1}` — the pipeline-level wrapper
 // `single_mass_q_numeric` (`src/pipeline/amfsystem.cpp:803`) is the
 // C++ enhancement that substitutes Numeric before testing, see
-// audit row 193 and the matching pipeline test
+// matching pipeline test
 // `AmfsystemTest.SingleMassEnhancement_*`.
 TEST(AMFModeTest, SingleMassQ_FreeSymbolMassReturnsFalse_LiteralUpstreamSemantic) {
     // Tadpole with a free-symbol mass `msq`, NO Numeric supplied.

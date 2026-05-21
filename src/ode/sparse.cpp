@@ -34,19 +34,17 @@ int sparse_chop_digits() {
             return static_cast<int>(v);
         }
     }
-    // Default: chop_pre, but bumped to (working_pre - 40) for the sparse
-    // layer.  Reason: in big sparse Gauss-eliminations (e.g. bn3_4mass's
-    // 12-master 240-order boundary-order system), acb rounding noise
-    // compounds across divisions by ill-conditioned pivots and can land
-    // a residual at ~10^-(working_pre/2) to ~10^-(working_pre-30).  A
-    // 10^-20 cut keeps that noise as spurious matrix entries, which
-    // re-route Gauss elimination's pivot choice and inflate the
-    // `unsolved` set at the wrong columns.  Tying the floor to
-    // `working_pre - 40` gives a noise budget of 40 decimal digits while
-    // keeping ~80% of the working precision available for legitimate
-    // values.  See AUDIT_MMA_PARITY.md §D14 (bn3_4mass: 162-J BBR vs
-    // MMA's 1-J BBR) for the failure mode.  User can override via
-    // AMFLOW_SPARSE_CHOP_DIGITS.
+    // Default: chop_pre, but bumped to (working_pre - 40) for the
+    // sparse layer.  In big sparse Gauss-eliminations (12-master
+    // 240-order boundary-order systems are typical for multi-mass 3L
+    // families) acb rounding noise compounds across divisions by
+    // ill-conditioned pivots and can land a residual at ~10^-(wp/2)
+    // to ~10^-(wp-30).  A 10^-20 cut keeps that noise as spurious
+    // matrix entries, which re-route Gauss elimination's pivot choice
+    // and inflate the `unsolved` set at the wrong columns.  Tying the
+    // floor to `working_pre - 40` gives a 40-decimal-digit noise
+    // budget while keeping ~80% of working precision available for
+    // legitimate values.  Override via AMFLOW_SPARSE_CHOP_DIGITS.
     int chop_pre_val = chop_pre();
     int wp = numeric::working_pre();
     int floor_val = (wp > 60) ? (wp - 40) : chop_pre_val;
@@ -267,10 +265,7 @@ ConstructedMatrix construct_matrix(const std::vector<AcbValue>& dxexp,
                     // spurious nonzero entry.  Use `acb_contains_zero` so that
                     // any ball straddling zero is dropped — this matches
                     // MMA's exact-rational behavior at our working precision
-                    // (legitimate nonzero values have |mid| >> rad).  See
-                    // AUDIT_MMA_PARITY.md §D14: this drives bn3_4mass C++
-                    // boundary-order divergence (orders 23/27/56/25/25 vs
-                    // MMA's all-(-1) on the size-12 sub-block).
+                    // (legitimate nonzero values have |mid| >> rad).
                     if (acb_contains_zero(value.raw())) continue;
 
                     block_rows[r].emplace_back(col_local, std::move(value));

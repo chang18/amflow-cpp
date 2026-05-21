@@ -215,16 +215,15 @@ Full details: [`tools/bench/README.md`](../tools/bench/README.md).
 - `SolveIntegralsGaugeLink`
 - HQET / SCET / Wilson-line workflows
 - IBP backends other than Kira (no FIRE / LiteRed / FiniteFlow / Blade)
-- **Complex-valued numeric kinematics** (audit divergence D5).
-  Upstream MMA filters imaginary-part numerics through
-  `IBPRule` / `CompensateRule` (apply real parts to Kira, substitute
-  imaginary parts after).  This C++ port treats
-  `amf_options.blackbox.numeric_values` as a flat real-valued map;
-  the C++ algebra layer is over Q (FLINT `fmpz_mpoly_q_t`) and
-  cannot carry complex coefficients.  The JSON dispatcher rejects
-  the object form `{"re":..,"im":..}` with a clear error.
-  Workaround: provide only purely-real numeric values.  See
-  [`docs/AUDIT_MMA_PARITY.md`](AUDIT_MMA_PARITY.md) §D5.
+- **Complex-valued numeric kinematics.**  Upstream MMA filters
+  imaginary-part numerics through `IBPRule` / `CompensateRule` (apply
+  real parts to Kira, substitute imaginary parts after).  This C++
+  port treats `amf_options.blackbox.numeric_values` as a flat
+  real-valued map; the C++ algebra layer is over Q (FLINT
+  `fmpz_mpoly_q_t`) and cannot carry complex coefficients.  The JSON
+  dispatcher rejects the object form `{"re":..,"im":..}` with a
+  clear error.  Workaround: provide only purely-real numeric values.
+  See [`docs/AUDIT_MMA_PARITY.md`](AUDIT_MMA_PARITY.md).
 
 **See also:**
 - [`docs/AUDIT_MMA_PARITY.md`](AUDIT_MMA_PARITY.md) — line-level

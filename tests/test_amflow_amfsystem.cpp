@@ -45,7 +45,7 @@ TEST(AmfsystemTest, EndingQ_SingleMassScheme_GeneralVacuumStopsImmediately) {
 
 // --- SingleMass enhancement: numeric-substituted single-mass detection -----
 //
-// Audit row 193, 🟡 → 🟢.
+// Pinned by SingleMassEnhancement_* tests.
 //
 // Upstream's SingleMassQ (`AMFlow.m`) tests `info.mass[k]` literally
 // (`Count[mass, 1] === 1 && Count[mass, 0] === Length-1`).  C++
@@ -114,7 +114,7 @@ TEST(AmfsystemTest, SingleMassEnhancement_NumericResolvesSymbolToOne_FlowsViaSin
         << " on [msq] would reject this case).";
 }
 
-// --- factorize_family mass=-1 detection enhancement (audit row 194, 🟡 → 🟢)
+// --- factorize_family mass=-1 detection enhancement
 //
 // Same enhancement pattern as SingleMassQ above: C++
 // `find_mass_minus_one` (`src/pipeline/amfsystem.cpp:2394`) applies
@@ -212,7 +212,7 @@ TEST(AmfsystemTest, CutkoskySetupMaster_ClearsCutAndPrescriptionForSystem) {
     EXPECT_EQ(std::count(root.etac().begin(), root.etac().end(), -1), 1);
 }
 
-// --- Cutkosky physical-mass safety check (audit row 195, 🟡 → 🟢) ---------
+// --- Cutkosky physical-mass safety check ---------
 //
 // Phase 1A added the upstream `AMFlow.m:1050` guard at
 // `src/pipeline/amfsystem.cpp:2911-2953`: abort if a phase-volume

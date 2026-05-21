@@ -179,9 +179,9 @@ TEST(AnalyzeBlock, MutualDependencyMerges) {
     EXPECT_EQ(all, (std::vector<std::size_t>{0, 1, 2}));
 }
 
-// --- Non-nested overlapping closures (audit row 186, 🟡 → 🟢) ---------
+// --- Non-nested overlapping closures ---------
 //
-// Audit row 186: C++ `analyze_block` (`src/ode/blocks.cpp:130`) uses
+// C++ `analyze_block` (`src/ode/blocks.cpp:130`) uses
 // the AnalyzeBlock0 closure semantics — `extend` only adds j if
 // `subint[j] ∩ bl ≠ ∅` (intersection filter at line 161).  Upstream
 // MMA defaults to AnalyzeBlock1 (no intersection filter,

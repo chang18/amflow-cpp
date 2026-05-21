@@ -117,7 +117,7 @@ TEST(JordanTest, MixedBlocksSameEigenvalue) {
     fmpq_mat_clear(A);
 }
 
-// --- Multi-distinct-eigenvalue cases (audit divergence row 190, 🟡 → 🟢) -
+// --- Multi-distinct-eigenvalue cases -
 //
 // Existing tests above all use a single distinct eigenvalue.  The
 // audit's row-190 concern is: C++ `jordan_decomposition_exact`

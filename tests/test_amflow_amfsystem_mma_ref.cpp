@@ -158,7 +158,7 @@ TEST(AmfsystemMmaRefTest, EndingTadpole_J2_UsesExplicitBoundaryJson) {
     }
 }
 
-// --- Ending-master Kira reduction loop (audit row 197, 🟡 → 🟢) -------
+// --- Ending-master Kira reduction loop -------
 //
 // `solve_ending_master_value` (`src/pipeline/amfsystem.cpp:718-792`)
 // is the C++-only path that lowers an arbitrary ending master

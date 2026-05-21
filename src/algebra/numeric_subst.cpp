@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // amflow::algebra::numeric_subst implementation.  See header for
-// rationale (D14 fix).
+// rationale.
 
 #include "amflow/algebra/numeric_subst.hpp"
 

@@ -295,7 +295,7 @@ TEST(RegionTest, RegionPower_OneLoopBubble) {
     EXPECT_LE(deg_eps, 1);
 }
 
-// --- Audit row 200 (`region_power` skips `/.Numeric`), 🟡 → 🟢 -----
+// --- `region_power` skips `/.Numeric` -----
 //
 // `region_power` (`src/qft/findregion.cpp:463-529`) constructs the
 // per-integral exponent value as
@@ -351,7 +351,7 @@ TEST(RegionTest, RegionPower_OutputIsEpsOnlyPlusIntegers_AuditRow200Equivalence)
 
     EXPECT_TRUE(only_eps(powers[0].numerator()))
         << "region_power output numerator should be eps-only — applying"
-        << " `/.Numeric` would be a no-op (audit row 200 equivalence).";
+        << " `/.Numeric` would be a no-op (equivalence).";
     EXPECT_TRUE(only_eps(powers[0].denominator()))
         << "region_power output denominator should be eps-only.";
 }

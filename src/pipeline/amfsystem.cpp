@@ -807,7 +807,7 @@ bool vacuum_q_numeric(const qft::TopSectorComponentInfo& info,
 // `tests/test_amflow_amfsystem.cpp` `SingleMassEnhancement_*` and
 // `tests/test_qft_amfmode.cpp` `SingleMassQ_*` (the latter
 // confirms the qft layer's `single_mass_q` remains
-// upstream-literal).  Audit row 193.
+// upstream-literal).
 bool single_mass_q_numeric(const qft::TopSectorComponentInfo& info,
                               const std::map<std::string, FmpqHolder>& numeric_q) {
     if (!vacuum_q_numeric(info, numeric_q)) return false;
@@ -2434,14 +2434,13 @@ single_mass_setup_master(const qft::FamilyConfig& fc,
 // Find Position[mass_list, -1] (under numeric sub).  Returns -1 if not found.
 //
 // Same C++ enhancement pattern as `single_mass_q_numeric` above
-// (see audit row 193, locked by SingleMassEnhancement_* tests):
-// upstream's `Position[ToSquareAll[prop][[2]], -1]` tests the mass
-// list literally, while this routine first applies `numeric_q` so
-// a symbolic mass like `msq` with `Numeric = {msq -> -1}` (or
-// effectively -1 after the SingleMass loop-promotion's sign flip
-// on a `Numeric = {msq -> 1}` original family) resolves to the
-// expected literal `-1`.  Audit row 194; locked by
-// `tests/test_amflow_amfsystem.cpp`
+// (locked by SingleMassEnhancement_* tests): upstream's
+// `Position[ToSquareAll[prop][[2]], -1]` tests the mass list
+// literally, while this routine first applies `numeric_q` so a
+// symbolic mass like `msq` with `Numeric = {msq -> -1}` (or
+// effectively -1 after the SingleMass loop-promotion's sign flip on
+// a `Numeric = {msq -> 1}` original family) resolves to the expected
+// literal `-1`.  Locked by `tests/test_amflow_amfsystem.cpp`.
 // `FactorizeFamilyMassMinusOne_NumericResolvesSymbolic`.
 long find_mass_minus_one(const std::vector<algebra::Mfrac>& masses,
                             const std::map<std::string, FmpqHolder>& numeric_q) {
@@ -2860,31 +2859,20 @@ amf_system_setup_master(const qft::FamilyConfig& fc,
     if (preferred.empty()) return {};
 
     auto numeric_q = build_family_numeric_q(opts.bb);
-    // NOTE (η-placement fix, 2026-05-20): we no longer build a
-    // `numeric_q`-substituted family for use in amf-scheme decisions.
-    // Mirroring MMA AMFlow.m's design — `AMFSystemEndingQ`,
-    // `AMFPosition`, `AnalyzeTopSector` all operate on symbolic
-    // `ReducedPropagator` (no `/.Numeric` substitution; see
-    // `AnalyzeTopology` AMFlow.m:503-510 calling `EvaluateUF` without
-    // `/.Numeric`) — every callsite below uses the original symbolic
-    // `fc`.  The previous design substituted `numeric_values` into the
-    // `replacement` map (e.g. `p1^2 -> ssq` ↦ `p1^2 -> 0` under
-    // `ssq=0`), which silently flipped `info.vacQ` from false to true
-    // for diagrams with external-momentum-bearing F-poly terms, forcing
-    // `amf_candidate_component` into its Branch-mode fallback and
-    // bypassing the user-configured mode cascade.  Concrete bug:
-    // photon_4L_SE_TwoBubbles mass1 — MMA picks D1 (massive) via Mass
-    // mode; C++ used to pick D3 (massless) via Branch fallback, costing
-    // a 26,000× IBP mandatory-list inflation in the downstream Kira
-    // step.  Numeric substitution still flows downstream via
-    // `opts.bb.numeric_values`: Kira's yaml writer
-    // (`src/ibp/kira_yaml.cpp:113-145` `NumericSubs`) applies it
-    // independently when emitting yaml; Cutkosky's mass-positivity
-    // check below applies it via `apply_numeric(..., numeric_q)`;
-    // SingleMass's enhanced predicates (`single_mass_q_numeric` and
-    // `find_mass_minus_one`) call `apply_numeric` explicitly per mass
-    // entry; `single_mass_ending_q_impl` rebuilds `numeric_q`
-    // internally from `opts.bb`.
+    // Amf-scheme decisions (AMFSystemEndingQ, AMFPosition,
+    // AnalyzeTopSector) run on the symbolic `fc` — MMA does the same
+    // (`AnalyzeTopology` at `AMFlow.m:503-510` calls `EvaluateUF`
+    // without `/.Numeric`).  Substituting `numeric_q` into the
+    // replacement map can collapse external-momentum invariants
+    // (`p1^2 -> 0` under `ssq=0`), spuriously flipping `info.vacQ`
+    // and forcing `amf_candidate_component` into Branch-mode fallback.
+    //
+    // Numeric substitution still flows downstream via
+    // `opts.bb.numeric_values`: Kira's yaml writer (`NumericSubs` in
+    // `kira_yaml.cpp`) applies it when emitting yaml; the Cutkosky
+    // mass-positivity check below applies it via
+    // `apply_numeric(..., numeric_q)`; SingleMass's enhanced
+    // predicates apply it per mass entry.
 
     // Mirrors AMFSystemSetupMaster (AMFlow.m:1010 + 1034): auto-append
     // the Trivial scheme as a final fallback, then pick the first
@@ -3083,8 +3071,8 @@ amf_system_setup_master(const qft::FamilyConfig& fc,
         }
         std::cerr << "]" << std::endl;
 
-        // Detailed dump for D8 diagnosis: top-sector propagators + their
-        // U-polynomial component decomposition.
+        // Detailed dump for scheme-dispatch diagnosis: top-sector
+        // propagators + their U-polynomial component decomposition.
         std::cerr << "    top-sector props (after conservation):" << std::endl;
         for (std::size_t k = 0; k < top.size(); ++k) {
             std::cerr << "      [" << top[k] << "] "

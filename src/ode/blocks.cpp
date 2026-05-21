@@ -146,15 +146,11 @@ analyze_block(const RationalMatrix& mat) {
     }
 
     // Forward closure: iterate `bl ← ∪ subint[i] for i in bl` until fixpoint.
-    // Matches MMA `extend` (DESolver.m:240) verbatim.  The previous version
-    // additionally filtered `dep` by "subint[j] ∩ bl ≠ ∅", which discards
-    // forward-only edges (j has no back-edge into bl) and shrinks closures
-    // to fragments of an SCC.  On bn3_4mass inner sub-mat (size 12), this
-    // gave singletons {0}, {1}, ..., {4} instead of MMA's `{0,1,4,..,11}`
-    // chain — letting an oversized 12-master block reach
-    // `determine_block_boundary_order`, which then over-estimated boundary
-    // orders for masters 9, 10, 11, 13, 14 and inflated boundary integrand
-    // expansion to numerator rank 56 (see AUDIT_MMA_PARITY.md §D14).
+    // Matches MMA `extend` (DESolver.m:240) verbatim.  Do NOT additionally
+    // filter `dep` by "subint[j] ∩ bl ≠ ∅" — that discards forward-only
+    // edges (j has no back-edge into bl) and shrinks closures to
+    // fragments of an SCC, which lets oversized blocks reach
+    // `determine_block_boundary_order` and over-estimate boundary orders.
     auto extend = [&](std::vector<std::size_t> bl) -> std::vector<std::size_t> {
         bl = sorted_unique(std::move(bl));
         for (;;) {
@@ -172,12 +168,12 @@ analyze_block(const RationalMatrix& mat) {
     std::vector<std::vector<std::size_t>> blocks(n);
     for (std::size_t i = 0; i < n; ++i) blocks[i] = extend({i});
 
-    // 3. Dedupe closures by SAME-SET (.m line 245: `First/@Gather[blocks, samesetQ]`).
-    //    A previous version merged by `subset_or_superset`, which collapsed
-    //    nested-closure chains ({4} ⊂ {4,5} ⊂ {4,5,6} ⊂ …) into a single big
-    //    block instead of n singletons, driving determine_block_boundary_order
-    //    to over-couple masters and emit large (incorrect) orders.  See the
-    //    bn3_4mass investigation: AUDIT_MMA_PARITY.md §D14.
+    // 3. Dedupe closures by SAME-SET (.m line 245:
+    //    `First/@Gather[blocks, samesetQ]`).  Do NOT merge by
+    //    subset/superset — that collapses nested-closure chains
+    //    ({4} ⊂ {4,5} ⊂ {4,5,6} ⊂ …) into a single big block instead
+    //    of n singletons, which over-couples masters in
+    //    `determine_block_boundary_order` and produces incorrect orders.
     std::vector<std::vector<std::size_t>> unique_closures;
     for (std::size_t i = 0; i < blocks.size(); ++i) {
         bool dup = false;

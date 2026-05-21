@@ -220,26 +220,22 @@ namespace {
 // Rationalize a *real* AcbValue to a fmpq_t.  Returns false if Im part is
 // nonzero within rationalize_pre digits.
 //
-// PRECISION-MISMATCH FIX (pentabox-2L bug, 2026-05-13):
-//   When rationalize_digits > floor(working_prec_bits * log10(2)) (i.e. the
-//   user asks for more decimal digits than the working precision actually
-//   carries), the rationalization captures the binary-representation noise
-//   in the input AcbValue as a "real" rational like
-//       18 * 10^29 + 41359
-//       ────────────────── = 9/5 + 4.1e-26
-//             10^30
-//   for an input that is mathematically exact 9/5.  Downstream this
-//   spurious 4.1e-26 residual flows into BuildTaylor's diagonal subtraction
-//   `mat(i,i) - ini/eta`, leaks a 1e-25 entry into ConstructMatrix at the
-//   "should be unsolved free coefficient" column, and SparseGaussian pivots
-//   on it (scaling all other entries by 1/ε ≈ 1e25).  The amplified pivots
-//   then propagate into back-substitution for masters with all-zero BC and
-//   give the 1e7-1e21 ratios observed on pentabox 2L 5-leg.
+// Cap `rationalize_digits` at the largest value `working_prec` can
+// resolve unambiguously.  When `rationalize_digits >
+// floor(working_prec_bits * log10(2))` the rationalization captures
+// binary-representation noise in the input AcbValue as a "real"
+// rational like
 //
-//   Cap `rationalize_digits` at the largest value that working_prec can
-//   resolve unambiguously.  This makes the rationalization round to the
-//   nearest exact rational at the precision the user's working_prec
-//   actually supports, instead of capturing the binary noise.
+//     18 * 10^29 + 41359
+//     ────────────────── = 9/5 + 4.1e-26
+//           10^30
+//
+// for an input that is mathematically exact 9/5.  Downstream the
+// spurious residual flows into BuildTaylor's diagonal subtraction
+// `mat(i,i) - ini/eta`, leaks a 1e-25 entry into ConstructMatrix at
+// the unsolved-free-coefficient column, and SparseGaussian pivots on
+// it (amplifying all other entries by 1/ε ≈ 1e25).  Capping rounds
+// to the nearest exact rational at the precision actually supported.
 bool acb_real_to_fmpq_local(fmpq_t out, acb_srcptr x,
                              int rationalize_digits, long prec) {
     // Effective working precision in decimal digits, minus a small safety
@@ -322,15 +318,11 @@ canonical_boundary_permutation(const std::vector<std::vector<std::size_t>>& bloc
                                const std::vector<long>& int_offsets) {
     // MMA's DESolver `DetermineBlockBoundaryOrder` (DESolver.m:705-728) does
     // NOT permute the matrix before BuildTaylor/ConstructMatrix/SparseGaussian:
-    // the column-processing order in SparseGaussian is the ORIGINAL master
-    // order.  Sorting by offset (the previous behaviour) was a port-time
-    // mistake: it changes which column SparseGaussian picks as the free
-    // variable, so the boundary-order assignment can land on the wrong
-    // master when a block contains masters with varied integer offsets.
-    // Concretely, audit divergence D8 (banana_4L_mixed, region 3) attributed
-    // the only order=0 in a 19-master block to master[8]=[1,1,1,1,3] under
-    // the old descending sort, while MMA assigns it to master[20]=[1,1,1,1,7]
-    // — propagating into a 637× error on the corner.
+    // the column-processing order in SparseGaussian is the ORIGINAL
+    // master order.  Sorting by offset would change which column
+    // SparseGaussian picks as the free variable, landing the
+    // boundary-order assignment on the wrong master when a block
+    // contains masters with varied integer offsets.
     std::vector<std::size_t> perm;
     perm.reserve(int_offsets.size());
     for (const auto& blk : blocks) {
@@ -357,10 +349,9 @@ canonical_taylor_permutation(const std::vector<std::vector<std::size_t>>& blocks
     // variable retains the ORIGINAL master indices throughout SparseGaussian
     // and fid lookup.
     //
-    // The previous version sorted within each block by
-    // (boundary_row_has_nonzero asc, int_offsets asc, index asc) — a
-    // port-time heuristic that re-routes Gauss-elimination's free column
-    // to a different master.  See D8 root-cause analysis in ROADMAP.md.
+    // Do NOT sort within each block by (boundary_row_has_nonzero,
+    // int_offsets, index) — that heuristic re-routes
+    // Gauss-elimination's free column to a different master.
     (void)int_offsets;
     (void)bc;
     std::vector<std::size_t> perm;

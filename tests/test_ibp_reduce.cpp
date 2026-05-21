@@ -21,9 +21,9 @@ namespace qft = amflow::qft;
 namespace fs  = std::filesystem;
 
 TEST(IbpReduceTest, MakeReductionContext_NarrowsToEtaAndD) {
-    // D14 fix (2026-05-16): make_reduction_context returns an MpolyContext
-    // with exactly the two variables `{eta, d}`, independent of the
-    // family's variable count.  See audit AUDIT_MMA_PARITY.md §D14.
+    // make_reduction_context returns an MpolyContext with exactly the
+    // two variables `{eta, d}`, independent of the family's variable
+    // count.
     auto fc = qft::FamilyConfig::build(
         "bubble", {"l"}, {"p"}, {}, {{"p^2", "s"}},
         {"l^2 - msq", "(l - p)^2 - msq"});
@@ -48,7 +48,7 @@ TEST(IbpReduceTest, MakeReductionContext_DoesNotMutateFc) {
 
 TEST(IbpReduceTest, MakeReductionContext_ShapeIsFamilyIndependent) {
     // Different family with many more variables must still yield a
-    // narrow {eta, d} ctx — the whole point of D14.
+    // narrow {eta, d} ctx.
     auto fc = qft::FamilyConfig::build(
         "tribox", {"l1", "l2", "l3"}, {"p1", "p2"}, {},
         {{"p1^2", "0"}, {"p2^2", "0"}, {"(p1 + p2)^2", "s"}},
