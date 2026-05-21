@@ -180,6 +180,24 @@ TEST(KiraTest, WriteConfig_OneLoopBubble_HasExpectedYaml) {
     EXPECT_NE(kin_yaml.find("scalarproduct_rules:"), std::string::npos);
     EXPECT_NE(kin_yaml.find("[p,p]"), std::string::npos) << kin_yaml;
 
+    // Pin propagator yaml format to MMA-aligned `[Propagator, 0]` form
+    // (matches MMA Kira/interface.m:126).  Both propagators must appear
+    // as a full denominator expression with mass-field=0, NOT the older
+    // `[Momentum, -Mass]` form (commented out at MMA :125).  The
+    // closed-form `(l - p)^2` (not the expanded `l^2-2*l*p+p^2`) is
+    // produced by try_render_closed_form's rank-1 factoring.
+    EXPECT_NE(fam_yaml.find("\"l^2 - 1\", 0"), std::string::npos)
+        << "expected propagator l^2 - msq (numeric-subbed msq=1) emitted "
+           "as `[\"l^2 - 1\", 0]`; got:\n" << fam_yaml;
+    EXPECT_NE(fam_yaml.find("\"(l - p)^2 - 1\", 0"), std::string::npos)
+        << "expected propagator (l - p)^2 - msq emitted as closed form "
+           "`[\"(l - p)^2 - 1\", 0]` (not expanded `l^2-2*l*p+p^2-1`); "
+           "got:\n" << fam_yaml;
+    EXPECT_EQ(fam_yaml.find("\", l^2 - 1"), std::string::npos)
+        << "saw signs of the old `[Momentum, -Mass]` writer form; the "
+           "writer should emit `[FullDenominator, 0]` per MMA "
+           "interface.m:126.  yaml:\n" << fam_yaml;
+
     fs::remove_all(dir);
 }
 
