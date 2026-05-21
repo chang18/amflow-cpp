@@ -88,7 +88,47 @@ opportunity unrelated to that false alarm:
 
 ## 2026-05-20 — C++ uses `select_mandatory_recursively` in `IBPSystem` stage where MMA uses `select_mandatory_list`
 
-**Status**: confirmed MMA-faithfulness gap. Not a correctness bug
+**Status (2026-05-21)**: **CLOSED — false alarm**.  The headline "19,000×
+mandatory-list gap" was a misread of MMA's cached `kira.log`.  MMA cache
+appends two Kira invocations (`IBPSystem` Masters-mode followed by
+`AnalyticReduction` Reduce-mode in the same directory), and the
+`length of mandatory list` numbers we tabulated (e.g. 18 for mass1,
+136 for sunset_bubble) are the *Reduce-mode* output (literally equal
+to the `target` file's integral count, which is the
+`select_mandatory_list: [fam, target]` selector's mandatory list).
+C++ instead reports the *Masters-mode* `select_mandatory_recursively`
+mandatory list, which is the sector-wide enumeration size — a
+fundamentally different quantity from the Reduce-mode target count.
+
+The minimum-reproducer experiment that closed this:
+take MMA's `config/` + `preferred` from any cached `<sysid>/diffeqsetup`,
+write a fresh Masters-mode `jobs.yaml` with the same `(r, s, d)`
+parameters MMA used, and run Kira from a clean dir → produces the
+**same** Masters-mode mandatory list as C++.  Bench-wide validation
+on sunset_bubble_4L_2leg_eqmass: 20/20 systems match C++ vs
+fresh-MMA-reproduce numbers exactly (e.g. system_0 = 3360 vs
+MMA-reproduce 3360; system_44 = 91 vs 91; all 20 line-by-line ✓).
+
+What was actually fixed during the investigation (separately
+warranted, see `58cb588`): three mirror-MMA-behavior alignment
+changes in `src/ibp/kira_yaml.cpp` + `src/ibp/reduce.cpp` —
+`[Propagator, 0]` yaml format, closed-form rank-1 propagator
+reconstruction, and disabling the over-correcting `sort_integrals_like_amflow`.
+These are clean alignment improvements but did not — and could not —
+"fix" the 19,000× gap because the gap never existed.
+
+Lesson recorded at user-level `feedback_no_wild_guess_use_minimum_reproducer.md`:
+when third-party tool outputs disagree between C++ and MMA on the
+same nominal inputs, isolate via minimum reproducer experiment
+before patching; cosmetic input differences rarely matter to mature
+parsers, and "same log keyword" can mean different stage outputs
+across two parallel runs of the same binary.
+
+**Original (since-invalidated) content below — retained for context.**
+
+---
+
+**Original status**: confirmed MMA-faithfulness gap. Not a correctness bug
 (numerical output matches oracle 30+ digits post η-placement fix), but
 an algorithmic-implementation gap that inflates Kira intermediate work
 by orders of magnitude on heavy 4L benchmarks.
