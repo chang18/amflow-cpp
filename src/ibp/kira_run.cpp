@@ -11,6 +11,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <iostream>
 #include <optional>
 #include <sstream>
 #include <stdexcept>
@@ -137,6 +138,14 @@ double kira_run(const KiraConfig& cfg,
         throw std::runtime_error(
             "kira_run: kira exited with non-zero status (rc=" +
             std::to_string(WEXITSTATUS(status)) + ")");
+    }
+    // Stage-time instrumentation: emit a marker line for external timing
+    // analysis (sum these to get total Kira wallclock; subtract from
+    // amflow_cli's total to get non-Kira amflow time).  Enabled when
+    // AMFLOW_STAGE_TIMING env var is set to any non-empty value.
+    if (const char* env = std::getenv("AMFLOW_STAGE_TIMING");
+        env && *env) {
+        std::cerr << "[kira_time] " << elapsed << " s (dir=" << dir << ")\n";
     }
     return elapsed;
 }

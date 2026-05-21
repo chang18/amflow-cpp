@@ -4,6 +4,7 @@
 // All JSON dispatch logic lives in src/api/run_json.cpp; this binary is
 // just the executable wrapper.
 
+#include <chrono>
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
@@ -16,6 +17,7 @@
 #include "amflow/numeric/options.hpp"
 
 int main(int argc, char** argv) {
+    auto t_start = std::chrono::steady_clock::now();
     if (argc < 2) {
         std::cerr << "usage: amflow_cli input.json [output.json]\n";
         return 2;
@@ -50,6 +52,13 @@ int main(int argc, char** argv) {
                 return 2;
             }
             of << out.dump(2) << "\n";
+        }
+        if (const char* env = std::getenv("AMFLOW_STAGE_TIMING");
+            env && *env) {
+            auto t_end = std::chrono::steady_clock::now();
+            double total =
+                std::chrono::duration<double>(t_end - t_start).count();
+            std::cerr << "[total_time] " << total << " s\n";
         }
         return 0;
     } catch (const std::exception& e) {
