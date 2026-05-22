@@ -93,7 +93,7 @@ sampled values → Laurent fit.
 | `family`       | **required** | object | The integral family — see [Family object](#family-object) |
 | `integrals` (alias: `jints`, `targets`) | **required** | array | Target integrals — see [Integral entry](#integral-entry) |
 | `goal_digits` (alias: `goal`) | **required** | integer | Decimal digits of accuracy in the Laurent coefficients |
-| `eps_order` (alias: `order`)  | **required** | integer | Highest ε order to fit (so result has `eps_order + 1 - leading_order` coefficients) |
+| `eps_order` (alias: `order`)  | **required** | integer | Number of ε orders fitted above the algorithmic leading −2L (L = loop count). Highest fitted ε power is `ε^(eps_order − 2L)`. Example: 1-loop with `eps_order=4` fits up to ε² (orders ε⁻² … ε²). To request "result up to ε^K", pass `eps_order = K + 2L`. Leading orders that vanish are trimmed from the output. |
 | `work_dir`     | optional | string  | Filesystem directory used for Kira intermediate files (default: a tmp dir) |
 | `amf_options`  | optional | object | See [AMF options](#amf-options); also carries `numeric_values` |
 | `options`      | optional | object | See [Global options](#global-options) |

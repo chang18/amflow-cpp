@@ -190,7 +190,7 @@ bubble 积分
   - `propagators` — 两个标量分母, 用 `l`, `p` 和符号化的 mass 参数 `msq` 写出.
 - **`integrals`** — 目标积分. 每一项有长度等于 `propagators` 的 `indices`. `[1, 1]` 是每个分母都 1 次的 master integral.
 - **`goal_digits: 25`** — 每个 ε 系数拟合到 ~25 位精度.
-- **`eps_order: 2`** — 拟合到 ε² (含).
+- **`eps_order: 2`** — 对这个 1-loop bubble (L=1) 来说拟到 `ε^(2 − 2L) = ε⁰`, 结果含 ε⁻¹ 和 ε⁰ 两个系数 (形式上的 ε⁻² leading 对此有限 bubble 为零, 被 trim 掉). 通用规则: 想要结果到 ε^K 就传 `eps_order = K + 2L`.
 - **`work_dir`** — Kira 中间文件放在这里. 多次运行可复用 (cache 命中靠指纹守住).
 - **`amf_options.blackbox.numeric_values`** — 给*所有*在 `replacement` 里出现过的符号和*所有*在 `propagators` 里出现过的符号化 mass 都赋数值. 这里 `s = 9`, `msq = 1`.
 

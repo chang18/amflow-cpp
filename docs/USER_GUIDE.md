@@ -232,7 +232,7 @@ Key-by-key:
   equal to `propagators`.  `[1, 1]` is the master integral with
   unit power on each denominator.
 - **`goal_digits: 25`** — fit each ε-coefficient to ~25 decimal digits.
-- **`eps_order: 2`** — fit ε-orders up to and including ε².
+- **`eps_order: 2`** — for this 1-loop bubble (L=1) it fits up to `ε^(2 − 2L) = ε^0`, so the result will contain ε⁻¹ and ε⁰ coefficients (the formally-leading ε⁻² vanishes for this finite bubble and is trimmed). General rule: pass `eps_order = K + 2L` if you want the result up to ε^K.
 - **`work_dir`** — Kira intermediate files go here.  Reusable across
   runs (cache reuse is fingerprint-guarded).
 - **`amf_options.blackbox.numeric_values`** — assign numeric values

@@ -80,7 +80,7 @@ C++ 入口是 `amflow::api::run_json(const json&)` ([`include/amflow/api/run_jso
 | `family`       | **required** | object | 积分 family — 见 [Family 对象](#family-对象) |
 | `integrals` (别名: `jints`, `targets`) | **required** | 数组 | 目标积分 — 见 [Integral 项](#integral-项) |
 | `goal_digits` (别名: `goal`) | **required** | int | Laurent 系数的精度 (十进制位数) |
-| `eps_order` (别名: `order`)  | **required** | int | 拟合到的最高 ε 阶 (结果共有 `eps_order + 1 - leading_order` 个系数) |
+| `eps_order` (别名: `order`)  | **required** | int | 拟合在算法 leading 阶 −2L 之上的 ε 阶数 (L = 圈数). 最高拟合 ε 幂为 `ε^(eps_order − 2L)`. 例: 1-loop 用 `eps_order=4` 拟到 ε² (阶 ε⁻² … ε²). 想要 "结果到 ε^K", 传 `eps_order = K + 2L`. 输出会 trim 掉 leading 处为零的阶. |
 | `work_dir`     | optional | string  | Kira 中间文件所在目录 (默认: 临时目录) |
 | `amf_options`  | optional | object | 见 [AMF options](#amf-options); 也承载 `numeric_values` |
 | `options`      | optional | object | 见 [全局 options](#全局-options) |
