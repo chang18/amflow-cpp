@@ -1,5 +1,7 @@
 # AGENTS.md — onboarding for AI coding agents
 
+> 中文版本: [AGENTS_zh.md](AGENTS_zh.md)
+
 This file is the canonical onboarding document for any AI coding
 agent picking up work on this repo. It captures the project-level
 rules and conventions a new collaborator must internalise before
@@ -197,6 +199,6 @@ Canonical fix pattern lives in
   needs. Three similar lines beats a premature abstraction.
 - **Don't add docstrings/comments to code you didn't change.**
   Only comment where the logic isn't self-evident.
-- **Don't guess at recent project state** — `git log`, `docs/AUDIT_MMA_PARITY.md`,
-  and the per-domain notes are authoritative; check them before
+- **Don't guess at recent project state** — `git log` and
+  `docs/AUDIT_MMA_PARITY.md` are authoritative; check them before
   asserting.

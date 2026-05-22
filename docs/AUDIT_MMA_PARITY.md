@@ -1,5 +1,7 @@
 # MMA Parity Audit
 
+> 中文版本: [AUDIT_MMA_PARITY_zh.md](AUDIT_MMA_PARITY_zh.md)
+
 Status reference for the C++17 port against upstream Mathematica
 AMFlow (snapshot at commit `efda1db` of
 <https://gitlab.com/multiloop-pku/amflow>).

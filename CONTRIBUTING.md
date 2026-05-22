@@ -1,5 +1,7 @@
 # Contributing
 
+> 中文版本: [CONTRIBUTING_zh.md](CONTRIBUTING_zh.md)
+
 AMFlow.cpp is a parity-driven C++17 reimplementation of the AMFlow
 algorithm.  Before making behavioural changes, read the
 project-specific workflow in

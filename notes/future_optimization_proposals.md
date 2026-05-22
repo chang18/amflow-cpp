@@ -1,5 +1,7 @@
 # Future Optimization Proposals
 
+> 中文版本: [future_optimization_proposals_zh.md](future_optimization_proposals_zh.md)
+
 Forward-looking proposals only.  Each is **unverified and unimplemented**.
 Drop entries once accepted-and-implemented or rejected; do not retain
 their post-mortems here.
@@ -39,5 +41,5 @@ For `system_1+`: point Kira at the existing sectormappings dir
    the Kira-2.x bug still applies on the current Kira version; if
    not, dir-reuse is the smaller fix.
 
-Per `docs/PERFORMANCE.md`: perf-only changes wait until after
-correctness validation and a dedicated benchmark host.
+Per `docs/ROADMAP.md` §"Performance benchmarking": perf-only changes
+wait until after correctness validation and a dedicated benchmark host.

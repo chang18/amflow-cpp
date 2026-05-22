@@ -1,5 +1,7 @@
 # Docker
 
+> 中文版本: [DOCKER_zh.md](DOCKER_zh.md)
+
 `ghcr.io/chang18/amflow-cpp` bundles **FLINT 3.4 + Kira 3.1 + FireFly +
 amflow_cli** in a single Linux image so you don't need to compile the
 dependency stack yourself.  This page documents how to use it.

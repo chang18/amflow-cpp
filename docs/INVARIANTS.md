@@ -1,5 +1,7 @@
 # Project-Wide Invariants
 
+> 中文版本: [INVARIANTS_zh.md](INVARIANTS_zh.md)
+
 These conventions are *not* per-layer — they are honoured everywhere in
 the codebase.  Violating any of them will silently produce wrong results.
 

@@ -1,5 +1,7 @@
 # Mathematica ↔ C++ Cross-Reference
 
+> 中文版本: [REFERENCE_MAP_zh.md](REFERENCE_MAP_zh.md)
+
 This document maps the symbols of the three upstream Mathematica
 source files to their C++ counterparts.  Upstream lives at
 <https://gitlab.com/multiloop-pku/amflow>; this project does not

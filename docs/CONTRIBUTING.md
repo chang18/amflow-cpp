@@ -1,5 +1,7 @@
 # Contributing & Debugging Guide
 
+> 中文版本: [CONTRIBUTING_zh.md](CONTRIBUTING_zh.md)
+
 This document is for practical project work: build, test, benchmark,
 reference generation, and parity debugging.
 

@@ -1,5 +1,7 @@
 # Roadmap
 
+> 中文版本: [ROADMAP_zh.md](ROADMAP_zh.md)
+
 Forward-looking development plan.  For per-release narrative see
 [`CHANGELOG.md`](../CHANGELOG.md); for MMA-parity status see
 [`docs/AUDIT_MMA_PARITY.md`](AUDIT_MMA_PARITY.md).
@@ -63,3 +65,12 @@ clear error rather than silently mishandling.
   in code.
 - Do not silently drop items that turn out to be infeasible —
   document the reason where the user will see it (FAQ or AUDIT).
+
+---
+
+## Performance benchmarking
+
+Wall-clock benchmarking against upstream MMA AMFlow is **intentionally
+deferred** until after the project has completed broader correctness
+validation and the measurements can be run on a dedicated, load-isolated
+machine.  When that pass is performed, the numbers will be added here.
