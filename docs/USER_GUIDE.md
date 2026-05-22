@@ -1,5 +1,7 @@
 # User Guide
 
+> 中文版本: [USER_GUIDE_zh.md](USER_GUIDE_zh.md)
+
 This guide walks through using **AMFlow.cpp** end-to-end:
 
 1. What it computes and when to use it
@@ -121,6 +123,13 @@ Run:
 ```bash
 ./build/src/cli/amflow_cli examples/power_law.json
 ```
+
+> Tip — `sudo cmake --install build` puts `amflow_cli` on `$PATH`
+> (default prefix `/usr/local/`), so all subsequent commands in this
+> guide can drop the `./build/src/cli/` prefix and just say
+> `amflow_cli ...`.  See [`FAQ.md`](FAQ.md) "How do I install the
+> library and the `amflow_cli` binary system-wide?" for the full
+> install workflow.
 
 Output (abridged):
 

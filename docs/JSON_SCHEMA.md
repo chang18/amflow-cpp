@@ -1,5 +1,7 @@
 # `amflow_cli` JSON Schema Reference
 
+> 中文版本: [JSON_SCHEMA_zh.md](JSON_SCHEMA_zh.md)
+
 `amflow_cli` consumes a single JSON document and emits a single JSON
 document.  This page documents every field of every input/output, for
 all three top-level modes.
@@ -73,7 +75,7 @@ and returns the value at η = 0.  No IBP, no Kira, no family.
 }
 ```
 
-(Run this with `./build/src/cli/amflow_cli examples/power_law.json`.)
+(Run this with `amflow_cli examples/power_law.json` — or `./build/src/cli/amflow_cli examples/power_law.json` if you haven't installed the CLI.)
 
 ---
 

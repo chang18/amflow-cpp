@@ -1,5 +1,7 @@
 # FAQ
 
+> 中文版本: [FAQ_zh.md](FAQ_zh.md)
+
 Common questions for users and packagers of AMFlow.cpp.  If your
 question isn't here, please [open a GitHub issue](https://github.com/chang18/amflow-cpp/issues)
 or contact the maintainer at <3250800970@qq.com>.
@@ -50,13 +52,35 @@ The raw `amflow` mode (the ODE engine) doesn't need Kira at all — see
 [`examples/constant.json`](../examples/constant.json) for runnable
 examples.
 
+### Q. How do I install the library and the `amflow_cli` binary system-wide?
+
+After a successful build:
+
+```bash
+sudo cmake --install build                       # default prefix /usr/local
+# or, for a user-local install (no sudo):
+cmake --install build --prefix "$HOME/.local"
+```
+
+This installs four things under the chosen prefix:
+
+- `bin/amflow_cli` — the JSON-driven CLI on `$PATH`.
+- `lib/libamflow.a` — the static library.
+- `include/amflow/...` — public headers per domain.
+- `lib/cmake/AMFlowCpp/` — CMake config for downstream `find_package`.
+
+For a custom prefix:
+
+```bash
+cmake --install build --prefix /some/prefix
+```
+
 ### Q. How do I make CMake's `find_package(AMFlowCpp)` work for a downstream project?
 
-`cmake --install build --prefix /some/prefix` after a successful build
-installs `lib/cmake/AMFlowCpp/`.  In your downstream `CMakeLists.txt`:
+In your downstream `CMakeLists.txt`:
 
 ```cmake
-list(APPEND CMAKE_PREFIX_PATH /some/prefix)   # if non-standard
+list(APPEND CMAKE_PREFIX_PATH /some/prefix)   # only if non-standard
 find_package(AMFlowCpp 1.1 REQUIRED)
 target_link_libraries(my_target PRIVATE AMFlowCpp::amflow)
 ```

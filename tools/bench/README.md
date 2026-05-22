@@ -1,5 +1,7 @@
 # Sampled Benchmark Assets
 
+> 中文版本: [README_zh.md](README_zh.md)
+
 This directory stores sampled `eps = 1/1000` parity inputs, Mathematica
 reference values, and C++ benchmark configs.
 
@@ -35,36 +37,40 @@ Use `--json-out <path>` to write a machine-readable comparison report.
 These commands run the sampled C++ benchmark path. They are long-running
 benchmark commands, not default `ctest` entries.
 
+The commands below assume `amflow_cli` is on `$PATH` (after
+`sudo cmake --install build`).  If you haven't installed, substitute
+`./build/src/cli/amflow_cli` for each `amflow_cli`.
+
 ```bash
-./build/src/cli/amflow_cli \
+amflow_cli \
   tools/bench/tt_2loop_box_eps001_black_box_amflow_cpp.json \
   /tmp/amflow_bench_tt_2loop_box_cpp_out.json
 
-./build/src/cli/amflow_cli \
+amflow_cli \
   tools/bench/doublebox_sv_eps001_black_box_amflow_cpp.json \
   /tmp/amflow_bench_doublebox_sv_eps001_cpp_out.json
 
-./build/src/cli/amflow_cli \
+amflow_cli \
   tools/bench/tt_higher_rank_eps001_black_box_amflow_cpp.json \
   /tmp/amflow_bench_tt_higher_rank_eps001_cpp_out.json
 
-./build/src/cli/amflow_cli \
+amflow_cli \
   tools/bench/xbox_2loop_eps001_black_box_amflow_cpp.json \
   /tmp/amflow_bench_xbox_2loop_eps001_cpp_out.json
 
-./build/src/cli/amflow_cli \
+amflow_cli \
   tools/bench/tt_cutkosky_probe_eps001_black_box_amflow_cpp.json \
   /tmp/amflow_bench_tt_cutkosky_probe_eps001_cpp_out.json
 
-AMFLOW_DEBUG_SCHEME=1 ./build/src/cli/amflow_cli \
+AMFLOW_DEBUG_SCHEME=1 amflow_cli \
   tools/bench/cutbubble_1L_eps001_black_box_amflow_cpp.json \
   /tmp/amflow_bench_cutbubble_1L_eps001_cpp_out.json
 
-AMFLOW_DEBUG_SCHEME=1 ./build/src/cli/amflow_cli \
+AMFLOW_DEBUG_SCHEME=1 amflow_cli \
   tools/bench/cutsunrise_2L_eps001_black_box_amflow_cpp.json \
   /tmp/amflow_bench_cutsunrise_2L_eps001_cpp_out.json
 
-AMFLOW_DEBUG_SCHEME=1 ./build/src/cli/amflow_cli \
+AMFLOW_DEBUG_SCHEME=1 amflow_cli \
   tools/bench/cutbanana_3L_eps001_black_box_amflow_cpp.json \
   /tmp/amflow_bench_cutbanana_3L_eps001_cpp_out.json
 ```
@@ -81,7 +87,7 @@ Use `ls tools/bench/*_mma_reference.json` for the full list (228
 entries as of 2026-05-17).
 
 Wallclock numbers are intentionally not maintained here; see
-[`docs/PERFORMANCE.md`](../../docs/PERFORMANCE.md).
+[`docs/ROADMAP.md`](../../docs/ROADMAP.md) §"Performance benchmarking".
 
 ## Notes
 

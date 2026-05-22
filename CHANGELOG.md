@@ -1,5 +1,7 @@
 # Changelog
 
+> 中文版本: [CHANGELOG_zh.md](CHANGELOG_zh.md)
+
 All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
@@ -18,6 +20,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   Kira call and `[total_time]` at amflow_cli exit, lets external
   tools split wallclock into Kira-subprocess vs amflow-internal
   time.
+- CMake install rules now include `amflow_cli`: after
+  `sudo cmake --install build` the binary lands at
+  `${CMAKE_INSTALL_PREFIX}/bin/amflow_cli` (default `/usr/local/bin/`)
+  alongside the library and headers, so the CLI is reachable from
+  any working directory without needing to invoke `./build/src/cli/`.
 
 ### Fixed
 - Pentabox 2L 5-leg Jordan eigenvector normalization:
@@ -145,9 +152,10 @@ oracles.
   ported.  (Started at 65 🟢 / 21 🟡 / 6 🔴 in v1.0.0; the post-v1.0
   pass closed every 🟡, fixed 6 of the 7 🔴, and surfaced D7 as
   the seventh 🔴 — now fixed too.)
-- [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md): wall-clock baseline
-  vs MMA on the 12 oracle benchmarks.  Median speedup ~2× on
-  Kira-light benches; converges to ~1× on Kira-heavy benches.
+- [`docs/ROADMAP.md`](docs/ROADMAP.md) §"Performance benchmarking":
+  wall-clock baseline vs MMA on the 12 oracle benchmarks.  Median
+  speedup ~2× on Kira-light benches; converges to ~1× on Kira-heavy
+  benches.
 - [`docs/ROADMAP.md`](docs/ROADMAP.md): post-v1.0 development plan
   (Phase 1 implementation completeness, Phase 2 oracle expansion,
   Phase 3 ongoing diversification).
